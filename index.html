@@ -153,8 +153,9 @@
 
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"></script>
-  <script>
+  <script type="module">
+  import { Chess } from 'https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.min.js';
+
   (function(){
     const byId = (id) => document.getElementById(id);
     const state = {
