@@ -330,7 +330,6 @@
     }
 
     .board-wrap {
-      position: relative;
       width: min(100%, 420px);
     }
 
@@ -753,7 +752,6 @@
         </div>
         <div class="board-wrap">
           <div id="board"></div>
-          <svg id="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
         </div>
       </div>
 
@@ -854,7 +852,6 @@
           white: null,
           black: null
         },
-        lastHighlightedMove: null,
         currentSource: null,
         ply: 0,
         engine: null,
@@ -1181,15 +1178,14 @@
           position: 'start', draggable: false,
           pieceTheme: 'chesspieces/wikipedia/{piece}.png'
         });
-        syncArrowLayer();
-        const handleResize = () => { state.board.resize(); syncArrowLayer(); };
+        syncBoardMetrics();
+        const handleResize = () => { state.board.resize(); syncBoardMetrics(); };
         window.addEventListener('resize', handleResize);
       }
 
-      function syncArrowLayer() {
+      function syncBoardMetrics() {
         const boardEl = byId('board');
-        const svg = byId('arrowLayer');
-        if (!boardEl || !svg) return;
+        if (!boardEl) return;
         const rect = boardEl.getBoundingClientRect();
         if (!rect || rect.width === 0) {
           return;
@@ -1418,8 +1414,6 @@
         }
 
         updateMaterialBalance();
-        state.lastHighlightedMove = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
-        refreshBoardHighlights();
         highlightActive();
         analyzeCurrent();
 
@@ -1742,7 +1736,6 @@
                   historyEntry.classification = null;
                 }
                 renderMoves(); // Re-render to show the evaluation
-                refreshBoardHighlights();
               }
             }
             setStatus('engStatus', `Analysis complete (${engineLabel})`);
@@ -1787,7 +1780,6 @@
         state.multiPv.set(rank, entry);
         const list = [1, 2, 3].map(r => state.multiPv.get(r) || null);
         updatePVDisplay(list);
-        drawArrows(list);
         setStatus('engStatus', `Analyzing… depth ${line.match(/\bdepth (\d+)/)?.[1] || ''}`);
       }
 
@@ -1801,7 +1793,6 @@
 
         state.pendingAnalysis = false;
         state.multiPv = new Map();
-        drawArrows([]);
         updatePVDisplay([]);
         setStatus('engStatus', 'Analyzing…');
 
@@ -1912,7 +1903,6 @@
         state.bestEvalByPly = [];
         state.multiPv = new Map();
         state.ply = 0;
-        state.lastHighlightedMove = null;
         resetCurrentGame();
 
         if (state.board) {
@@ -1921,7 +1911,6 @@
 
         renderMoves();
         updateMaterialBalance();
-        refreshBoardHighlights();
         updateEvalBar(null);
 
         if (state.engineReady) {
@@ -1962,7 +1951,6 @@
         state.bestEvalByPly = [];
         state.multiPv = new Map();
         state.ply = 0;
-        state.lastHighlightedMove = null;
         resetCurrentGame();
 
         if (state.board) {
@@ -1971,7 +1959,6 @@
 
         renderMoves();
         updateMaterialBalance();
-        refreshBoardHighlights();
         updateEvalBar(null);
 
         if (state.engineReady) {
@@ -1987,7 +1974,6 @@
         const value = source.value ?? getCurrentInputValue();
         state.currentSource = { type, value };
 
-        drawArrows([]);
         updatePVDisplay([]);
         clearRatingGuess();
         updateEloGuessDisplay();
@@ -2082,10 +2068,6 @@
         byId('flipBtn').addEventListener('click', () => {
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
-          requestAnimationFrame(() => {
-            drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []);
-            refreshBoardHighlights();
-          });
         });
         byId('timeMs').addEventListener('change', analyzeCurrent);
         byId('depth').addEventListener('change', analyzeCurrent);
