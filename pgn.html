@@ -1285,12 +1285,15 @@
         const svg = byId('arrowLayer');
         if (!boardEl || !svg) return;
         const rect = boardEl.getBoundingClientRect();
+        if (!rect || rect.width === 0 || rect.height === 0) {
+          return;
+        }
         svg.setAttribute('viewBox', '0 0 8 8');
         svg.setAttribute('width', rect.width);
-        svg.setAttribute('height', rect.width);
+        svg.setAttribute('height', rect.height);
         const evalBar = byId('evalBar');
         if (evalBar) {
-          evalBar.style.height = `${rect.width}px`;
+          evalBar.style.height = `${rect.height}px`;
         }
       }
 
@@ -1528,18 +1531,40 @@
 
       function drawArrows(list) {
         const svg = byId('arrowLayer');
-        if (!svg) return;
+        const boardEl = byId('board');
+        if (!svg || !boardEl) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
         if (!Array.isArray(list) || !list.length) return;
 
-        const squareCenter = (sq) => {
-          const coords = squareToDisplayCoords(sq);
-          if (!coords) return null;
-          return {
-            x: coords.col + 0.5,
-            y: coords.row + 0.5
+        const boardRect = boardEl.getBoundingClientRect();
+        if (!boardRect || boardRect.width === 0 || boardRect.height === 0) {
+          return;
+        }
+
+        const squareCenter = (() => {
+          const cache = new Map();
+          return (square) => {
+            if (cache.has(square)) {
+              return cache.get(square);
+            }
+            const el = boardEl.querySelector(`[data-square="${square}"]`);
+            if (!el) {
+              cache.set(square, null);
+              return null;
+            }
+            const rect = el.getBoundingClientRect();
+            const centerX = ((rect.left + rect.right) / 2) - boardRect.left;
+            const centerY = ((rect.top + rect.bottom) / 2) - boardRect.top;
+            const coords = {
+              x: (centerX / boardRect.width) * 8,
+              y: (centerY / boardRect.height) * 8
+            };
+            cache.set(square, coords);
+            return coords;
           };
-        };
+        })();
+
+        let missingSquares = false;
 
         const palette = [
           { color: '#22c55e', width: 0.22 },
@@ -1579,7 +1604,10 @@
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
-          if (!from || !to) return;
+          if (!from || !to) {
+            missingSquares = true;
+            return;
+          }
 
           const dx = to.x - from.x;
           const dy = to.y - from.y;
@@ -1667,6 +1695,10 @@
             }
           }
         });
+
+        if (missingSquares) {
+          requestAnimationFrame(() => drawArrows(list));
+        }
       }
 
       function uciToSan(fen, uci) {
