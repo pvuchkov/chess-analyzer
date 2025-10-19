@@ -811,7 +811,7 @@
         </div>
         <div class="board-wrap">
           <div id="board"></div>
-          <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+          <svg id="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
         </div>
       </div>
 
@@ -1546,61 +1546,76 @@
         const svg = byId('arrowLayer');
         if (!svg) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
-        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        defs.innerHTML = `
-        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#4ade80" />
-        </marker>
-        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#38bdf8" />
-        </marker>
-        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#f97316" />
-        </marker>`;
-        svg.appendChild(defs);
         if (!list || !list.length) return;
-        function squareCenter(sq) {
+
+        const squareCenter = (sq) => {
           const coords = squareToDisplayCoords(sq);
           if (!coords) return null;
           return {
             x: coords.col + 0.5,
             y: coords.row + 0.5
           };
-        }
+        };
+
         const colors = ['#4ade80', '#38bdf8', '#f97316'];
-        const opacities = [0.95, 0.35, 0.35];
+        const opacities = [0.95, 0.4, 0.4];
+
         list.forEach((entry, i) => {
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
           if (!from || !to) return;
+
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const len = Math.hypot(dx, dy);
-          if (!len) return;
-          const shorten = Math.min(0.6, len * 0.25);
-          const startOffset = Math.min(0.4, len * 0.2);
-          const sx = from.x + (dx / len) * startOffset;
-          const sy = from.y + (dy / len) * startOffset;
-          const ex = to.x - (dx / len) * shorten;
-          const ey = to.y - (dy / len) * shorten;
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', sx);
-          line.setAttribute('y1', sy);
-          line.setAttribute('x2', ex);
-          line.setAttribute('y2', ey);
-          line.setAttribute('stroke', colors[i] || colors[2]);
-          const strokeWidth = Math.max(0.16, 0.28 - i * 0.04);
-          line.setAttribute('stroke-width', strokeWidth);
-          line.setAttribute('stroke-linecap', 'round');
-          line.setAttribute('marker-end', `url(#m${i + 1})`);
-          line.setAttribute('opacity', opacities[i] || opacities[2]);
-          svg.appendChild(line);
+          if (len < 1e-3) return;
+
+          const nx = dx / len;
+          const ny = dy / len;
+          const px = -ny;
+          const py = nx;
+
+          const headLength = Math.min(Math.max(len * 0.45, 0.35), len - 0.1);
+          const tailPadding = Math.min(Math.max(len * 0.2, 0.25), len - headLength - 0.05);
+          if (headLength <= 0 || tailPadding < 0) return;
+
+          const tipX = to.x;
+          const tipY = to.y;
+          const baseX = tipX - nx * headLength;
+          const baseY = tipY - ny * headLength;
+          const startX = from.x + nx * tailPadding;
+          const startY = from.y + ny * tailPadding;
+
+          const shaft = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          shaft.setAttribute('x1', startX);
+          shaft.setAttribute('y1', startY);
+          shaft.setAttribute('x2', baseX);
+          shaft.setAttribute('y2', baseY);
+          shaft.setAttribute('stroke', colors[i] || colors[colors.length - 1]);
+          shaft.setAttribute('stroke-width', Math.max(0.16, 0.28 - i * 0.04));
+          shaft.setAttribute('stroke-linecap', 'round');
+          shaft.setAttribute('opacity', opacities[i] || opacities[opacities.length - 1]);
+          svg.appendChild(shaft);
+
+          const headWidth = headLength * 0.55;
+          const leftX = baseX + px * headWidth;
+          const leftY = baseY + py * headWidth;
+          const rightX = baseX - px * headWidth;
+          const rightY = baseY - py * headWidth;
+
+          const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          head.setAttribute('d', `M ${tipX} ${tipY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`);
+          head.setAttribute('fill', colors[i] || colors[colors.length - 1]);
+          head.setAttribute('opacity', opacities[i] || opacities[opacities.length - 1]);
+          svg.appendChild(head);
 
           if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange)) {
             const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            const tx = ex + (-dy / len) * 18;
-            const ty = ey + (dx / len) * 18;
+            const labelAlong = Math.min(len - headLength * 0.5, Math.max(len * 0.55, headLength + 0.2));
+            const labelPerp = 0.35;
+            const tx = from.x + nx * labelAlong + px * labelPerp;
+            const ty = from.y + ny * labelAlong + py * labelPerp;
             label.setAttribute('x', tx);
             label.setAttribute('y', ty);
             label.setAttribute('text-anchor', 'middle');
