@@ -441,6 +441,39 @@
       font-size: 12px;
     }
 
+    .suggestions-header {
+      margin-top: 22px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .suggestions-header h2 {
+      flex: 1;
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .suggestion-mode-label {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      margin-left: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
     .hint {
       font-size: 12px;
       color: var(--muted);
@@ -550,12 +583,6 @@
         <button id="lastBtn">Last ⏭</button>
         <button id="flipBtn" class="secondary">Flip</button>
       </div>
-      <div class="row" style="margin-top:12px; align-items:center;">
-        <label style="font-size:13px; color:var(--muted);">Engine: time (ms)</label>
-        <input id="timeMs" type="number" min="100" max="10000" step="100" value="2000" style="width:120px;" disabled />
-        <label style="font-size:13px; color:var(--muted);">Depth</label>
-        <input id="depth" type="number" min="1" max="40" step="1" value="20" style="width:100px;" disabled />
-      </div>
       <div id="navStatus" class="status"></div>
     </div>
 
@@ -586,7 +613,10 @@
         <div id="eloBlack">—</div>
       </div>
 
-      <h2 style="margin-top:22px;">Engine suggestions <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
+      <div class="suggestions-header">
+        <h2>Engine suggestions <span id="suggestionModeLabel" class="suggestion-mode-label">Played move review</span> <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
+        <button id="suggestionToggle" class="secondary">Show next move advice</button>
+      </div>
       <div class="pv-list">
         <div class="pv"><span class="rank">1</span><span class="move" id="pv1">—</span><span class="eval"
             id="ev1"></span></div>
@@ -630,7 +660,8 @@
         analysisStatus: 'idle',
         engineQueue: [],
         currentRequest: null,
-        analysisToken: 0
+        analysisToken: 0,
+        suggestionMode: 'played'
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -640,6 +671,18 @@
         pgn: 'Paste the full PGN for the game you want to analyze.',
         lichess: 'Paste a public Lichess game URL or ID. For best results run this page from http://localhost/.',
         fen: 'Paste a FEN string to analyze a specific position.'
+      };
+      const suggestionModeOptions = {
+        played: {
+          label: 'Played move review',
+          button: 'Show next move advice',
+          title: 'Switch to next-move advice'
+        },
+        next: {
+          label: 'Next move advice',
+          button: 'Show move review',
+          title: 'Switch to played-move review'
+        }
       };
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
 
@@ -827,6 +870,56 @@
         if (hint) {
           hint.textContent = inputHints[mode] || '';
         }
+      }
+
+      function getSavedSuggestionMode() {
+        if (typeof localStorage === 'undefined') {
+          return 'played';
+        }
+        try {
+          const saved = localStorage.getItem('suggestionMode');
+          return saved === 'next' ? 'next' : 'played';
+        } catch (err) {
+          return 'played';
+        }
+      }
+
+      function updateSuggestionModeUI() {
+        const label = byId('suggestionModeLabel');
+        const button = byId('suggestionToggle');
+        const config = suggestionModeOptions[state.suggestionMode] || suggestionModeOptions.played;
+        if (label) {
+          label.textContent = config.label;
+        }
+        if (button) {
+          button.textContent = config.button;
+          button.title = config.title;
+          button.setAttribute('aria-pressed', state.suggestionMode === 'next' ? 'true' : 'false');
+        }
+      }
+
+      function setSuggestionMode(mode) {
+        const nextMode = suggestionModeOptions[mode] ? mode : 'played';
+        state.suggestionMode = nextMode;
+        updateSuggestionModeUI();
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('suggestionMode', nextMode);
+          }
+        } catch (err) {
+          // ignore storage errors
+        }
+        applyAnalysisForCurrentPly();
+      }
+
+      function toggleSuggestionMode() {
+        const nextMode = state.suggestionMode === 'next' ? 'played' : 'next';
+        setSuggestionMode(nextMode);
+      }
+
+      function initSuggestionMode() {
+        state.suggestionMode = getSavedSuggestionMode();
+        updateSuggestionModeUI();
       }
 
       function initBoard() {
@@ -1502,30 +1595,57 @@
         engineController.reset();
       }
 
+      function getAnalysisForCurrentView() {
+        if (state.suggestionMode === 'next') {
+          if (state.ply >= state.verboseHistory.length) {
+            return null;
+          }
+          return state.analysisCache.get(state.ply + 1) || null;
+        }
+        return state.analysisCache.get(state.ply) || null;
+      }
+
       function applyAnalysisForCurrentPly() {
-        const analysis = state.analysisCache.get(state.ply);
+        const analysis = getAnalysisForCurrentView();
         if (analysis) {
           drawArrows(analysis.pvEntries || []);
           updatePVDisplay(analysis.pvEntries || []);
-          const evalText = analysis.actualEntry && analysis.actualEntry.eval
-            ? analysis.actualEntry.eval
+          const evalText = state.suggestionMode === 'played'
+            ? (analysis.actualEntry && analysis.actualEntry.eval
+              ? analysis.actualEntry.eval
+              : analysis.bestEntry && analysis.bestEntry.eval
+                ? analysis.bestEntry.eval
+                : null)
             : analysis.bestEntry && analysis.bestEntry.eval
               ? analysis.bestEntry.eval
               : null;
           updateEvalBar(evalText);
           setStatus('engStatus', `Precomputed (depth ${analysis.depth || 0})`);
-        } else {
-          drawArrows([]);
-          updatePVDisplay([]);
-          if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
+          return;
+        }
+
+        drawArrows([]);
+        updatePVDisplay([]);
+        if (state.suggestionMode === 'next') {
+          updateEvalBar(null);
+          if (state.ply >= state.verboseHistory.length) {
+            setStatus('engStatus', 'Game complete. No next move to analyze.');
+          } else if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
             setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
-          }
-          if (state.ply === 0) {
-            updateEvalBar(null);
           } else {
-            const entry = state.verboseHistory[state.ply - 1];
-            updateEvalBar(entry && entry.eval ? entry.eval : null);
+            setStatus('engStatus', 'Next-move suggestion not available yet.');
           }
+          return;
+        }
+
+        if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
+          setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
+        }
+        if (state.ply === 0) {
+          updateEvalBar(null);
+        } else {
+          const entry = state.verboseHistory[state.ply - 1];
+          updateEvalBar(entry && entry.eval ? entry.eval : null);
         }
       }
 
@@ -1582,7 +1702,7 @@
           movetime
         };
         state.analysisCache.set(index + 1, moveEntry.analysis);
-        if (state.ply === index + 1) {
+        if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
           applyAnalysisForCurrentPly();
         }
         renderMoves();
@@ -1760,7 +1880,7 @@
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
           requestAnimationFrame(() => {
-            const analysis = state.analysisCache.get(state.ply);
+            const analysis = getAnalysisForCurrentView();
             drawArrows(analysis ? analysis.pvEntries || [] : []);
           });
         });
@@ -1769,6 +1889,12 @@
           const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
           setTheme(newTheme);
         });
+        const suggestionToggle = byId('suggestionToggle');
+        if (suggestionToggle) {
+          suggestionToggle.addEventListener('click', () => {
+            toggleSuggestionMode();
+          });
+        }
       }
 
       function getSystemTheme() {
@@ -1863,6 +1989,7 @@
         initBoard();
         setInputMode('pgn');
         bindUi();
+        initSuggestionMode();
         initializePieceCounts();
         state.game = createBaseGame();
         updateMaterialDiff();
