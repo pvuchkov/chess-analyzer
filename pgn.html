@@ -327,6 +327,86 @@
       color: var(--muted);
     }
 
+    .summary-scroll {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .summary-table {
+      display: grid;
+      gap: 10px;
+      min-width: 640px;
+    }
+
+    .summary-row {
+      display: grid;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-row.summary-header {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+
+    .summary-row[data-color] {
+      background: rgba(148, 163, 184, 0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    [data-theme="light"] .summary-row[data-color] {
+      background: rgba(37, 99, 235, 0.06);
+    }
+
+    .summary-cell {
+      text-align: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .summary-cell-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .summary-icon {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+    }
+
+    .summary-player-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .summary-player-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .summary-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .summary-meta strong {
+      font-weight: 600;
+      color: var(--text);
+    }
+
     .kv {
       display: grid;
       grid-template-columns: 120px 1fr;
@@ -613,6 +693,11 @@
         <div id="eloBlack">—</div>
       </div>
 
+      <h2 style="margin-top:22px;">Move summary</h2>
+      <div class="summary-scroll">
+        <div id="moveSummaryTable" class="summary-table"></div>
+      </div>
+
       <div class="suggestions-header">
         <h2>Engine suggestions <span id="suggestionModeLabel" class="suggestion-mode-label">Played move review</span> <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
         <button id="suggestionToggle" class="secondary">Show next move advice</button>
@@ -685,6 +770,198 @@
         }
       };
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
+      const moveSummaryCategories = [
+        { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
+        { key: 'great', label: 'Great', icon: './move-classifications/great.png' },
+        { key: 'best', label: 'Best', icon: './move-classifications/best.png' },
+        { key: 'excellent', label: 'Excellent', icon: './move-classifications/excellent.png' },
+        { key: 'good', label: 'Good', icon: './move-classifications/good.png' },
+        { key: 'inaccuracy', label: 'Inaccuracy', icon: './move-classifications/inaccuracy.png' },
+        { key: 'mistake', label: 'Mistake', icon: './move-classifications/mistake.png' },
+        { key: 'blunder', label: 'Blunder', icon: './move-classifications/blunder.png' },
+        { key: 'miss', label: 'Miss', icon: './move-classifications/miss.png' }
+      ];
+
+      function initMoveSummary() {
+        const table = byId('moveSummaryTable');
+        if (!table) return;
+        table.innerHTML = '';
+        const columnTemplate = `minmax(150px, 1.3fr) repeat(${moveSummaryCategories.length}, minmax(60px, 1fr))`;
+
+        const headerRow = document.createElement('div');
+        headerRow.className = 'summary-row summary-header';
+        headerRow.style.gridTemplateColumns = columnTemplate;
+        const playerHeader = document.createElement('div');
+        playerHeader.className = 'summary-player-cell';
+        playerHeader.textContent = 'Player';
+        headerRow.appendChild(playerHeader);
+        moveSummaryCategories.forEach((category) => {
+          const cell = document.createElement('div');
+          cell.className = 'summary-cell summary-cell-header';
+          if (category.icon) {
+            const icon = document.createElement('img');
+            icon.src = category.icon;
+            icon.alt = category.label;
+            icon.className = 'summary-icon';
+            cell.appendChild(icon);
+          }
+          const label = document.createElement('span');
+          label.textContent = category.label;
+          cell.appendChild(label);
+          headerRow.appendChild(cell);
+        });
+        table.appendChild(headerRow);
+
+        const players = [
+          { name: 'White', color: 'w' },
+          { name: 'Black', color: 'b' }
+        ];
+        players.forEach((player) => {
+          const row = document.createElement('div');
+          row.className = 'summary-row';
+          row.dataset.color = player.color;
+          row.style.gridTemplateColumns = columnTemplate;
+
+          const playerCell = document.createElement('div');
+          playerCell.className = 'summary-player-cell';
+          const playerName = document.createElement('div');
+          playerName.className = 'summary-player-name';
+          playerName.textContent = player.name;
+          playerCell.appendChild(playerName);
+
+          const meta = document.createElement('div');
+          meta.className = 'summary-meta';
+
+          const accuracySpan = document.createElement('span');
+          accuracySpan.textContent = 'Accuracy ';
+          const accuracyValue = document.createElement('strong');
+          accuracyValue.dataset.role = 'accuracy';
+          accuracyValue.textContent = '—';
+          accuracySpan.appendChild(accuracyValue);
+          meta.appendChild(accuracySpan);
+
+          const cpLossSpan = document.createElement('span');
+          cpLossSpan.textContent = 'Avg CPL ';
+          const cpLossValue = document.createElement('strong');
+          cpLossValue.dataset.role = 'cpLoss';
+          cpLossValue.textContent = '—';
+          cpLossSpan.appendChild(cpLossValue);
+          meta.appendChild(cpLossSpan);
+
+          playerCell.appendChild(meta);
+          row.appendChild(playerCell);
+
+          moveSummaryCategories.forEach((category) => {
+            const cell = document.createElement('div');
+            cell.className = 'summary-cell';
+            cell.dataset.key = category.key;
+            cell.textContent = '—';
+            row.appendChild(cell);
+          });
+
+          table.appendChild(row);
+        });
+      }
+
+      function createSummaryBucket() {
+        const counts = {};
+        moveSummaryCategories.forEach((category) => {
+          counts[category.key] = 0;
+        });
+        return {
+          counts,
+          moves: 0,
+          analyzedMoves: 0,
+          accuracySum: 0,
+          accuracyCount: 0,
+          cpLossSum: 0,
+          cpLossCount: 0
+        };
+      }
+
+      function computeCpLoss(bestCp, actualCp, color) {
+        if (!Number.isFinite(bestCp) || !Number.isFinite(actualCp)) return null;
+        const clamp = (cp) => Math.max(-1000, Math.min(1000, cp));
+        const best = clamp(bestCp);
+        const actual = clamp(actualCp);
+        if (color === 'b') {
+          return Math.max(0, actual - best);
+        }
+        return Math.max(0, best - actual);
+      }
+
+      function computeMoveSummary() {
+        const summary = {
+          w: createSummaryBucket(),
+          b: createSummaryBucket()
+        };
+        state.verboseHistory.forEach((entry) => {
+          if (!entry) return;
+          const color = entry.color === 'b' ? 'b' : 'w';
+          const bucket = summary[color];
+          bucket.moves++;
+          if (!entry.analysis) return;
+          bucket.analyzedMoves++;
+          const classification = entry.analysis.classification;
+          if (classification && Object.prototype.hasOwnProperty.call(bucket.counts, classification)) {
+            bucket.counts[classification] += 1;
+          }
+          const expectedLoss = entry.analysis.expectedLoss;
+          if (Number.isFinite(expectedLoss)) {
+            bucket.accuracySum += expectedLoss;
+            bucket.accuracyCount++;
+          }
+          const cpLoss = entry.analysis.cpLoss;
+          if (Number.isFinite(cpLoss)) {
+            bucket.cpLossSum += cpLoss;
+            bucket.cpLossCount++;
+          }
+        });
+        return summary;
+      }
+
+      function updateMoveSummary() {
+        const table = byId('moveSummaryTable');
+        if (!table) return;
+        const summary = computeMoveSummary();
+        ['w', 'b'].forEach((color) => {
+          const row = table.querySelector(`.summary-row[data-color="${color}"]`);
+          if (!row) return;
+          const bucket = summary[color];
+          const hasAnalysis = bucket.analyzedMoves > 0;
+          moveSummaryCategories.forEach((category) => {
+            const cell = row.querySelector(`.summary-cell[data-key="${category.key}"]`);
+            if (!cell) return;
+            if (!hasAnalysis) {
+              cell.textContent = '—';
+            } else {
+              cell.textContent = bucket.counts[category.key] || 0;
+            }
+          });
+
+          const accuracyEl = row.querySelector('[data-role="accuracy"]');
+          if (accuracyEl) {
+            if (bucket.accuracyCount > 0) {
+              const avgLoss = bucket.accuracySum / bucket.accuracyCount;
+              const accuracy = Math.max(0, Math.min(100, 100 * (1 - avgLoss)));
+              accuracyEl.textContent = `${accuracy.toFixed(1)}%`;
+            } else {
+              accuracyEl.textContent = '—';
+            }
+          }
+
+          const cpLossEl = row.querySelector('[data-role="cpLoss"]');
+          if (cpLossEl) {
+            if (bucket.cpLossCount > 0) {
+              const avgCpLoss = bucket.cpLossSum / bucket.cpLossCount;
+              const formatted = Math.abs(avgCpLoss) < 1 ? avgCpLoss.toFixed(1) : avgCpLoss.toFixed(0);
+              cpLossEl.textContent = formatted;
+            } else {
+              cpLossEl.textContent = '—';
+            }
+          }
+        });
+      }
 
       function createBaseGame(fen = state.initialFen) {
         if (fen && fen !== 'start') {
@@ -1065,6 +1342,7 @@
           container.appendChild(black);
         }
         highlightActive();
+        updateMoveSummary();
       }
 
       function highlightActive() {
@@ -1680,6 +1958,7 @@
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
         const bestEp = cpToExpectedPoints(bestCp);
         const actualEp = cpToExpectedPoints(actualCp);
+        const cpLoss = computeCpLoss(bestCp, actualCp, moveEntry.color);
         const classificationData = classifyMoveContext({
           bestEp,
           actualEp,
@@ -1698,6 +1977,9 @@
           beforeEp,
           expectedLoss: classificationData.expectedLoss,
           classification: classificationData.classification,
+          bestCp,
+          actualCp,
+          cpLoss,
           depth: multiResult.depth || depth || 0,
           movetime
         };
@@ -1987,6 +2269,8 @@
 
         initTheme();
         initBoard();
+        initMoveSummary();
+        updateMoveSummary();
         setInputMode('pgn');
         bindUi();
         initSuggestionMode();
