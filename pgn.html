@@ -258,6 +258,26 @@
       height: 100%;
       pointer-events: none;
       display: block;
+      z-index: 2;
+    }
+
+    #arrowLayer text {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      fill: var(--text);
+      stroke: rgba(0, 0, 0, 0.55);
+      stroke-width: 3px;
+      paint-order: stroke fill;
+      pointer-events: none;
+    }
+
+    #board .square-last-move {
+      box-shadow: inset 0 0 0 4px rgba(250, 204, 21, 0.85);
+    }
+
+    #board .square-last-destination {
+      box-shadow: inset 0 0 0 4px rgba(125, 196, 255, 0.9);
     }
 
     #arrowLayer text {
@@ -607,9 +627,6 @@
       <h2>Load game</h2>
       <div class="row">
         <input id="lichessUrl" type="text" placeholder="Paste Lichess URL or game ID" autocomplete="off" />
-      </div>
-      <div class="row">
-        <input id="token" type="password" placeholder="Optional: API token for private games" autocomplete="off" />
         <button id="loadBtn">Fetch PGN</button>
       </div>
       <div class="row">
@@ -676,6 +693,14 @@
         <div id="tagResult">—</div>
         <div>Opening</div>
         <div id="tagOpening">—</div>
+      </div>
+
+      <div class="rating-guess">
+        <button id="guessEloBtn" class="secondary">Guess player ratings</button>
+        <div class="rating-guess-values">
+          <span>White: <span id="whiteEloGuess">—</span></span>
+          <span>Black: <span id="blackEloGuess">—</span></span>
+        </div>
       </div>
 
       <h2 style="margin-top:22px;">Engine suggestions <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
@@ -841,8 +866,9 @@
       function syncArrowLayer() {
         const boardEl = byId('board');
         const svg = byId('arrowLayer');
+        if (!boardEl || !svg) return;
         const rect = boardEl.getBoundingClientRect();
-        svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.width}`);
+        svg.setAttribute('viewBox', '0 0 8 8');
         svg.setAttribute('width', rect.width);
         svg.setAttribute('height', rect.width);
         const evalBar = byId('evalBar');
@@ -869,12 +895,11 @@
         }
       }
 
-      async function fetchPGN(input, token) {
+      async function fetchPGN(input) {
         const id = extractGameId(input);
         if (!id) throw new Error('Please provide a Lichess URL or game ID.');
         const params = new URLSearchParams({ moves: '1', tags: '1', clocks: '1', opening: '1', evals: '0', literate: '0' });
         const headers = { 'Accept': 'application/x-chess-pgn' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch(`https://lichess.org/game/export/${id}.pgn?${params.toString()}`, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
         return res.text();
@@ -1019,6 +1044,9 @@
             state.game.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
           }
         }
+        updateMaterialBalance();
+        state.lastHighlightedMove = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
+        refreshBoardHighlights();
         highlightActive();
         analyzeCurrent();
 
@@ -1039,6 +1067,7 @@
 
       function drawArrows(list) {
         const svg = byId('arrowLayer');
+        if (!svg) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         defs.innerHTML = `
@@ -1053,22 +1082,13 @@
         </marker>`;
         svg.appendChild(defs);
         if (!list || !list.length) return;
-        const boardRect = byId('board').getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
         function squareCenter(sq) {
-          const file = sq.charCodeAt(0) - 97;
-          const rank = parseInt(sq[1], 10) - 1;
-          if (state.orientation === 'white') {
-            return {
-              x: (file + 0.5) * squareSize,
-              y: ((7 - rank) + 0.5) * squareSize
-            };
-          } else {
-            return {
-              x: ((7 - file) + 0.5) * squareSize,
-              y: (rank + 0.5) * squareSize
-            };
-          }
+          const coords = squareToDisplayCoords(sq);
+          if (!coords) return null;
+          return {
+            x: coords.col + 0.5,
+            y: coords.row + 0.5
+          };
         }
         const colors = ['#4ade80', '#38bdf8', '#f97316'];
         const opacities = [0.95, 0.35, 0.35];
@@ -1076,13 +1096,13 @@
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
+          if (!from || !to) return;
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const len = Math.hypot(dx, dy);
           if (!len) return;
-          // Make arrows smaller - reduce the shorten amount and starting offset
-          const shorten = Math.min(12, len * 0.15); // Reduced from 20 to 12, 0.2 to 0.15
-          const startOffset = Math.min(12, len * 0.1); // Start closer to the piece
+          const shorten = Math.min(0.6, len * 0.25);
+          const startOffset = Math.min(0.4, len * 0.2);
           const sx = from.x + (dx / len) * startOffset;
           const sy = from.y + (dy / len) * startOffset;
           const ex = to.x - (dx / len) * shorten;
@@ -1093,7 +1113,8 @@
           line.setAttribute('x2', ex);
           line.setAttribute('y2', ey);
           line.setAttribute('stroke', colors[i] || colors[2]);
-          line.setAttribute('stroke-width', Math.max(4, 6 - i * 0.8)); // Smaller base width, progressive reduction
+          const strokeWidth = Math.max(0.16, 0.28 - i * 0.04);
+          line.setAttribute('stroke-width', strokeWidth);
           line.setAttribute('stroke-linecap', 'round');
           line.setAttribute('marker-end', `url(#m${i + 1})`);
           line.setAttribute('opacity', opacities[i] || opacities[2]);
@@ -1336,6 +1357,7 @@
                   historyEntry.classification = null;
                 }
                 renderMoves(); // Re-render to show the evaluation
+                refreshBoardHighlights();
               }
             }
             setStatus('engStatus', `Analysis complete (${engineLabel})`);
@@ -1448,7 +1470,7 @@
         if (!gameId) return;
         try {
           setStatus('loadStatus', 'Fetching PGN…');
-          const pgn = await fetchPGN(gameId, token);
+          const pgn = await fetchPGN(gameId);
           state.game.loadPgn(pgn);
           state.verboseHistory = buildHistory(state.game);
           state.bestEvalByPly = [];
@@ -1456,6 +1478,9 @@
           state.game.reset();
           state.ply = 0;
           state.board.position('start');
+          state.lastHighlightedMove = null;
+          refreshBoardHighlights();
+          updateMaterialBalance();
           populateHeaders(parseHeaders(pgn));
           renderMoves();
           if (state.engineReady) state.engine.postMessage('ucinewgame');
@@ -1474,12 +1499,11 @@
       function bindUi() {
         byId('loadBtn').addEventListener('click', async () => {
           const input = byId('lichessUrl').value.trim();
-          const token = byId('token').value;
           if (!input) return setStatus('loadStatus', 'Please paste a Lichess URL or ID.', 'error');
 
           const gameId = extractGameId(input);
           setUrlParam('game', gameId);
-          await loadGame(gameId, token);
+          await loadGame(gameId);
         });
 
         byId('lichessUrl').addEventListener('input', () => {
@@ -1495,7 +1519,10 @@
         byId('flipBtn').addEventListener('click', () => {
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
-          requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
+          requestAnimationFrame(() => {
+            drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []);
+            refreshBoardHighlights();
+          });
         });
         byId('timeMs').addEventListener('change', analyzeCurrent);
         byId('depth').addEventListener('change', analyzeCurrent);
@@ -1575,6 +1602,8 @@
         initBoard();
         bindUi();
         updateEvalBar(null); // Initialize evaluation bar to neutral
+        updateMaterialBalance();
+        updateEloGuessDisplay();
         setStatus('engStatus', 'Initializing engine…');
         ensureEngine();
 
