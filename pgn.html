@@ -1557,10 +1557,37 @@
           };
         };
 
-        const colors = ['#4ade80', '#38bdf8', '#f97316'];
-        const opacities = [0.95, 0.4, 0.4];
+        const palette = [
+          { color: '#22c55e', width: 0.3 },
+          { color: '#0ea5e9', width: 0.27 },
+          { color: '#f97316', width: 0.25 }
+        ];
 
-        list.forEach((entry, i) => {
+        const MIN_ARROW_ALPHA = 0.25;
+        const MAX_ARROW_ALPHA = 0.8;
+
+        const getScore = (entry) => {
+          if (!entry) return null;
+          if (typeof entry.cp === 'number') return entry.cp;
+          if (typeof entry.mate === 'number') return mateToCp(entry.mate);
+          return null;
+        };
+
+        const scored = list.slice(0, 3).map((entry) => ({
+          entry,
+          score: getScore(entry)
+        }));
+
+        if (!scored.length) return;
+
+        const bestScore = scored[0].score;
+        const scoreDiffs = scored.map(({ score }) => {
+          if (bestScore === null || score === null) return null;
+          return Math.abs(score - bestScore);
+        });
+        const maxDiff = scoreDiffs.reduce((acc, diff) => (diff !== null ? Math.max(acc, diff) : acc), 0);
+
+        scored.forEach(({ entry }, i) => {
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
@@ -1587,15 +1614,28 @@
           const startX = from.x + nx * tailPadding;
           const startY = from.y + ny * tailPadding;
 
+          let opacity = 1;
+          if (i > 0) {
+            const diff = scoreDiffs[i];
+            if (diff === null || maxDiff === 0) {
+              opacity = MAX_ARROW_ALPHA;
+            } else {
+              const closeness = 1 - diff / maxDiff;
+              opacity = MIN_ARROW_ALPHA + Math.max(0, Math.min(1, closeness)) * (MAX_ARROW_ALPHA - MIN_ARROW_ALPHA);
+            }
+          }
+
+          const paletteEntry = palette[i] || palette[palette.length - 1];
+
           const shaft = document.createElementNS('http://www.w3.org/2000/svg', 'line');
           shaft.setAttribute('x1', startX);
           shaft.setAttribute('y1', startY);
           shaft.setAttribute('x2', baseX);
           shaft.setAttribute('y2', baseY);
-          shaft.setAttribute('stroke', colors[i] || colors[colors.length - 1]);
-          shaft.setAttribute('stroke-width', Math.max(0.16, 0.28 - i * 0.04));
+          shaft.setAttribute('stroke', paletteEntry.color);
+          shaft.setAttribute('stroke-width', paletteEntry.width);
           shaft.setAttribute('stroke-linecap', 'round');
-          shaft.setAttribute('opacity', opacities[i] || opacities[opacities.length - 1]);
+          shaft.setAttribute('opacity', opacity);
           svg.appendChild(shaft);
 
           const headWidth = headLength * 0.55;
@@ -1606,8 +1646,8 @@
 
           const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           head.setAttribute('d', `M ${tipX} ${tipY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`);
-          head.setAttribute('fill', colors[i] || colors[colors.length - 1]);
-          head.setAttribute('opacity', opacities[i] || opacities[opacities.length - 1]);
+          head.setAttribute('fill', paletteEntry.color);
+          head.setAttribute('opacity', opacity);
           svg.appendChild(head);
 
           if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange)) {
@@ -1620,6 +1660,8 @@
             label.setAttribute('y', ty);
             label.setAttribute('text-anchor', 'middle');
             label.setAttribute('dominant-baseline', 'middle');
+            label.setAttribute('fill', paletteEntry.color);
+            label.setAttribute('opacity', Math.min(1, opacity + 0.1));
             label.textContent = formatRatingDelta(entry.ratingChange);
             svg.appendChild(label);
           }
