@@ -138,7 +138,9 @@
 
     input[type="text"],
     input[type="password"],
-    input[type="number"] {
+    input[type="number"],
+    textarea,
+    select {
       flex: 1;
       min-width: 0;
       padding: 10px 12px;
@@ -153,14 +155,18 @@
 
     [data-theme="dark"] input[type="text"],
     [data-theme="dark"] input[type="password"],
-    [data-theme="dark"] input[type="number"] {
+    [data-theme="dark"] input[type="number"],
+    [data-theme="dark"] textarea,
+    [data-theme="dark"] select {
       background: #0b1024;
       border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     [data-theme="light"] input[type="text"],
     [data-theme="light"] input[type="password"],
-    [data-theme="light"] input[type="number"] {
+    [data-theme="light"] input[type="number"],
+    [data-theme="light"] textarea,
+    [data-theme="light"] select {
       background: #ffffff;
       border: 1px solid rgba(0, 0, 0, 0.15);
       color: #212529;
@@ -168,7 +174,9 @@
 
     input[type="text"]:focus,
     input[type="password"]:focus,
-    input[type="number"]:focus {
+    input[type="number"]:focus,
+    textarea:focus,
+    select:focus {
       border-color: var(--accent);
     }
 
@@ -225,6 +233,102 @@
       accent-color: var(--accent);
     }
 
+    .load-controls {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .input-switch {
+      display: grid;
+      gap: 10px;
+    }
+
+    .input-switch select {
+      max-width: 220px;
+      flex: none;
+    }
+
+    textarea {
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .game-input {
+      width: 100%;
+      min-height: 120px;
+    }
+
+    .game-input.compact {
+      min-height: 54px;
+      max-height: 120px;
+    }
+
+    .material-panel {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(125, 196, 255, 0.18);
+      background: rgba(125, 196, 255, 0.08);
+      display: grid;
+      gap: 10px;
+    }
+
+    [data-theme="light"] .material-panel {
+      border-color: rgba(37, 99, 235, 0.18);
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .material-header {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+    }
+
+    .material-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .material-side {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .material-side-label {
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .material-icons {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-height: 24px;
+    }
+
+    .material-icons img {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+    }
+
+    .material-score {
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-weight: 600;
+      min-width: 44px;
+      text-align: right;
+    }
+
     .status {
       min-height: 20px;
       font-size: 13px;
@@ -272,12 +376,47 @@
       pointer-events: none;
     }
 
-    #board .square-last-move {
-      box-shadow: inset 0 0 0 4px rgba(250, 204, 21, 0.85);
+    #board .square-55d63 {
+      position: relative;
+      overflow: hidden;
     }
 
-    #board .square-last-destination {
-      box-shadow: inset 0 0 0 4px rgba(125, 196, 255, 0.9);
+    #board .square-55d63::after {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 10px;
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    #board .highlight-last-from::after {
+      background: rgba(56, 189, 248, 0.3);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
+      opacity: 1;
+    }
+
+    #board .highlight-last-to::after {
+      background: rgba(94, 225, 163, 0.32);
+      box-shadow: 0 0 18px rgba(94, 225, 163, 0.45);
+      opacity: 1;
+    }
+
+    #board .highlight-next-from::after,
+    #board .highlight-next-to::after {
+      opacity: 1;
+      border: 1px solid rgba(148, 163, 196, 0.4);
+      transform: scale(0.95);
+    }
+
+    #board .highlight-next-from::after {
+      background: rgba(250, 204, 21, 0.18);
+      box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
+    }
+
+    #board .highlight-next-to::after {
+      background: rgba(125, 196, 255, 0.18);
+      box-shadow: 0 0 14px rgba(125, 196, 255, 0.32);
     }
 
     #arrowLayer text {
@@ -394,6 +533,12 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
+    }
+
+    .mv-badge img {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
     }
 
     .mv-badge[data-grade="Brilliant"] {
@@ -533,19 +678,28 @@
       position: relative;
       width: 26px;
       border-radius: 18px;
-      background: linear-gradient(to bottom, var(--eval-black) 0%, rgba(17, 24, 39, 0.75) 50%, var(--eval-white) 100%);
+      background: rgba(15, 23, 42, 0.35);
       border: 1px solid var(--eval-border);
       overflow: hidden;
       min-height: 320px;
       transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
-    .eval-bar::after {
-      content: '';
+    .eval-fill {
       position: absolute;
-      inset: 0;
-      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0) 30%, rgba(255, 255, 255, 0.25) 70%, rgba(255, 255, 255, 0.4));
-      pointer-events: none;
+      left: 0;
+      right: 0;
+      transition: height 0.18s ease;
+    }
+
+    .eval-fill.eval-black {
+      top: 0;
+      background: linear-gradient(to bottom, rgba(17, 24, 39, 0.95), rgba(17, 24, 39, 0.75));
+    }
+
+    .eval-fill.eval-white {
+      bottom: 0;
+      background: linear-gradient(to top, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.78));
     }
 
     .eval-zero-line {
@@ -625,20 +779,26 @@
   <div class="layout">
     <div class="card">
       <h2>Load game</h2>
-      <div class="row">
-        <input id="lichessUrl" type="text" placeholder="Paste Lichess URL or game ID" autocomplete="off" />
-        <button id="loadBtn">Fetch PGN</button>
+      <div class="load-controls">
+        <div class="input-switch">
+          <select id="inputType">
+            <option value="pgn">Paste PGN</option>
+            <option value="lichess">Lichess URL / ID</option>
+            <option value="fen">FEN</option>
+          </select>
+          <textarea id="gameInput" class="game-input" placeholder="Paste a PGN" autocomplete="off" spellcheck="false"></textarea>
+        </div>
+        <button id="loadBtn">Load</button>
       </div>
-      <div class="row">
-        <label class="hint">Tip: run from http://localhost (e.g. python -m http.server). file:// may block network
-          requests.</label>
-      </div>
+      <div class="hint">Tip: run from http://localhost (e.g. python -m http.server). file:// may block network requests.</div>
       <div id="loadStatus" class="status"></div>
 
       <h2>Board</h2>
       <div class="board-eval-wrap">
         <div class="eval-column">
           <div class="eval-bar" id="evalBar">
+            <div class="eval-fill eval-black" id="evalBlackFill"></div>
+            <div class="eval-fill eval-white" id="evalWhiteFill"></div>
             <div class="eval-zero-line"></div>
             <div class="eval-pointer" id="evalPointer">
               <span class="eval-value" id="evalValue">0.00</span>
@@ -652,6 +812,24 @@
         <div class="board-wrap">
           <div id="board"></div>
           <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <div class="material-panel">
+        <div class="material-header">Material balance</div>
+        <div class="material-row" data-side="white">
+          <div class="material-side">
+            <span class="material-side-label">White</span>
+            <div class="material-icons" id="materialWhiteIcons"></div>
+          </div>
+          <span class="material-score" id="materialWhiteScore">0</span>
+        </div>
+        <div class="material-row" data-side="black">
+          <div class="material-side">
+            <span class="material-side-label">Black</span>
+            <div class="material-icons" id="materialBlackIcons"></div>
+          </div>
+          <span class="material-score" id="materialBlackScore">0</span>
         </div>
       </div>
 
@@ -725,11 +903,22 @@
     import { Chess } from './chess.js';
     (function () {
       const byId = (id) => document.getElementById(id);
+      const START_FEN = new Chess().fen();
       const state = {
         board: null,
         orientation: 'white',
         game: new Chess(),
+        fullGame: null,
         verboseHistory: [],
+        initialFen: START_FEN,
+        initialPositionKey: 'start',
+        headers: {},
+        ratingGuess: {
+          white: null,
+          black: null
+        },
+        lastHighlightedMove: null,
+        currentSource: null,
         ply: 0,
         engine: null,
         engineReady: false,
@@ -741,6 +930,44 @@
         settings: {
           showArrowRatings: true
         }
+      };
+
+      const INPUT_TYPES = {
+        PGN: 'pgn',
+        LICHESS: 'lichess',
+        FEN: 'fen'
+      };
+
+      const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+      const PIECE_NAMES = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen' };
+
+      const MATERIAL_ICONS = {
+        white: {
+          p: 'chesspieces/wikipedia/bP.png',
+          n: 'chesspieces/wikipedia/bN.png',
+          b: 'chesspieces/wikipedia/bB.png',
+          r: 'chesspieces/wikipedia/bR.png',
+          q: 'chesspieces/wikipedia/bQ.png'
+        },
+        black: {
+          p: 'chesspieces/wikipedia/wP.png',
+          n: 'chesspieces/wikipedia/wN.png',
+          b: 'chesspieces/wikipedia/wB.png',
+          r: 'chesspieces/wikipedia/wR.png',
+          q: 'chesspieces/wikipedia/wQ.png'
+        }
+      };
+
+      const CLASSIFICATION_ICONS = {
+        'Brilliant': 'brilliant.png',
+        'Great': 'great.png',
+        'Best': 'best.png',
+        'Excellent': 'excellent.png',
+        'Good': 'good.png',
+        'Inaccuracy': 'inaccuracy.png',
+        'Mistake': 'mistake.png',
+        'Blunder': 'blunder.png',
+        'Missed Win': 'miss.png'
       };
 
       const ELO_PER_PAWN = 60;
@@ -771,6 +998,212 @@
           return `${entry.cp >= 0 ? '+' : ''}${(entry.cp / 100).toFixed(2)}`;
         }
         return entry.eval || '—';
+      }
+
+      function squareToDisplayCoords(square) {
+        if (!square || square.length < 2) return null;
+        const file = square.charCodeAt(0) - 97;
+        const rank = parseInt(square[1], 10) - 1;
+        if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
+          return null;
+        }
+        let col = file;
+        let row = 7 - rank;
+        if (state.orientation === 'black') {
+          col = 7 - col;
+          row = 7 - row;
+        }
+        return { col, row };
+      }
+
+      function refreshBoardHighlights() {
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        const classes = ['highlight-last-from', 'highlight-last-to', 'highlight-next-from', 'highlight-next-to'];
+        boardEl.querySelectorAll('.square-55d63').forEach((el) => {
+          classes.forEach(cls => el.classList.remove(cls));
+        });
+
+        const highlightSquare = (square, className) => {
+          if (!square) return;
+          const target = boardEl.querySelector(`.square-55d63[data-square="${square}"]`);
+          if (target) target.classList.add(className);
+        };
+
+        if (state.lastHighlightedMove) {
+          highlightSquare(state.lastHighlightedMove.from, 'highlight-last-from');
+          highlightSquare(state.lastHighlightedMove.to, 'highlight-last-to');
+        }
+
+        const upcoming = state.verboseHistory[state.ply] || null;
+        if (upcoming) {
+          highlightSquare(upcoming.from, 'highlight-next-from');
+          highlightSquare(upcoming.to, 'highlight-next-to');
+        }
+      }
+
+      function formatMaterialScore(score) {
+        if (!Number.isFinite(score) || score === 0) return '0';
+        return score > 0 ? `+${score}` : `${score}`;
+      }
+
+      function updateMaterialBalance() {
+        const whiteIcons = byId('materialWhiteIcons');
+        const blackIcons = byId('materialBlackIcons');
+        const whiteScoreEl = byId('materialWhiteScore');
+        const blackScoreEl = byId('materialBlackScore');
+        if (!whiteIcons || !blackIcons || !whiteScoreEl || !blackScoreEl) return;
+
+        whiteIcons.innerHTML = '';
+        blackIcons.innerHTML = '';
+
+        const counts = {
+          w: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+          b: { p: 0, n: 0, b: 0, r: 0, q: 0 }
+        };
+
+        if (state.game && typeof state.game.board === 'function') {
+          const board = state.game.board();
+          board.forEach(row => {
+            row.forEach(piece => {
+              if (!piece || piece.type === 'k') return;
+              counts[piece.color][piece.type] += 1;
+            });
+          });
+        }
+
+        let whiteMaterial = 0;
+        Object.keys(PIECE_VALUES).forEach((type) => {
+          const diff = counts.w[type] - counts.b[type];
+          whiteMaterial += diff * PIECE_VALUES[type];
+          if (diff > 0) {
+            for (let i = 0; i < diff; i++) {
+              const img = document.createElement('img');
+              img.src = MATERIAL_ICONS.white[type];
+              img.alt = `${PIECE_NAMES[type] || type.toUpperCase()} captured by White`;
+              whiteIcons.appendChild(img);
+            }
+          } else if (diff < 0) {
+            for (let i = 0; i < Math.abs(diff); i++) {
+              const img = document.createElement('img');
+              img.src = MATERIAL_ICONS.black[type];
+              img.alt = `${PIECE_NAMES[type] || type.toUpperCase()} captured by Black`;
+              blackIcons.appendChild(img);
+            }
+          }
+        });
+
+        if (!whiteIcons.childElementCount) {
+          const span = document.createElement('span');
+          span.className = 'muted';
+          span.textContent = '—';
+          whiteIcons.appendChild(span);
+        }
+
+        if (!blackIcons.childElementCount) {
+          const span = document.createElement('span');
+          span.className = 'muted';
+          span.textContent = '—';
+          blackIcons.appendChild(span);
+        }
+
+        const whiteScore = Math.round(whiteMaterial);
+        const blackScore = -whiteScore;
+        whiteScoreEl.textContent = formatMaterialScore(whiteScore);
+        blackScoreEl.textContent = formatMaterialScore(blackScore);
+      }
+
+      function updateEloGuessDisplay() {
+        const whiteEl = byId('whiteEloGuess');
+        const blackEl = byId('blackEloGuess');
+        if (!whiteEl || !blackEl) return;
+
+        const applyGuess = (el, guess) => {
+          if (!guess || !Number.isFinite(guess.value)) {
+            el.textContent = '—';
+            el.removeAttribute('title');
+            return;
+          }
+          const prefix = guess.source === 'tag' ? '' : '≈ ';
+          el.textContent = `${prefix}${guess.value}`;
+          if (guess.description) {
+            el.title = guess.description;
+          } else {
+            el.removeAttribute('title');
+          }
+        };
+
+        applyGuess(whiteEl, state.ratingGuess.white);
+        applyGuess(blackEl, state.ratingGuess.black);
+      }
+
+      function clearRatingGuess() {
+        state.ratingGuess = { white: null, black: null };
+        updateEloGuessDisplay();
+      }
+
+      function estimateRatingFromGame(color) {
+        const headerKey = color === 'white' ? 'WhiteElo' : 'BlackElo';
+        const rated = parseInt(state.headers?.[headerKey], 10);
+        if (Number.isFinite(rated)) {
+          return {
+            value: rated,
+            source: 'tag',
+            description: 'Provided by PGN tags'
+          };
+        }
+
+        const moves = state.verboseHistory.filter((_, idx) => idx % 2 === (color === 'white' ? 0 : 1));
+        const annotations = { brilliant: 0, good: 0, mistake: 0, blunder: 0 };
+        moves.forEach((mv) => {
+          if (!mv || !mv.san) return;
+          const san = mv.san;
+          if (san.includes('!!')) annotations.brilliant += 1;
+          else if (san.includes('!')) annotations.good += 1;
+          if (san.includes('??')) annotations.blunder += 1;
+          else if (san.includes('?')) annotations.mistake += 1;
+        });
+
+        let rating = 1100 + Math.min(moves.length, 80) * 6;
+        rating += annotations.brilliant * 25 + annotations.good * 10;
+        rating -= annotations.mistake * 25 + annotations.blunder * 45;
+
+        const result = state.headers?.Result || '';
+        if ((color === 'white' && result === '1-0') || (color === 'black' && result === '0-1')) {
+          rating += 30;
+        } else if (result === '1/2-1/2') {
+          rating += 10;
+        }
+
+        const checkmates = moves.filter(mv => mv && typeof mv.san === 'string' && mv.san.includes('#')).length;
+        rating += checkmates * 15;
+
+        const evalMoves = moves.filter(mv => mv && typeof mv.lossCp === 'number');
+        if (evalMoves.length) {
+          const avgLoss = evalMoves.reduce((sum, mv) => sum + Math.max(0, mv.lossCp), 0) / evalMoves.length;
+          const pawnLoss = avgLoss / 100;
+          rating += Math.max(-240, Math.min(240, (3 - pawnLoss) * 60));
+        }
+
+        const termination = state.headers?.Termination || '';
+        if (/time forfeit/i.test(termination)) {
+          rating -= 20;
+        }
+
+        rating = Math.round(Math.max(600, Math.min(2800, rating)));
+        return {
+          value: rating,
+          source: 'estimate',
+          description: 'Heuristic estimate from move annotations and engine loss'
+        };
+      }
+
+      function guessPlayerRatings() {
+        state.ratingGuess = {
+          white: estimateRatingFromGame('white'),
+          black: estimateRatingFromGame('black')
+        };
+        updateEloGuessDisplay();
       }
 
       function gradeMove(lossPawns, whiteBefore, whiteAfter, moverIsWhite) {
@@ -906,13 +1339,15 @@
       }
 
       function populateHeaders(headers) {
-        byId('tagWhite').textContent = headers.White || '—';
-        byId('tagBlack').textContent = headers.Black || '—';
-        byId('tagEvent').textContent = headers.Event || '—';
-        byId('tagSite').textContent = headers.Site || '—';
-        byId('tagDate').textContent = headers.Date || '—';
-        byId('tagResult').textContent = headers.Result || '—';
-        byId('tagOpening').textContent = headers.Opening || headers.ECO || '—';
+        const safe = headers || {};
+        state.headers = safe;
+        byId('tagWhite').textContent = safe.White || '—';
+        byId('tagBlack').textContent = safe.Black || '—';
+        byId('tagEvent').textContent = safe.Event || '—';
+        byId('tagSite').textContent = safe.Site || '—';
+        byId('tagDate').textContent = safe.Date || '—';
+        byId('tagResult').textContent = safe.Result || '—';
+        byId('tagOpening').textContent = safe.Opening || safe.ECO || '—';
       }
 
       function parseHeaders(pgn) {
@@ -925,14 +1360,15 @@
         return out;
       }
 
-      function buildHistory(game) {
+      function buildHistory(game, initialFen) {
         const verbose = [];
-        const temp = new Chess();
-        const moves = game.history();
-        temp.reset();
+        const startFen = initialFen || START_FEN;
+        const temp = new Chess(startFen);
+        const moves = game.history({ verbose: true });
         for (let idx = 0; idx < moves.length; idx++) {
           const mv = moves[idx];
           const played = temp.move(mv);
+          if (!played) continue;
           verbose.push({
             ...played,
             ply: idx + 1,
@@ -947,6 +1383,29 @@
         return verbose;
       }
 
+      function determineInitialFen(headers) {
+        if (headers && headers.SetUp === '1' && headers.FEN) {
+          return headers.FEN;
+        }
+        return START_FEN;
+      }
+
+      function determineInitialPositionKey(initialFen) {
+        return !initialFen || initialFen === START_FEN ? 'start' : initialFen;
+      }
+
+      function resetCurrentGame() {
+        state.game = new Chess(state.initialFen || START_FEN);
+      }
+
+      function getFenForPly(ply) {
+        if (ply <= 0) {
+          return state.initialFen || START_FEN;
+        }
+        const entry = state.verboseHistory[ply - 1];
+        return entry ? entry.fen : (state.initialFen || START_FEN);
+      }
+
       function renderMoves() {
         const container = byId('moves');
         container.innerHTML = '';
@@ -959,6 +1418,12 @@
 
           container.appendChild(createMoveCell(history[i], i));
           container.appendChild(createMoveCell(history[i + 1], i + 1));
+        }
+        if (!history.length) {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'muted';
+          placeholder.textContent = 'No moves available for this position.';
+          container.appendChild(placeholder);
         }
         highlightActive();
       }
@@ -982,7 +1447,16 @@
           const badge = document.createElement('span');
           badge.className = 'mv-badge';
           badge.dataset.grade = move.classification;
-          badge.textContent = move.classification;
+          const iconFile = CLASSIFICATION_ICONS[move.classification];
+          if (iconFile) {
+            const img = document.createElement('img');
+            img.src = `move-classifications/${iconFile}`;
+            img.alt = move.classification;
+            badge.appendChild(img);
+          }
+          const label = document.createElement('span');
+          label.textContent = move.classification;
+          badge.appendChild(label);
           header.appendChild(badge);
         }
 
@@ -1033,17 +1507,20 @@
       function goToPly(ply) {
         const max = state.verboseHistory.length;
         state.ply = Math.max(0, Math.min(max, ply));
-        if (state.ply === 0) {
-          state.board.position('start');
-          state.game.reset();
-        } else {
-          state.board.position(state.verboseHistory[state.ply - 1].fen);
-          state.game.reset();
-          for (let i = 0; i < state.ply; i++) {
-            const mv = state.verboseHistory[i];
-            state.game.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
+        resetCurrentGame();
+
+        if (state.board) {
+          if (state.ply === 0) {
+            state.board.position(state.initialPositionKey);
+          } else {
+            for (let i = 0; i < state.ply; i++) {
+              const mv = state.verboseHistory[i];
+              state.game.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
+            }
+            state.board.position(state.game.fen());
           }
         }
+
         updateMaterialBalance();
         state.lastHighlightedMove = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
         refreshBoardHighlights();
@@ -1220,12 +1697,20 @@
         const evalValueEl = byId('evalValue');
         const pointerEl = byId('evalPointer');
         const barEl = byId('evalBar');
+        const whiteFill = byId('evalWhiteFill');
+        const blackFill = byId('evalBlackFill');
         if (!evalValueEl || !pointerEl || !barEl) return;
+
+        const setNeutralFill = () => {
+          if (whiteFill) whiteFill.style.height = '50%';
+          if (blackFill) blackFill.style.height = '50%';
+        };
 
         if (!entry) {
           evalValueEl.textContent = '0.00';
           pointerEl.style.top = '50%';
           pointerEl.classList.remove('adv-white', 'adv-black');
+          setNeutralFill();
           return;
         }
 
@@ -1252,13 +1737,17 @@
         if (cpValue === null) {
           pointerEl.style.top = '50%';
           pointerEl.classList.remove('adv-white', 'adv-black');
+          setNeutralFill();
           return;
         }
 
         const cpWhite = ply % 2 === 0 ? cpValue : -cpValue;
         const clamped = clampCp(cpWhite);
         const percentWhite = (clamped + MAX_CP) / (2 * MAX_CP);
-        pointerEl.style.top = `${(1 - percentWhite) * 100}%`;
+        const boundedWhite = Math.max(0, Math.min(1, percentWhite));
+        pointerEl.style.top = `${(1 - boundedWhite) * 100}%`;
+        if (whiteFill) whiteFill.style.height = `${boundedWhite * 100}%`;
+        if (blackFill) blackFill.style.height = `${(1 - boundedWhite) * 100}%`;
 
         pointerEl.classList.remove('adv-white', 'adv-black');
         if (cpWhite > 80) {
@@ -1420,7 +1909,7 @@
         updatePVDisplay([]);
         setStatus('engStatus', 'Analyzing…');
 
-        const fen = state.ply === 0 ? new Chess().fen() : state.verboseHistory[state.ply - 1].fen;
+        const fen = getFenForPly(state.ply);
 
         // Stop any previous analysis
         state.engine.postMessage('stop');
@@ -1455,62 +1944,240 @@
         window.history.replaceState({}, '', url);
       }
 
-      function extractGameId(input) {
-        if (!input) return null;
-        try {
-          const url = new URL(input);
-          const pathSegments = url.pathname.split('/').filter(Boolean);
-          return pathSegments[0] || input;
-        } catch (e) {
-          return input; // Assume it's already a game ID
-        }
+      function getInputType() {
+        const select = byId('inputType');
+        return select ? (select.value || INPUT_TYPES.PGN) : INPUT_TYPES.PGN;
       }
 
-      async function loadGame(gameId, token = '', targetPly = null) {
-        if (!gameId) return;
+      function setInputType(type) {
+        const select = byId('inputType');
+        if (!select) return;
+        const normalized = Object.values(INPUT_TYPES).includes(type) ? type : INPUT_TYPES.PGN;
+        select.value = normalized;
+        updateInputAppearance();
+      }
+
+      function getCurrentInputValue() {
+        const textarea = byId('gameInput');
+        return textarea ? textarea.value.trim() : '';
+      }
+
+      function setCurrentInputValue(value) {
+        const textarea = byId('gameInput');
+        if (textarea) textarea.value = value || '';
+      }
+
+      function updateInputAppearance() {
+        const select = byId('inputType');
+        const textarea = byId('gameInput');
+        if (!select || !textarea) return;
+        const type = select.value || INPUT_TYPES.PGN;
+        textarea.classList.remove('compact');
+        let placeholder = 'Paste a PGN';
+        if (type === INPUT_TYPES.LICHESS) {
+          placeholder = 'Paste a Lichess game URL or ID';
+          textarea.classList.add('compact');
+        } else if (type === INPUT_TYPES.FEN) {
+          placeholder = 'Paste a FEN string';
+          textarea.classList.add('compact');
+        }
+        textarea.placeholder = placeholder;
+      }
+
+      function updateQueryFromInput() {
+        const type = getInputType();
+        const value = getCurrentInputValue();
+        const trimmedValue = value ? value.trim() : '';
+        if (type === INPUT_TYPES.LICHESS) {
+          const id = extractGameId(value);
+          setUrlParam('game', id || null);
+          setUrlParam('source', null);
+        } else {
+          setUrlParam('game', null);
+          setUrlParam('source', trimmedValue ? trimmedValue : null);
+        }
+        setUrlParam('inputType', type === INPUT_TYPES.PGN ? null : type);
+      }
+
+      async function setupGameFromPgn(pgn, targetPly = null) {
+        const raw = (pgn || '').trim();
+        if (!raw) throw new Error('PGN data is empty.');
+        const fullGame = new Chess();
+        const loaded = fullGame.loadPgn(raw, { sloppy: true });
+        if (!loaded) throw new Error('Invalid PGN data.');
+
+        state.fullGame = fullGame;
+        const headers = parseHeaders(raw);
+        populateHeaders(headers);
+
+        state.initialFen = determineInitialFen(headers);
+        state.initialPositionKey = determineInitialPositionKey(state.initialFen);
+        state.verboseHistory = buildHistory(fullGame, state.initialFen);
+        state.bestEvalByPly = [];
+        state.multiPv = new Map();
+        state.ply = 0;
+        state.lastHighlightedMove = null;
+        resetCurrentGame();
+
+        if (state.board) {
+          state.board.position(state.initialPositionKey);
+        }
+
+        renderMoves();
+        updateMaterialBalance();
+        refreshBoardHighlights();
+        updateEvalBar(null);
+
+        if (state.engineReady) {
+          state.engine.postMessage('ucinewgame');
+        }
+
+        const maxPly = state.verboseHistory.length;
+        const desiredPly = typeof targetPly === 'number'
+          ? Math.max(0, Math.min(maxPly, targetPly))
+          : maxPly;
+        goToPly(desiredPly);
+      }
+
+      function setupGameFromFen(fen) {
+        const trimmed = (fen || '').trim();
+        const temp = new Chess();
+        if (!trimmed || !temp.load(trimmed)) {
+          throw new Error('Invalid FEN string.');
+        }
+
+        const headers = {
+          White: '—',
+          Black: '—',
+          Event: 'Custom Position',
+          Site: '—',
+          Date: new Date().toISOString().slice(0, 10),
+          Result: '*',
+          Opening: '—',
+          FEN: trimmed,
+          SetUp: '1'
+        };
+        populateHeaders(headers);
+
+        state.fullGame = null;
+        state.initialFen = trimmed;
+        state.initialPositionKey = determineInitialPositionKey(trimmed);
+        state.verboseHistory = [];
+        state.bestEvalByPly = [];
+        state.multiPv = new Map();
+        state.ply = 0;
+        state.lastHighlightedMove = null;
+        resetCurrentGame();
+
+        if (state.board) {
+          state.board.position(state.initialPositionKey);
+        }
+
+        renderMoves();
+        updateMaterialBalance();
+        refreshBoardHighlights();
+        updateEvalBar(null);
+
+        if (state.engineReady) {
+          state.engine.postMessage('ucinewgame');
+        }
+
+        goToPly(0);
+      }
+
+      async function loadFromSource(source, targetPly = null) {
+        if (!source) return;
+        const type = source.type || getInputType();
+        const value = source.value ?? getCurrentInputValue();
+        state.currentSource = { type, value };
+
+        drawArrows([]);
+        updatePVDisplay([]);
+        clearRatingGuess();
+        updateEloGuessDisplay();
+        setUrlParam('ply', null);
+
         try {
-          setStatus('loadStatus', 'Fetching PGN…');
-          const pgn = await fetchPGN(gameId);
-          state.game.loadPgn(pgn);
-          state.verboseHistory = buildHistory(state.game);
-          state.bestEvalByPly = [];
-          state.multiPv = new Map();
-          state.game.reset();
-          state.ply = 0;
-          state.board.position('start');
-          state.lastHighlightedMove = null;
-          refreshBoardHighlights();
-          updateMaterialBalance();
-          populateHeaders(parseHeaders(pgn));
-          renderMoves();
-          if (state.engineReady) state.engine.postMessage('ucinewgame');
-          const maxPly = state.verboseHistory.length;
-          const desiredPly = typeof targetPly === 'number'
-            ? Math.max(0, Math.min(maxPly, targetPly))
-            : maxPly;
-          goToPly(desiredPly);
-          setStatus('loadStatus', 'Game ready.', 'ok');
+          if (type === INPUT_TYPES.LICHESS) {
+            const id = extractGameId(value);
+            if (!id) {
+              setStatus('loadStatus', 'Please provide a Lichess URL or game ID.', 'error');
+              return;
+            }
+            setStatus('loadStatus', 'Fetching PGN…');
+            const pgn = await fetchPGN(id);
+            await setupGameFromPgn(pgn, targetPly);
+            setUrlParam('game', id);
+            setUrlParam('source', null);
+            setStatus('loadStatus', 'Game ready.', 'ok');
+          } else if (type === INPUT_TYPES.FEN) {
+            if (!value || !value.trim()) {
+              setStatus('loadStatus', 'Please paste a FEN string.', 'error');
+              return;
+            }
+            setStatus('loadStatus', 'Loading position…');
+            setupGameFromFen(value);
+            setUrlParam('game', null);
+            setUrlParam('source', value.trim());
+            setStatus('loadStatus', 'Position ready.', 'ok');
+          } else {
+            if (!value || !value.trim()) {
+              setStatus('loadStatus', 'Please paste a PGN.', 'error');
+              return;
+            }
+            setStatus('loadStatus', 'Loading PGN…');
+            await setupGameFromPgn(value, targetPly);
+            setUrlParam('game', null);
+            setUrlParam('source', value.trim());
+            setStatus('loadStatus', 'Game ready.', 'ok');
+          }
         } catch (err) {
           console.error(err);
-          setStatus('loadStatus', err.message || 'Failed to load game.', 'error');
+          setStatus('loadStatus', err.message || 'Failed to load data.', 'error');
+          throw err;
         }
       }
 
       function bindUi() {
-        byId('loadBtn').addEventListener('click', async () => {
-          const input = byId('lichessUrl').value.trim();
-          if (!input) return setStatus('loadStatus', 'Please paste a Lichess URL or ID.', 'error');
+        const loadButton = byId('loadBtn');
+        if (loadButton) {
+          loadButton.addEventListener('click', async () => {
+            const type = getInputType();
+            const value = getCurrentInputValue();
+            if (!value) {
+              const message = type === INPUT_TYPES.LICHESS
+                ? 'Please paste a Lichess URL or ID.'
+                : type === INPUT_TYPES.FEN
+                  ? 'Please paste a FEN string.'
+                  : 'Please paste a PGN.';
+              setStatus('loadStatus', message, 'error');
+              return;
+            }
+            await loadFromSource({ type, value });
+          });
+        }
 
-          const gameId = extractGameId(input);
-          setUrlParam('game', gameId);
-          await loadGame(gameId);
-        });
+        const input = byId('gameInput');
+        if (input) {
+          input.addEventListener('input', () => {
+            updateQueryFromInput();
+          });
+        }
 
-        byId('lichessUrl').addEventListener('input', () => {
-          const input = byId('lichessUrl').value.trim();
-          const gameId = extractGameId(input);
-          setUrlParam('game', gameId || null);
-        });
+        const typeSelect = byId('inputType');
+        if (typeSelect) {
+          typeSelect.addEventListener('change', () => {
+            updateInputAppearance();
+            updateQueryFromInput();
+          });
+        }
+
+        const guessButton = byId('guessEloBtn');
+        if (guessButton) {
+          guessButton.addEventListener('click', () => {
+            guessPlayerRatings();
+          });
+        }
 
         byId('firstBtn').addEventListener('click', () => goToPly(0));
         byId('prevBtn').addEventListener('click', () => goToPly(state.ply - 1));
@@ -1543,7 +2210,9 @@
         }
 
         applySettingsToUi();
+        updateInputAppearance();
       }
+
 
       // Theme management
       function getSystemTheme() {
@@ -1607,15 +2276,30 @@
         setStatus('engStatus', 'Initializing engine…');
         ensureEngine();
 
-        // Check for game parameter in URL and auto-load
+        // Check for parameters in URL and auto-load
+        const inputTypeParam = getUrlParam('inputType');
+        const sourceParam = getUrlParam('source');
         const gameParam = getUrlParam('game');
         const plyParam = parseInt(getUrlParam('ply'), 10);
         const targetPly = Number.isFinite(plyParam) ? plyParam : null;
+
+        let initialType = inputTypeParam && Object.values(INPUT_TYPES).includes(inputTypeParam)
+          ? inputTypeParam
+          : INPUT_TYPES.PGN;
+        let initialValue = sourceParam || '';
+
         if (gameParam) {
-          byId('lichessUrl').value = gameParam;
-          setUrlParam('game', gameParam); // Ensure it's in URL
-          // Auto-load after a short delay to ensure engine is ready
-          setTimeout(() => loadGame(gameParam, '', targetPly), 1000);
+          initialType = INPUT_TYPES.LICHESS;
+          initialValue = gameParam;
+        }
+
+        setInputType(initialType);
+        setCurrentInputValue(initialValue);
+        updateInputAppearance();
+        updateQueryFromInput();
+
+        if ((initialType === INPUT_TYPES.LICHESS && initialValue) || (initialType !== INPUT_TYPES.LICHESS && initialValue)) {
+          setTimeout(() => loadFromSource({ type: initialType, value: initialValue }, targetPly), 800);
         } else if (targetPly !== null) {
           setUrlParam('ply', null);
         }
