@@ -229,6 +229,59 @@
       display: block;
     }
 
+    .board-badge-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .board-move-badge {
+      position: absolute;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.82);
+      border: 2px solid transparent;
+      box-shadow: 0 12px 30px rgba(8, 15, 35, 0.45);
+      transform: translate(-50%, -50%);
+    }
+
+    .board-move-badge-icon {
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 4px rgba(8, 15, 35, 0.45));
+    }
+
+    .board-move-badge[data-classification="best"],
+    .board-move-badge[data-classification="excellent"],
+    .board-move-badge[data-classification="good"],
+    .board-move-badge[data-classification="brilliant"],
+    .board-move-badge[data-classification="great"] {
+      border-color: var(--ok);
+      background: rgba(34, 197, 94, 0.2);
+    }
+
+    .board-move-badge[data-classification="book"] {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.22);
+    }
+
+    .board-move-badge[data-classification="inaccuracy"],
+    .board-move-badge[data-classification="miss"] {
+      border-color: var(--warn);
+      background: rgba(250, 204, 21, 0.24);
+    }
+
+    .board-move-badge[data-classification="mistake"],
+    .board-move-badge[data-classification="blunder"] {
+      border-color: var(--danger);
+      background: rgba(248, 113, 113, 0.25);
+    }
+
     .eval-column {
       width: 52px;
       display: flex;
@@ -633,6 +686,11 @@
         <div class="board-wrap">
           <div id="board"></div>
           <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+          <div class="board-badge-layer">
+            <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
+              <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+            </div>
+          </div>
         </div>
         <div class="eval-column">
           <div class="eval-label" id="evalWhiteValue">0.00</div>
@@ -746,7 +804,8 @@
         engineQueue: [],
         currentRequest: null,
         analysisToken: 0,
-        suggestionMode: 'played'
+        suggestionMode: 'played',
+        badgeRaf: null
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -1001,6 +1060,61 @@
         } else {
           state.board.position(fen);
         }
+        scheduleBoardBadgeUpdate();
+      }
+
+      function updateBoardClassificationBadge() {
+        const badge = byId('boardMoveBadge');
+        const icon = byId('boardMoveBadgeIcon');
+        const boardEl = byId('board');
+        if (!badge || !icon || !boardEl) return;
+
+        badge.style.display = 'none';
+        badge.removeAttribute('data-classification');
+        icon.removeAttribute('src');
+        icon.alt = '';
+
+        if (state.ply === 0) {
+          return;
+        }
+
+        const entry = state.verboseHistory[state.ply - 1];
+        if (!entry || !entry.analysis || !entry.analysis.classification || !entry.to) {
+          return;
+        }
+
+        const iconPath = classificationToIcon(entry.analysis.classification);
+        if (!iconPath) {
+          return;
+        }
+
+        const squareEl = boardEl.querySelector(`[data-square="${entry.to}"]`);
+        if (!squareEl) {
+          return;
+        }
+
+        const boardRect = boardEl.getBoundingClientRect();
+        const squareRect = squareEl.getBoundingClientRect();
+        const left = squareRect.left - boardRect.left + squareRect.width / 2;
+        const top = squareRect.top - boardRect.top + squareRect.height / 2;
+
+        const normalizedClass = entry.analysis.classification.toLowerCase().replace(/\s+/g, '-');
+        badge.style.left = `${left}px`;
+        badge.style.top = `${top}px`;
+        badge.setAttribute('data-classification', normalizedClass);
+        icon.src = iconPath;
+        icon.alt = entry.analysis.classification;
+        badge.style.display = 'flex';
+      }
+
+      function scheduleBoardBadgeUpdate() {
+        if (state.badgeRaf != null) {
+          cancelAnimationFrame(state.badgeRaf);
+        }
+        state.badgeRaf = requestAnimationFrame(() => {
+          state.badgeRaf = null;
+          updateBoardClassificationBadge();
+        });
       }
 
       function formatMaterialScore(score) {
@@ -1208,6 +1322,7 @@
         window.addEventListener('resize', () => {
           state.board.resize();
           syncArrowLayer();
+          scheduleBoardBadgeUpdate();
         });
       }
 
@@ -2058,6 +2173,9 @@
           depth: multiResult.depth || depth || 0,
           movetime
         };
+        if (state.ply === index + 1) {
+          scheduleBoardBadgeUpdate();
+        }
         state.analysisCache.set(index + 1, moveEntry.analysis);
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
           applyAnalysisForCurrentPly();
@@ -2239,6 +2357,7 @@
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
             drawArrows(analysis ? analysis.pvEntries || [] : []);
+            updateBoardClassificationBadge();
           });
         });
         byId('themeToggle').addEventListener('click', () => {
