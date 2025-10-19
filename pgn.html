@@ -250,25 +250,6 @@
       max-width: 420px;
     }
 
-    .board-overlay {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 3;
-    }
-
-    .board-overlay img {
-      position: absolute;
-      width: calc(100% / 8 * 0.7);
-      transform: translate(-50%, -50%);
-      left: calc((var(--col) + 0.5) * 12.5%);
-      top: calc((var(--row) + 0.5) * 12.5%);
-      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
-    }
-
     #arrowLayer {
       position: absolute;
       left: 0;
@@ -297,6 +278,17 @@
 
     #board .square-last-destination {
       box-shadow: inset 0 0 0 4px rgba(125, 196, 255, 0.9);
+    }
+
+    #arrowLayer text {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      fill: var(--text);
+      stroke: rgba(0, 0, 0, 0.55);
+      stroke-width: 3px;
+      paint-order: stroke fill;
+      pointer-events: none;
     }
 
     .kv {
@@ -401,13 +393,7 @@
       color: var(--badge-best);
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-    }
-
-    .mv-badge img {
-      width: 18px;
-      height: 18px;
-      display: block;
+      gap: 4px;
     }
 
     .mv-badge[data-grade="Brilliant"] {
@@ -547,21 +533,19 @@
       position: relative;
       width: 26px;
       border-radius: 18px;
-      background: var(--eval-black);
+      background: linear-gradient(to bottom, var(--eval-black) 0%, rgba(17, 24, 39, 0.75) 50%, var(--eval-white) 100%);
       border: 1px solid var(--eval-border);
       overflow: hidden;
       min-height: 320px;
       transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
-    .eval-fill {
+    .eval-bar::after {
+      content: '';
       position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: var(--eval-white);
-      transition: height 0.2s ease;
-      height: 50%;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0) 30%, rgba(255, 255, 255, 0.25) 70%, rgba(255, 255, 255, 0.4));
+      pointer-events: none;
     }
 
     .eval-zero-line {
@@ -630,48 +614,6 @@
       text-transform: uppercase;
       letter-spacing: 0.8px;
     }
-
-    .material-balance {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 14px;
-      padding: 8px 12px;
-      border-radius: 12px;
-      background: rgba(125, 196, 255, 0.08);
-      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
-      font-size: 13px;
-      gap: 16px;
-    }
-
-    [data-theme="light"] .material-balance {
-      background: rgba(37, 99, 235, 0.06);
-    }
-
-    .material-balance span strong {
-      font-weight: 600;
-    }
-
-    .rating-guess {
-      margin-top: 18px;
-      padding: 12px;
-      border-radius: 12px;
-      background: rgba(125, 196, 255, 0.08);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    [data-theme="light"] .rating-guess {
-      background: rgba(37, 99, 235, 0.06);
-    }
-
-    .rating-guess-values {
-      display: flex;
-      justify-content: space-between;
-      font-weight: 600;
-      font-size: 14px;
-    }
   </style>
 </head>
 
@@ -697,7 +639,6 @@
       <div class="board-eval-wrap">
         <div class="eval-column">
           <div class="eval-bar" id="evalBar">
-            <div class="eval-fill" id="evalFill"></div>
             <div class="eval-zero-line"></div>
             <div class="eval-pointer" id="evalPointer">
               <span class="eval-value" id="evalValue">0.00</span>
@@ -710,14 +651,8 @@
         </div>
         <div class="board-wrap">
           <div id="board"></div>
-          <div id="boardOverlay" class="board-overlay"></div>
           <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
         </div>
-      </div>
-
-      <div class="material-balance" id="materialBalance">
-        <span>White: <strong id="whiteMaterial">+0</strong></span>
-        <span>Black: <strong id="blackMaterial">+0</strong></span>
       </div>
 
       <label class="toggle-row">
@@ -803,8 +738,6 @@
         pendingAnalysis: null,
         multiPv: new Map(),
         bestEvalByPly: [],
-        lastHighlightedMove: null,
-        ratingGuessRequested: false,
         settings: {
           showArrowRatings: true
         }
@@ -812,18 +745,6 @@
 
       const ELO_PER_PAWN = 60;
       const MAX_CP = 4000;
-      const MATERIAL_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
-      const CLASS_ICON_MAP = {
-        'Brilliant': 'brilliant',
-        'Great': 'great',
-        'Best': 'best',
-        'Excellent': 'excellent',
-        'Good': 'good',
-        'Inaccuracy': 'inaccuracy',
-        'Mistake': 'mistake',
-        'Blunder': 'blunder',
-        'Missed Win': 'missed-win'
-      };
 
       function mateToCp(mate) {
         const base = 10000;
@@ -835,9 +756,10 @@
       }
 
       function formatRatingDelta(value) {
-        if (typeof value !== 'number' || Number.isNaN(value)) return '—';
-        if (value === 0) return '0';
-        return value > 0 ? `+${value}` : `${value}`;
+        if (typeof value !== 'number' || Number.isNaN(value)) return 'Δ —';
+        if (value === 0) return 'Δ 0';
+        const sign = value > 0 ? '+' : '';
+        return `Δ ${sign}${value}`;
       }
 
       function formatEvalDisplay(entry) {
@@ -849,145 +771,6 @@
           return `${entry.cp >= 0 ? '+' : ''}${(entry.cp / 100).toFixed(2)}`;
         }
         return entry.eval || '—';
-      }
-
-      function getClassificationIcon(name) {
-        if (!name) return null;
-        const key = CLASS_ICON_MAP[name];
-        return key ? `move-classifications/${key}.png` : null;
-      }
-
-      function squareToDisplayCoords(square) {
-        if (!square || square.length < 2) return null;
-        const normalized = square.toLowerCase();
-        const file = normalized.charCodeAt(0) - 97;
-        const rank = parseInt(normalized[1], 10) - 1;
-        if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
-        if (state.orientation === 'white') {
-          return { col: file, row: 7 - rank };
-        }
-        return { col: 7 - file, row: rank };
-      }
-
-      function highlightBoardMove(move) {
-        const boardEl = byId('board');
-        if (!boardEl) return;
-        boardEl.querySelectorAll('.square-last-move').forEach(el => el.classList.remove('square-last-move'));
-        boardEl.querySelectorAll('.square-last-destination').forEach(el => el.classList.remove('square-last-destination'));
-        if (!move) return;
-        const fromKey = move.from ? move.from.toLowerCase() : '';
-        const toKey = move.to ? move.to.toLowerCase() : '';
-        const fromEl = fromKey ? boardEl.querySelector(`[data-square='${fromKey}']`) : null;
-        const toEl = toKey ? boardEl.querySelector(`[data-square='${toKey}']`) : null;
-        const fromFallback = fromEl || (fromKey ? boardEl.querySelector(`.square-${fromKey}`) : null);
-        const toFallback = toEl || (toKey ? boardEl.querySelector(`.square-${toKey}`) : null);
-        if (fromFallback) fromFallback.classList.add('square-last-move');
-        if (toFallback) toFallback.classList.add('square-last-destination');
-      }
-
-      function renderBoardOverlay(move) {
-        const overlay = byId('boardOverlay');
-        if (!overlay) return;
-        overlay.innerHTML = '';
-        if (!move || !move.classification) return;
-        const iconPath = getClassificationIcon(move.classification);
-        if (!iconPath) return;
-        const coords = squareToDisplayCoords(move.to);
-        if (!coords) return;
-        const img = document.createElement('img');
-        img.src = iconPath;
-        img.alt = move.classification;
-        img.dataset.classification = move.classification;
-        img.style.setProperty('--col', coords.col);
-        img.style.setProperty('--row', coords.row);
-        overlay.appendChild(img);
-      }
-
-      function refreshBoardHighlights() {
-        highlightBoardMove(state.lastHighlightedMove);
-        renderBoardOverlay(state.lastHighlightedMove);
-      }
-
-      function formatMaterialDelta(value) {
-        if (!Number.isFinite(value) || value === 0) return '0';
-        return value > 0 ? `+${value}` : `${value}`;
-      }
-
-      function updateMaterialBalance() {
-        const whiteEl = byId('whiteMaterial');
-        const blackEl = byId('blackMaterial');
-        if (!whiteEl || !blackEl) return;
-        const boardMatrix = state.game.board();
-        let whiteTotal = 0;
-        let blackTotal = 0;
-        for (const row of boardMatrix) {
-          for (const piece of row) {
-            if (!piece) continue;
-            const value = MATERIAL_VALUES[piece.type] || 0;
-            if (piece.color === 'w') {
-              whiteTotal += value;
-            } else {
-              blackTotal += value;
-            }
-          }
-        }
-        const diff = whiteTotal - blackTotal;
-        whiteEl.textContent = formatMaterialDelta(diff);
-        blackEl.textContent = formatMaterialDelta(-diff);
-      }
-
-      function computePlayerAcpl(color) {
-        let total = 0;
-        let count = 0;
-        for (const move of state.verboseHistory) {
-          if (!move || move.color !== color) continue;
-          if (typeof move.lossCp === 'number') {
-            total += Math.max(0, Math.abs(move.lossCp));
-            count += 1;
-          }
-        }
-        if (!count) return null;
-        return total / count;
-      }
-
-      function guessEloFromAcpl(acpl) {
-        if (!Number.isFinite(acpl)) return null;
-        const estimate = 2800 - acpl * 12;
-        return Math.round(Math.max(600, Math.min(2800, estimate)));
-      }
-
-      function updateEloGuessDisplay() {
-        const whiteEl = byId('whiteEloGuess');
-        const blackEl = byId('blackEloGuess');
-        if (!whiteEl || !blackEl) return;
-        if (!state.ratingGuessRequested) {
-          whiteEl.textContent = '—';
-          whiteEl.removeAttribute('title');
-          blackEl.textContent = '—';
-          blackEl.removeAttribute('title');
-          return;
-        }
-
-        const whiteAcpl = computePlayerAcpl('w');
-        const blackAcpl = computePlayerAcpl('b');
-
-        if (Number.isFinite(whiteAcpl)) {
-          const guess = guessEloFromAcpl(whiteAcpl);
-          whiteEl.textContent = guess ? `≈${guess} (ACPL ${whiteAcpl.toFixed(1)})` : 'Need more data';
-          whiteEl.title = `Average centipawn loss: ${whiteAcpl.toFixed(1)}`;
-        } else {
-          whiteEl.textContent = 'Need more data';
-          whiteEl.removeAttribute('title');
-        }
-
-        if (Number.isFinite(blackAcpl)) {
-          const guess = guessEloFromAcpl(blackAcpl);
-          blackEl.textContent = guess ? `≈${guess} (ACPL ${blackAcpl.toFixed(1)})` : 'Need more data';
-          blackEl.title = `Average centipawn loss: ${blackAcpl.toFixed(1)}`;
-        } else {
-          blackEl.textContent = 'Need more data';
-          blackEl.removeAttribute('title');
-        }
       }
 
       function gradeMove(lossPawns, whiteBefore, whiteAfter, moverIsWhite) {
@@ -1092,7 +875,6 @@
         if (evalBar) {
           evalBar.style.height = `${rect.width}px`;
         }
-        refreshBoardHighlights();
       }
 
       function setStatus(id, msg, type) {
@@ -1179,7 +961,6 @@
           container.appendChild(createMoveCell(history[i + 1], i + 1));
         }
         highlightActive();
-        updateEloGuessDisplay();
       }
 
       function createMoveCell(move, idx) {
@@ -1201,16 +982,7 @@
           const badge = document.createElement('span');
           badge.className = 'mv-badge';
           badge.dataset.grade = move.classification;
-          const iconPath = getClassificationIcon(move.classification);
-          if (iconPath) {
-            const icon = document.createElement('img');
-            icon.src = iconPath;
-            icon.alt = move.classification;
-            badge.appendChild(icon);
-          }
-          const label = document.createElement('span');
-          label.textContent = move.classification;
-          badge.appendChild(label);
+          badge.textContent = move.classification;
           header.appendChild(badge);
         }
 
@@ -1299,13 +1071,13 @@
         while (svg.firstChild) svg.removeChild(svg.firstChild);
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         defs.innerHTML = `
-        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="0.6" markerHeight="0.6" orient="auto">
+        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#4ade80" />
         </marker>
-        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="0.6" markerHeight="0.6" orient="auto">
+        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#38bdf8" />
         </marker>
-        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="0.6" markerHeight="0.6" orient="auto">
+        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#f97316" />
         </marker>`;
         svg.appendChild(defs);
@@ -1348,12 +1120,12 @@
           line.setAttribute('opacity', opacities[i] || opacities[2]);
           svg.appendChild(line);
 
-          if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange) && Math.abs(entry.ratingChange) >= 1) {
+          if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange)) {
             const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            const offsetX = (-dy / len) * 0.45;
-            const offsetY = (dx / len) * 0.45;
-            label.setAttribute('x', ex + offsetX);
-            label.setAttribute('y', ey + offsetY);
+            const tx = ex + (-dy / len) * 18;
+            const ty = ey + (dx / len) * 18;
+            label.setAttribute('x', tx);
+            label.setAttribute('y', ty);
             label.setAttribute('text-anchor', 'middle');
             label.setAttribute('dominant-baseline', 'middle');
             label.textContent = formatRatingDelta(entry.ratingChange);
@@ -1423,7 +1195,12 @@
               const ratingChange = Math.round((diffCp / 100) * ELO_PER_PAWN);
               const clampedRating = Math.max(-600, Math.min(600, ratingChange));
               entry.ratingChange = clampedRating;
-              evalEl.textContent = evalText;
+              if (Math.abs(clampedRating) >= 1) {
+                const sign = clampedRating > 0 ? '+' : '';
+                evalEl.textContent = `${evalText} (${sign}${clampedRating})`;
+              } else {
+                evalEl.textContent = evalText;
+              }
             } else {
               entry.ratingChange = null;
               evalEl.textContent = evalText;
@@ -1443,14 +1220,12 @@
         const evalValueEl = byId('evalValue');
         const pointerEl = byId('evalPointer');
         const barEl = byId('evalBar');
-        const fillEl = byId('evalFill');
         if (!evalValueEl || !pointerEl || !barEl) return;
 
         if (!entry) {
           evalValueEl.textContent = '0.00';
           pointerEl.style.top = '50%';
           pointerEl.classList.remove('adv-white', 'adv-black');
-          if (fillEl) fillEl.style.height = '50%';
           return;
         }
 
@@ -1477,7 +1252,6 @@
         if (cpValue === null) {
           pointerEl.style.top = '50%';
           pointerEl.classList.remove('adv-white', 'adv-black');
-          if (fillEl) fillEl.style.height = '50%';
           return;
         }
 
@@ -1485,9 +1259,6 @@
         const clamped = clampCp(cpWhite);
         const percentWhite = (clamped + MAX_CP) / (2 * MAX_CP);
         pointerEl.style.top = `${(1 - percentWhite) * 100}%`;
-        if (fillEl) {
-          fillEl.style.height = `${percentWhite * 100}%`;
-        }
 
         pointerEl.classList.remove('adv-white', 'adv-black');
         if (cpWhite > 80) {
@@ -1684,7 +1455,18 @@
         window.history.replaceState({}, '', url);
       }
 
-      async function loadGame(gameId, targetPly = null) {
+      function extractGameId(input) {
+        if (!input) return null;
+        try {
+          const url = new URL(input);
+          const pathSegments = url.pathname.split('/').filter(Boolean);
+          return pathSegments[0] || input;
+        } catch (e) {
+          return input; // Assume it's already a game ID
+        }
+      }
+
+      async function loadGame(gameId, token = '', targetPly = null) {
         if (!gameId) return;
         try {
           setStatus('loadStatus', 'Fetching PGN…');
@@ -1757,14 +1539,6 @@
             state.settings.showArrowRatings = event.target.checked;
             saveSettings();
             requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
-          });
-        }
-
-        const guessBtn = byId('guessEloBtn');
-        if (guessBtn) {
-          guessBtn.addEventListener('click', () => {
-            state.ratingGuessRequested = true;
-            updateEloGuessDisplay();
           });
         }
 
@@ -1841,7 +1615,7 @@
           byId('lichessUrl').value = gameParam;
           setUrlParam('game', gameParam); // Ensure it's in URL
           // Auto-load after a short delay to ensure engine is ready
-          setTimeout(() => loadGame(gameParam, targetPly), 1000);
+          setTimeout(() => loadGame(gameParam, '', targetPly), 1000);
         } else if (targetPly !== null) {
           setUrlParam('ply', null);
         }
