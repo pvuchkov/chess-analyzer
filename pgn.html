@@ -238,6 +238,10 @@
       transition: background .12s, transform .12s;
     }
 
+    .mv {
+      position: relative;
+    }
+
     .mv:hover {
       background: rgba(112, 167, 255, 0.16);
     }
@@ -245,6 +249,20 @@
     .mv.active {
       background: rgba(112, 167, 255, 0.28);
       box-shadow: 0 0 0 1px rgba(112, 167, 255, 0.5);
+    }
+
+    .eval {
+      position: absolute;
+      top: -12px;
+      right: 2px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 1px 3px;
+      border-radius: 3px;
+      white-space: nowrap;
+      opacity: 0.8;
     }
 
     .pv-list {
@@ -298,6 +316,50 @@
       color: var(--muted);
       margin-top: 8px;
     }
+
+    .eval-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .eval-bar {
+      flex: 1;
+      height: 8px;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .eval-fill {
+      height: 100%;
+      background: linear-gradient(to right, #dc3545 0%, #ffc867 50%, #28a745 100%);
+      width: 50%;
+      transform: translateX(-50%);
+      transition: transform 0.3s ease;
+    }
+
+    .eval-zero-line {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--text);
+      opacity: 0.5;
+    }
+
+    .eval-value {
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      min-width: 45px;
+      text-align: right;
+    }
   </style>
 </head>
 
@@ -327,6 +389,16 @@
         <div id="board"></div>
         <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
       </div>
+
+      <h3 style="margin:18px 0 8px; font-size:14px; color:var(--muted);">Evaluation</h3>
+      <div class="eval-bar-container">
+        <div class="eval-bar">
+          <div class="eval-fill" id="evalFill"></div>
+          <div class="eval-zero-line"></div>
+        </div>
+        <div class="eval-value" id="evalValue">0.00</div>
+      </div>
+
       <div class="row" style="margin-top:14px; align-items:center;">
         <button id="firstBtn" class="secondary">⏮ First</button>
         <button id="prevBtn" class="secondary">◀ Prev</button>
@@ -336,9 +408,9 @@
       </div>
       <div class="row" style="margin-top:12px; align-items:center;">
         <label style="font-size:13px; color:var(--muted);">Engine: time (ms)</label>
-        <input id="timeMs" type="number" min="100" max="10000" step="100" value="300" style="width:120px;" />
+        <input id="timeMs" type="number" min="100" max="10000" step="100" value="1500" style="width:120px;" />
         <label style="font-size:13px; color:var(--muted);">Depth</label>
-        <input id="depth" type="number" min="1" max="40" step="1" value="10" style="width:100px;" />
+        <input id="depth" type="number" min="1" max="40" step="1" value="20" style="width:100px;" />
       </div>
       <div id="navStatus" class="status"></div>
     </div>
@@ -362,7 +434,7 @@
         <div id="tagOpening">—</div>
       </div>
 
-      <h2 style="margin-top:22px;">Engine suggestions</h2>
+      <h2 style="margin-top:22px;">Engine suggestions <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
       <div class="pv-list">
         <div class="pv"><span class="rank">1</span><span class="move" id="pv1">—</span><span class="eval"
             id="ev1"></span></div>
@@ -474,7 +546,7 @@
         temp.reset();
         for (const mv of moves) {
           const played = temp.move(mv);
-          verbose.push({ ...played, fen: temp.fen() });
+          verbose.push({ ...played, fen: temp.fen(), eval: null });
         }
         return verbose;
       }
@@ -487,12 +559,25 @@
           const moveNo = document.createElement('div');
           moveNo.textContent = `${Math.floor(i / 2) + 1}.`;
           moveNo.className = 'muted';
+
           const white = document.createElement('div');
           white.className = 'mv';
           white.textContent = h[i] ? h[i].san : '';
+
+          const whiteEval = document.createElement('div');
+          whiteEval.className = 'eval';
+          whiteEval.textContent = h[i] && h[i].eval ? h[i].eval : '';
+          white.appendChild(whiteEval);
+
           const black = document.createElement('div');
           black.className = 'mv';
           black.textContent = h[i + 1] ? h[i + 1].san : '';
+
+          const blackEval = document.createElement('div');
+          blackEval.className = 'eval';
+          blackEval.textContent = h[i + 1] && h[i + 1].eval ? h[i + 1].eval : '';
+          black.appendChild(blackEval);
+
           white.addEventListener('click', () => goToPly(i + 1));
           black.addEventListener('click', () => goToPly(i + 2));
           container.appendChild(moveNo);
@@ -529,6 +614,14 @@
         }
         highlightActive();
         analyzeCurrent();
+
+        // Update evaluation bar with stored evaluation for this position
+        if (state.ply > 0 && state.verboseHistory[state.ply - 1].eval) {
+          updateEvalBar(state.verboseHistory[state.ply - 1].eval);
+        } else {
+          updateEvalBar(null); // Reset to neutral
+        }
+
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
       }
 
@@ -537,14 +630,14 @@
         while (svg.firstChild) svg.removeChild(svg.firstChild);
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         defs.innerHTML = `
-        <marker id="m1" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M0,0 L12,6 L0,12 Z" fill="#3fd086" />
+        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#28a745" />
         </marker>
-        <marker id="m2" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M0,0 L12,6 L0,12 Z" fill="#70a7ff" />
+        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#007bff" />
         </marker>
-        <marker id="m3" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M0,0 L12,6 L0,12 Z" fill="#ffc867" />
+        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#dc3545" />
         </marker>`;
         svg.appendChild(defs);
         if (!list || !list.length) return;
@@ -565,7 +658,8 @@
             };
           }
         }
-        const colors = ['#3fd086', '#70a7ff', '#ffc867'];
+        const colors = ['#28a745', '#007bff', '#dc3545']; // Green, Blue, Red - distinct colors
+        const opacities = [1.0, 0.25, 0.25]; // Best solid, 2nd more transparent, 3rd medium
         list.forEach((entry, i) => {
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
@@ -574,9 +668,11 @@
           const dy = to.y - from.y;
           const len = Math.hypot(dx, dy);
           if (!len) return;
-          const shorten = Math.min(20, len * 0.2);
-          const sx = from.x + (dx / len) * 18;
-          const sy = from.y + (dy / len) * 18;
+          // Make arrows smaller - reduce the shorten amount and starting offset
+          const shorten = Math.min(12, len * 0.15); // Reduced from 20 to 12, 0.2 to 0.15
+          const startOffset = Math.min(12, len * 0.1); // Start closer to the piece
+          const sx = from.x + (dx / len) * startOffset;
+          const sy = from.y + (dy / len) * startOffset;
           const ex = to.x - (dx / len) * shorten;
           const ey = to.y - (dy / len) * shorten;
           const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -585,10 +681,10 @@
           line.setAttribute('x2', ex);
           line.setAttribute('y2', ey);
           line.setAttribute('stroke', colors[i] || colors[2]);
-          line.setAttribute('stroke-width', 9 - i * 1.5);
+          line.setAttribute('stroke-width', Math.max(4, 6 - i * 0.8)); // Smaller base width, progressive reduction
           line.setAttribute('stroke-linecap', 'round');
           line.setAttribute('marker-end', `url(#m${i + 1})`);
-          line.setAttribute('opacity', '0.9');
+          line.setAttribute('opacity', opacities[i] || opacities[2]);
           svg.appendChild(line);
         });
       }
@@ -610,6 +706,10 @@
 
       function updatePVDisplay(entries) {
         const ids = [1, 2, 3];
+
+        // Get the best move's evaluation as baseline
+        const bestEval = entries[0] && entries[0].eval ? parseFloat(entries[0].eval) || 0 : 0;
+
         ids.forEach((idx, i) => {
           const moveEl = byId(`pv${idx}`);
           const evalEl = byId(`ev${idx}`);
@@ -617,11 +717,60 @@
           if (entry) {
             moveEl.textContent = entry.san || entry.uci;
             evalEl.textContent = entry.eval || '';
+
+            // Add rating change info (difference from best move)
+            const moveEval = parseFloat(entry.eval) || 0;
+            const ratingChange = (moveEval - bestEval) * 100; // Convert to rating points
+
+            // Update the display to include rating change
+            if (!isNaN(ratingChange) && Math.abs(ratingChange) > 1) { // Only show if significant difference
+              const sign = ratingChange > 0 ? '+' : '';
+              evalEl.textContent = `${entry.eval} (${sign}${ratingChange.toFixed(0)})`;
+            } else {
+              evalEl.textContent = entry.eval || '';
+            }
           } else {
             moveEl.textContent = '—';
             evalEl.textContent = '';
           }
         });
+
+        // Update evaluation bar with the best move's evaluation
+        if (entries[0] && entries[0].eval) {
+          updateEvalBar(entries[0].eval);
+        }
+      }
+
+      function updateEvalBar(evalStr) {
+        const evalValueEl = byId('evalValue');
+        const evalFillEl = byId('evalFill');
+
+        if (!evalStr) {
+          evalValueEl.textContent = '0.00';
+          evalFillEl.style.transform = 'translateX(-50%)';
+          return;
+        }
+
+        // Handle mate scores
+        if (evalStr.startsWith('#')) {
+          const mateIn = parseInt(evalStr.substring(1));
+          evalValueEl.textContent = evalStr;
+          // Position bar based on mate score (very positive or negative)
+          const position = mateIn > 0 ? 100 : 0;
+          evalFillEl.style.transform = `translateX(${position - 50}%)`;
+          return;
+        }
+
+        // Handle centipawn scores
+        const cp = parseFloat(evalStr);
+        evalValueEl.textContent = evalStr;
+
+        // Convert centipawn to percentage (clamp between -300 to +300 cp for display)
+        const clampedCp = Math.max(-300, Math.min(300, cp));
+        const percentage = (clampedCp + 300) / 600; // 0 to 1 range
+        const position = percentage * 100; // 0 to 100%
+
+        evalFillEl.style.transform = `translateX(${position - 50}%)`;
       }
 
       function ensureEngine() {
@@ -695,6 +844,14 @@
           }
           
           if (line.startsWith('bestmove')) {
+            // Store the current position's evaluation in history
+            if (state.ply > 0 && state.multiPv && state.multiPv.has(1)) {
+              const bestMove = state.multiPv.get(1);
+              if (bestMove && bestMove.eval) {
+                state.verboseHistory[state.ply - 1].eval = bestMove.eval;
+                renderMoves(); // Re-render to show the evaluation
+              }
+            }
             setStatus('engStatus', `Analysis complete (${engineLabel})`);
           }
         };
@@ -907,6 +1064,7 @@
         initTheme();
         initBoard();
         bindUi();
+        updateEvalBar(null); // Initialize evaluation bar to neutral
         setStatus('engStatus', 'Initializing engine…');
         ensureEngine();
 
