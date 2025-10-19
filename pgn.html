@@ -1632,6 +1632,18 @@
         return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
       }
 
+      function sideToMoveFromFen(fen) {
+        if (typeof fen !== 'string') return 'w';
+        const parts = fen.trim().split(/\s+/);
+        return parts[1] === 'b' ? 'b' : 'w';
+      }
+
+      function centipawnsToBarPercent(cp) {
+        if (!Number.isFinite(cp)) return 50;
+        const scaled = Math.tanh(cp / 600);
+        return 50 + 50 * scaled;
+      }
+
       function updateEvalBar(evalStr) {
         const whiteEl = byId('evalWhiteValue');
         const blackEl = byId('evalBlackValue');
@@ -1640,7 +1652,6 @@
 
         let normalized = 0.5;
         let whiteDisplay = '0.00';
-        let blackDisplay = '0.00';
 
         if (evalStr) {
           const parsed = parseEvalString(evalStr);
@@ -1648,32 +1659,24 @@
             if (parsed.type === 'mate') {
               const mate = parsed.value;
               const moves = Math.abs(mate);
-              if (mate > 0) {
-                whiteDisplay = `+M${moves}`;
-                blackDisplay = '—';
-                normalized = 0.99;
-              } else if (mate < 0) {
-                whiteDisplay = '—';
-                blackDisplay = `-M${moves}`;
-                normalized = 0.01;
+              const prefix = mate >= 0 ? '+' : '-';
+              whiteDisplay = `${prefix}M${moves}`;
+              if (mate === 0) {
+                normalized = 0.5;
+              } else {
+                normalized = mate > 0 ? 0.99 : 0.01;
               }
             } else {
               const pawns = parsed.pawns;
               whiteDisplay = formatEval(pawns);
-              blackDisplay = formatEval(-pawns);
-              const cp = parsed.cp;
-              const winPercent = centipawnsToWinPercent(cp);
-              if (Number.isFinite(winPercent)) {
-                normalized = winPercent / 100;
-              } else {
-                normalized = 0.5;
-              }
+              const percent = centipawnsToBarPercent(parsed.cp);
+              normalized = percent / 100;
             }
           }
         }
 
         if (whiteEl) whiteEl.textContent = whiteDisplay;
-        if (blackEl) blackEl.textContent = blackDisplay;
+        if (blackEl) blackEl.textContent = '—';
         const percentage = Math.min(0.98, Math.max(0.02, normalized));
         if (fillEl) fillEl.style.height = `${(percentage * 100).toFixed(1)}%`;
         if (markerEl) markerEl.style.top = `${(percentage * 100).toFixed(1)}%`;
@@ -1988,14 +1991,20 @@
           const moves = pv[1].trim().split(/\s+/);
           if (!moves.length) return;
           let evalStr = '';
+          const sideToMove = sideToMoveFromFen(req.config.fen);
           const scoreMate = line.match(/\bscore mate (-?\d+)/);
           const scoreCp = line.match(/\bscore cp (-?\d+)/);
           if (scoreMate) {
-            evalStr = `#${scoreMate[1]}`;
+            const mate = parseInt(scoreMate[1], 10);
+            if (Number.isFinite(mate)) {
+              const adjusted = mate * (sideToMove === 'b' ? -1 : 1);
+              evalStr = `#${adjusted}`;
+            }
           } else if (scoreCp) {
             const cp = parseInt(scoreCp[1], 10);
             if (Number.isFinite(cp)) {
-              evalStr = `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
+              const adjusted = cp * (sideToMove === 'b' ? -1 : 1);
+              evalStr = `${adjusted >= 0 ? '+' : ''}${(adjusted / 100).toFixed(2)}`;
             }
           }
           const entry = {
