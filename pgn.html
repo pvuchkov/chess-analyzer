@@ -8,49 +8,25 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
   <style>
     :root {
-      --bg: #0b1020;
-      --panel: rgba(18, 24, 46, 0.92);
-      --text: #f5f7ff;
-      --muted: #94a3c4;
-      --accent: #7dc4ff;
-      --ok: #5ee1a3;
-      --warn: #ffd480;
-      --danger: #ff7aa5;
-      --eval-black: #1f2338;
-      --eval-white: #f7f9ff;
-      --eval-border: rgba(255, 255, 255, 0.12);
-      --eval-zero: rgba(148, 163, 196, 0.5);
-      --eval-pointer: #facc15;
-      --badge-best: #38bdf8;
-      --badge-excellent: #4ade80;
-      --badge-good: #a855f7;
-      --badge-inaccuracy: #f97316;
-      --badge-mistake: #fb7185;
-      --badge-blunder: #ef4444;
-      --badge-brilliant: #eab308;
+      --bg: #0e101d;
+      --panel: #15192b;
+      --text: #f3f6ff;
+      --muted: #8891b0;
+      --accent: #70a7ff;
+      --ok: #3fd086;
+      --warn: #ffc867;
+      --danger: #ff708a;
     }
 
     [data-theme="light"] {
-      --bg: #f3f6fb;
-      --panel: rgba(255, 255, 255, 0.92);
-      --text: #1f2937;
-      --muted: #6b7280;
-      --accent: #2563eb;
-      --ok: #16a34a;
-      --warn: #f59e0b;
-      --danger: #dc2626;
-      --eval-black: #111827;
-      --eval-white: #ffffff;
-      --eval-border: rgba(15, 23, 42, 0.15);
-      --eval-zero: rgba(107, 114, 128, 0.45);
-      --eval-pointer: #0ea5e9;
-      --badge-best: #2563eb;
-      --badge-excellent: #16a34a;
-      --badge-good: #7c3aed;
-      --badge-inaccuracy: #d97706;
-      --badge-mistake: #f97316;
-      --badge-blunder: #dc2626;
-      --badge-brilliant: #ca8a04;
+      --bg: #ffffff;
+      --panel: #f8f9fa;
+      --text: #212529;
+      --muted: #6c757d;
+      --accent: #007bff;
+      --ok: #28a745;
+      --warn: #ffc107;
+      --danger: #dc3545;
     }
 
     * {
@@ -72,11 +48,11 @@
     }
 
     [data-theme="dark"] body {
-      background: radial-gradient(1200px 800px at 10% -10%, #131b34, #080b17);
+      background: radial-gradient(1200px 800px at 10% -10%, #1b2141, #090c18);
     }
 
     [data-theme="light"] body {
-      background: linear-gradient(135deg, #f9fbff 0%, #dbe7ff 100%);
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
 
     h1 {
@@ -138,9 +114,7 @@
 
     input[type="text"],
     input[type="password"],
-    input[type="number"],
-    textarea,
-    select {
+    input[type="number"] {
       flex: 1;
       min-width: 0;
       padding: 10px 12px;
@@ -155,18 +129,14 @@
 
     [data-theme="dark"] input[type="text"],
     [data-theme="dark"] input[type="password"],
-    [data-theme="dark"] input[type="number"],
-    [data-theme="dark"] textarea,
-    [data-theme="dark"] select {
+    [data-theme="dark"] input[type="number"] {
       background: #0b1024;
       border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     [data-theme="light"] input[type="text"],
     [data-theme="light"] input[type="password"],
-    [data-theme="light"] input[type="number"],
-    [data-theme="light"] textarea,
-    [data-theme="light"] select {
+    [data-theme="light"] input[type="number"] {
       background: #ffffff;
       border: 1px solid rgba(0, 0, 0, 0.15);
       color: #212529;
@@ -174,39 +144,24 @@
 
     input[type="text"]:focus,
     input[type="password"]:focus,
-    input[type="number"]:focus,
-    textarea:focus,
-    select:focus {
+    input[type="number"]:focus {
       border-color: var(--accent);
     }
 
     button {
-      background: linear-gradient(180deg, rgba(80, 120, 255, 0.95), rgba(46, 84, 214, 0.95));
-      border: 1px solid rgba(125, 196, 255, 0.45);
+      background: linear-gradient(180deg, #27386a, #213159);
+      border: 1px solid rgba(255, 255, 255, 0.18);
       color: var(--text);
       padding: 10px 16px;
       border-radius: 10px;
       cursor: pointer;
       font-weight: 600;
       letter-spacing: 0.2px;
-      transition: transform .12s ease, filter .18s ease;
-    }
-
-    button:hover {
-      filter: brightness(1.06);
-      transform: translateY(-1px);
+      transition: transform .1s ease, filter .2s;
     }
 
     button.secondary {
-      background: rgba(125, 196, 255, 0.12);
-      border: 1px solid rgba(125, 196, 255, 0.25);
-      color: var(--text);
-    }
-
-    [data-theme="light"] button.secondary {
-      background: rgba(37, 99, 235, 0.08);
-      border: 1px solid rgba(37, 99, 235, 0.18);
-      color: #1f2937;
+      background: #161d35;
     }
 
     button:active {
@@ -214,104 +169,8 @@
     }
 
     button:disabled {
-      opacity: 0.55;
+      opacity: 0.6;
       cursor: not-allowed;
-    }
-
-    .load-controls {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 12px;
-      align-items: stretch;
-    }
-
-    .input-switch {
-      display: grid;
-      gap: 10px;
-    }
-
-    .input-switch select {
-      max-width: 220px;
-      flex: none;
-    }
-
-    textarea {
-      resize: vertical;
-      line-height: 1.5;
-    }
-
-    .game-input {
-      width: 100%;
-      min-height: 120px;
-    }
-
-    .game-input.compact {
-      min-height: 54px;
-      max-height: 120px;
-    }
-
-    .material-panel {
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 14px;
-      border: 1px solid rgba(125, 196, 255, 0.18);
-      background: rgba(125, 196, 255, 0.08);
-      display: grid;
-      gap: 10px;
-    }
-
-    [data-theme="light"] .material-panel {
-      border-color: rgba(37, 99, 235, 0.18);
-      background: rgba(37, 99, 235, 0.08);
-    }
-
-    .material-header {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--muted);
-    }
-
-    .material-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .material-side {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .material-side-label {
-      font-weight: 600;
-      letter-spacing: 0.3px;
-    }
-
-    .material-icons {
-      display: inline-flex;
-      gap: 4px;
-      align-items: center;
-      flex-wrap: wrap;
-      min-height: 24px;
-    }
-
-    .material-icons img {
-      width: 22px;
-      height: 22px;
-      object-fit: contain;
-      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
-    }
-
-    .material-score {
-      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
-      font-weight: 600;
-      min-width: 44px;
-      text-align: right;
     }
 
     .status {
@@ -330,12 +189,13 @@
     }
 
     .board-wrap {
-      width: min(100%, 420px);
+      position: relative;
     }
 
     #board {
       width: 100%;
       max-width: 420px;
+      margin: 0 auto;
     }
 
     #arrowLayer {
@@ -345,30 +205,7 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      z-index: 2;
-    }
-
-    #board .square-55d63 {
-      position: relative;
-    }
-
-    #board .square-55d63::after {
-      content: '';
-      position: absolute;
-      inset: 6px;
-      border-radius: 8px;
-      opacity: 0;
-      transition: opacity 0.12s ease;
-    }
-
-    #board .square-55d63.highlight-last-from::after {
-      background: rgba(112, 167, 255, 0.45);
-      opacity: 1;
-    }
-
-    #board .square-55d63.highlight-last-to::after {
-      background: rgba(63, 208, 134, 0.45);
-      opacity: 1;
+      display: block;
     }
 
     .kv {
@@ -388,143 +225,44 @@
 
     .moves {
       display: grid;
-      grid-template-columns: 44px 1fr 1fr;
-      gap: 8px 12px;
+      grid-template-columns: 40px 1fr 1fr;
+      gap: 6px 12px;
       font-size: 14px;
     }
 
     .mv {
-      padding: 8px 12px;
-      border-radius: 12px;
+      padding: 6px 10px;
+      border-radius: 10px;
       cursor: pointer;
-      background: rgba(125, 196, 255, 0.08);
-      transition: background 0.15s ease, transform 0.12s ease;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+      background: rgba(15, 20, 40, 0.6);
+      transition: background .12s, transform .12s;
+    }
+
+    .mv {
       position: relative;
-      border: 1px solid transparent;
-    }
-
-    .mv.empty {
-      opacity: 0.4;
-      cursor: default;
-    }
-
-    [data-theme="light"] .mv {
-      background: rgba(37, 99, 235, 0.06);
     }
 
     .mv:hover {
-      background: rgba(125, 196, 255, 0.18);
+      background: rgba(112, 167, 255, 0.16);
     }
 
     .mv.active {
-      background: rgba(125, 196, 255, 0.28);
-      border-color: rgba(125, 196, 255, 0.4);
-      box-shadow: 0 10px 25px rgba(18, 24, 46, 0.25);
+      background: rgba(112, 167, 255, 0.28);
+      box-shadow: 0 0 0 1px rgba(112, 167, 255, 0.5);
     }
 
-    .mv-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .mv-san {
+    .eval {
+      position: absolute;
+      top: -12px;
+      right: 2px;
+      font-size: 10px;
       font-weight: 600;
-      letter-spacing: 0.2px;
-    }
-
-    .mv-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .mv-eval {
-      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
-    }
-
-    .mv-loss {
-      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
-    }
-
-    .mv-loss.loss {
-      color: var(--danger);
-    }
-
-    .mv-loss.gain {
-      color: var(--ok);
-    }
-
-    .mv-badge {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: rgba(125, 196, 255, 0.16);
-      color: var(--badge-best);
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .mv-badge img {
-      width: 16px;
-      height: 16px;
-      object-fit: contain;
-    }
-
-    .mv-badge[data-grade="Brilliant"] {
-      background: rgba(234, 179, 8, 0.18);
-      color: var(--badge-brilliant);
-    }
-
-    .mv-badge[data-grade="Great"] {
-      background: rgba(59, 130, 246, 0.18);
-      color: var(--badge-best);
-    }
-
-    .mv-badge[data-grade="Best"] {
-      background: rgba(59, 130, 246, 0.18);
-      color: var(--badge-best);
-    }
-
-    .mv-badge[data-grade="Excellent"] {
-      background: rgba(74, 222, 128, 0.18);
-      color: var(--badge-excellent);
-    }
-
-    .mv-badge[data-grade="Good"] {
-      background: rgba(168, 85, 247, 0.18);
-      color: var(--badge-good);
-    }
-
-    .mv-badge[data-grade="Inaccuracy"] {
-      background: rgba(249, 115, 22, 0.18);
-      color: var(--badge-inaccuracy);
-    }
-
-    .mv-badge[data-grade="Mistake"] {
-      background: rgba(251, 113, 133, 0.18);
-      color: var(--badge-mistake);
-    }
-
-    .mv-badge[data-grade="Blunder"] {
-      background: rgba(239, 68, 68, 0.18);
-      color: var(--badge-blunder);
-    }
-
-    .mv-badge[data-grade="Missed Win"] {
-      background: rgba(249, 115, 22, 0.18);
-      color: var(--badge-inaccuracy);
+      color: var(--accent);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 1px 3px;
+      border-radius: 3px;
+      white-space: nowrap;
+      opacity: 0.8;
     }
 
     .pv-list {
@@ -579,135 +317,48 @@
       margin-top: 8px;
     }
 
-    .board-eval-wrap {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 18px;
-      align-items: stretch;
-    }
-
-    @media (max-width:640px) {
-      .board-eval-wrap {
-        grid-template-columns: 1fr;
-      }
-
-      .eval-column {
-        order: -1;
-      }
-
-      .eval-column .eval-bar {
-        height: min(220px, 60vw) !important;
-        width: 24px;
-      }
-
-      .eval-scale {
-        flex-direction: row;
-        justify-content: space-between;
-        margin-top: 0;
-        width: 100%;
-      }
-    }
-
-    .eval-column {
+    .eval-bar-container {
       display: flex;
-      flex-direction: column;
       align-items: center;
       gap: 12px;
+      margin-bottom: 8px;
     }
 
     .eval-bar {
+      flex: 1;
+      height: 8px;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
       position: relative;
-      width: 26px;
-      border-radius: 18px;
-      background: rgba(15, 23, 42, 0.35);
-      border: 1px solid var(--eval-border);
       overflow: hidden;
-      min-height: 320px;
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
     .eval-fill {
-      position: absolute;
-      left: 0;
-      right: 0;
-      transition: height 0.18s ease;
-    }
-
-    .eval-fill.eval-black {
-      top: 0;
-      background: linear-gradient(to bottom, rgba(17, 24, 39, 0.95), rgba(17, 24, 39, 0.75));
-    }
-
-    .eval-fill.eval-white {
-      bottom: 0;
-      background: linear-gradient(to top, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.78));
+      height: 100%;
+      background: linear-gradient(to right, #dc3545 0%, #ffc867 50%, #28a745 100%);
+      width: 50%;
+      transform: translateX(-50%);
+      transition: transform 0.3s ease;
     }
 
     .eval-zero-line {
       position: absolute;
-      top: 50%;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: var(--eval-zero);
-      z-index: 1;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--text);
+      opacity: 0.5;
     }
 
-    .eval-pointer {
-      position: absolute;
-      left: calc(100% + 14px);
-      transform: translateY(-50%);
-      background: var(--panel);
-      color: var(--text);
+    .eval-value {
       font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
       font-size: 12px;
       font-weight: 600;
-      padding: 4px 8px;
-      border-radius: 8px;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-      transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
-      z-index: 2;
-      min-width: 54px;
-      text-align: center;
-    }
-
-    .eval-pointer::before {
-      content: '';
-      position: absolute;
-      right: 100%;
-      top: 50%;
-      transform: translateY(-50%);
-      border: 6px solid transparent;
-      border-right-color: var(--panel);
-    }
-
-    .eval-pointer.adv-white {
-      background: linear-gradient(135deg, #fef9c3, #fde68a);
-      color: #92400e;
-    }
-
-    .eval-pointer.adv-white::before {
-      border-right-color: #fde68a;
-    }
-
-    .eval-pointer.adv-black {
-      background: linear-gradient(135deg, #1f2937, #111827);
-      color: #e5e7eb;
-    }
-
-    .eval-pointer.adv-black::before {
-      border-right-color: #1f2937;
-    }
-
-    .eval-scale {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      font-size: 11px;
-      color: var(--muted);
-      gap: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
+      color: var(--text);
+      min-width: 45px;
+      text-align: right;
     }
   </style>
 </head>
@@ -720,57 +371,32 @@
   <div class="layout">
     <div class="card">
       <h2>Load game</h2>
-      <div class="load-controls">
-        <div class="input-switch">
-          <select id="inputType">
-            <option value="pgn">Paste PGN</option>
-            <option value="lichess">Lichess URL / ID</option>
-            <option value="fen">FEN</option>
-          </select>
-          <textarea id="gameInput" class="game-input" placeholder="Paste a PGN" autocomplete="off" spellcheck="false"></textarea>
-        </div>
-        <button id="loadBtn">Load</button>
+      <div class="row">
+        <input id="lichessUrl" type="text" placeholder="Paste Lichess URL or game ID" autocomplete="off" />
       </div>
-      <div class="hint">Tip: run from http://localhost (e.g. python -m http.server). file:// may block network requests.</div>
+      <div class="row">
+        <input id="token" type="password" placeholder="Optional: API token for private games" autocomplete="off" />
+        <button id="loadBtn">Fetch PGN</button>
+      </div>
+      <div class="row">
+        <label class="hint">Tip: run from http://localhost (e.g. python -m http.server). file:// may block network
+          requests.</label>
+      </div>
       <div id="loadStatus" class="status"></div>
 
       <h2>Board</h2>
-      <div class="board-eval-wrap">
-        <div class="eval-column">
-          <div class="eval-bar" id="evalBar">
-            <div class="eval-fill eval-black" id="evalBlackFill"></div>
-            <div class="eval-fill eval-white" id="evalWhiteFill"></div>
-            <div class="eval-zero-line"></div>
-            <div class="eval-pointer" id="evalPointer">
-              <span class="eval-value" id="evalValue">0.00</span>
-            </div>
-          </div>
-          <div class="eval-scale">
-            <span>Black</span>
-            <span>White</span>
-          </div>
-        </div>
-        <div class="board-wrap">
-          <div id="board"></div>
-        </div>
+      <div class="board-wrap">
+        <div id="board"></div>
+        <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
       </div>
 
-      <div class="material-panel">
-        <div class="material-header">Material balance</div>
-        <div class="material-row" data-side="white">
-          <div class="material-side">
-            <span class="material-side-label">White</span>
-            <div class="material-icons" id="materialWhiteIcons"></div>
-          </div>
-          <span class="material-score" id="materialWhiteScore">0</span>
+      <h3 style="margin:18px 0 8px; font-size:14px; color:var(--muted);">Evaluation</h3>
+      <div class="eval-bar-container">
+        <div class="eval-bar">
+          <div class="eval-fill" id="evalFill"></div>
+          <div class="eval-zero-line"></div>
         </div>
-        <div class="material-row" data-side="black">
-          <div class="material-side">
-            <span class="material-side-label">Black</span>
-            <div class="material-icons" id="materialBlackIcons"></div>
-          </div>
-          <span class="material-score" id="materialBlackScore">0</span>
-        </div>
+        <div class="eval-value" id="evalValue">0.00</div>
       </div>
 
       <div class="row" style="margin-top:14px; align-items:center;">
@@ -808,14 +434,6 @@
         <div id="tagOpening">—</div>
       </div>
 
-      <div class="rating-guess">
-        <button id="guessEloBtn" class="secondary">Guess player ratings</button>
-        <div class="rating-guess-values">
-          <span>White: <span id="whiteEloGuess">—</span></span>
-          <span>Black: <span id="blackEloGuess">—</span></span>
-        </div>
-      </div>
-
       <h2 style="margin-top:22px;">Engine suggestions <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
       <div class="pv-list">
         <div class="pv"><span class="rank">1</span><span class="move" id="pv1">—</span><span class="eval"
@@ -838,339 +456,19 @@
     import { Chess } from './chess.js';
     (function () {
       const byId = (id) => document.getElementById(id);
-      const START_FEN = new Chess().fen();
       const state = {
         board: null,
         orientation: 'white',
         game: new Chess(),
-        fullGame: null,
         verboseHistory: [],
-        initialFen: START_FEN,
-        initialPositionKey: 'start',
-        headers: {},
-        ratingGuess: {
-          white: null,
-          black: null
-        },
-        currentSource: null,
         ply: 0,
         engine: null,
         engineReady: false,
         engineConfigured: false,
         engineVersion: 'unknown',
         pendingAnalysis: null,
-        multiPv: new Map(),
-        bestEvalByPly: []
+        multiPv: new Map()
       };
-
-      const INPUT_TYPES = {
-        PGN: 'pgn',
-        LICHESS: 'lichess',
-        FEN: 'fen'
-      };
-
-      const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
-      const PIECE_NAMES = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen' };
-
-      const MATERIAL_ICONS = {
-        white: {
-          p: 'chesspieces/wikipedia/bP.png',
-          n: 'chesspieces/wikipedia/bN.png',
-          b: 'chesspieces/wikipedia/bB.png',
-          r: 'chesspieces/wikipedia/bR.png',
-          q: 'chesspieces/wikipedia/bQ.png'
-        },
-        black: {
-          p: 'chesspieces/wikipedia/wP.png',
-          n: 'chesspieces/wikipedia/wN.png',
-          b: 'chesspieces/wikipedia/wB.png',
-          r: 'chesspieces/wikipedia/wR.png',
-          q: 'chesspieces/wikipedia/wQ.png'
-        }
-      };
-
-      const CLASSIFICATION_ICONS = {
-        'Brilliant': 'brilliant.png',
-        'Great': 'great.png',
-        'Best': 'best.png',
-        'Excellent': 'excellent.png',
-        'Good': 'good.png',
-        'Inaccuracy': 'inaccuracy.png',
-        'Mistake': 'mistake.png',
-        'Blunder': 'blunder.png',
-        'Missed Win': 'miss.png'
-      };
-
-      const MAX_CP = 4000;
-
-      function mateToCp(mate) {
-        const base = 10000;
-        return mate > 0 ? base - mate * 100 : -base - mate * 100;
-      }
-
-      function clampCp(cp) {
-        return Math.max(-MAX_CP, Math.min(MAX_CP, cp));
-      }
-
-      function formatEvalDisplay(entry) {
-        if (!entry) return '—';
-        if (entry.mate !== undefined && entry.mate !== null) {
-          return `#${entry.mate}`;
-        }
-        if (typeof entry.cp === 'number') {
-          return `${entry.cp >= 0 ? '+' : ''}${(entry.cp / 100).toFixed(2)}`;
-        }
-        return entry.eval || '—';
-      }
-
-      function squareToDisplayCoords(square) {
-        if (!square || square.length < 2) return null;
-        const file = square.charCodeAt(0) - 97;
-        const rank = parseInt(square[1], 10) - 1;
-        if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
-          return null;
-        }
-        let col = file;
-        let row = 7 - rank;
-        if (state.orientation === 'black') {
-          col = 7 - col;
-          row = 7 - row;
-        }
-        return { col, row };
-      }
-
-      function refreshBoardHighlights() {
-        const boardEl = byId('board');
-        if (!boardEl) return;
-        boardEl.querySelectorAll('.square-55d63').forEach((el) => {
-          el.classList.remove('highlight-last-from', 'highlight-last-to');
-        });
-        const last = state.lastHighlightedMove;
-        if (!last) return;
-        if (last.from) {
-          const fromEl = boardEl.querySelector(`[data-square="${last.from}"]`);
-          if (fromEl) fromEl.classList.add('highlight-last-from');
-        }
-        if (last.to) {
-          const toEl = boardEl.querySelector(`[data-square="${last.to}"]`);
-          if (toEl) toEl.classList.add('highlight-last-to');
-        }
-      }
-
-      function formatMaterialScore(score) {
-        if (!Number.isFinite(score) || score === 0) return '0';
-        return score > 0 ? `+${score}` : `${score}`;
-      }
-
-      function updateMaterialBalance() {
-        const whiteIcons = byId('materialWhiteIcons');
-        const blackIcons = byId('materialBlackIcons');
-        const whiteScoreEl = byId('materialWhiteScore');
-        const blackScoreEl = byId('materialBlackScore');
-        if (!whiteIcons || !blackIcons || !whiteScoreEl || !blackScoreEl) return;
-
-        whiteIcons.innerHTML = '';
-        blackIcons.innerHTML = '';
-
-        const counts = {
-          w: { p: 0, n: 0, b: 0, r: 0, q: 0 },
-          b: { p: 0, n: 0, b: 0, r: 0, q: 0 }
-        };
-
-        if (state.game && typeof state.game.board === 'function') {
-          const board = state.game.board();
-          board.forEach(row => {
-            row.forEach(piece => {
-              if (!piece || piece.type === 'k') return;
-              counts[piece.color][piece.type] += 1;
-            });
-          });
-        }
-
-        let whiteMaterial = 0;
-        Object.keys(PIECE_VALUES).forEach((type) => {
-          const diff = counts.w[type] - counts.b[type];
-          whiteMaterial += diff * PIECE_VALUES[type];
-          if (diff > 0) {
-            for (let i = 0; i < diff; i++) {
-              const img = document.createElement('img');
-              img.src = MATERIAL_ICONS.white[type];
-              img.alt = `${PIECE_NAMES[type] || type.toUpperCase()} captured by White`;
-              whiteIcons.appendChild(img);
-            }
-          } else if (diff < 0) {
-            for (let i = 0; i < Math.abs(diff); i++) {
-              const img = document.createElement('img');
-              img.src = MATERIAL_ICONS.black[type];
-              img.alt = `${PIECE_NAMES[type] || type.toUpperCase()} captured by Black`;
-              blackIcons.appendChild(img);
-            }
-          }
-        });
-
-        if (!whiteIcons.childElementCount) {
-          const span = document.createElement('span');
-          span.className = 'muted';
-          span.textContent = '—';
-          whiteIcons.appendChild(span);
-        }
-
-        if (!blackIcons.childElementCount) {
-          const span = document.createElement('span');
-          span.className = 'muted';
-          span.textContent = '—';
-          blackIcons.appendChild(span);
-        }
-
-        const whiteScore = Math.round(whiteMaterial);
-        const blackScore = -whiteScore;
-        whiteScoreEl.textContent = formatMaterialScore(whiteScore);
-        blackScoreEl.textContent = formatMaterialScore(blackScore);
-      }
-
-      function updateEloGuessDisplay() {
-        const whiteEl = byId('whiteEloGuess');
-        const blackEl = byId('blackEloGuess');
-        if (!whiteEl || !blackEl) return;
-
-        const applyGuess = (el, guess) => {
-          if (!guess || !Number.isFinite(guess.value)) {
-            el.textContent = '—';
-            el.removeAttribute('title');
-            return;
-          }
-          const prefix = guess.source === 'tag' ? '' : '≈ ';
-          el.textContent = `${prefix}${guess.value}`;
-          if (guess.description) {
-            el.title = guess.description;
-          } else {
-            el.removeAttribute('title');
-          }
-        };
-
-        applyGuess(whiteEl, state.ratingGuess.white);
-        applyGuess(blackEl, state.ratingGuess.black);
-      }
-
-      function clearRatingGuess() {
-        state.ratingGuess = { white: null, black: null };
-        updateEloGuessDisplay();
-      }
-
-      function estimateRatingFromGame(color) {
-        const headerKey = color === 'white' ? 'WhiteElo' : 'BlackElo';
-        const rated = parseInt(state.headers?.[headerKey], 10);
-        if (Number.isFinite(rated)) {
-          return {
-            value: rated,
-            source: 'tag',
-            description: 'Provided by PGN tags'
-          };
-        }
-
-        const moves = state.verboseHistory.filter((_, idx) => idx % 2 === (color === 'white' ? 0 : 1));
-        const annotations = { brilliant: 0, good: 0, mistake: 0, blunder: 0 };
-        moves.forEach((mv) => {
-          if (!mv || !mv.san) return;
-          const san = mv.san;
-          if (san.includes('!!')) annotations.brilliant += 1;
-          else if (san.includes('!')) annotations.good += 1;
-          if (san.includes('??')) annotations.blunder += 1;
-          else if (san.includes('?')) annotations.mistake += 1;
-        });
-
-        let rating = 1100 + Math.min(moves.length, 80) * 6;
-        rating += annotations.brilliant * 25 + annotations.good * 10;
-        rating -= annotations.mistake * 25 + annotations.blunder * 45;
-
-        const result = state.headers?.Result || '';
-        if ((color === 'white' && result === '1-0') || (color === 'black' && result === '0-1')) {
-          rating += 30;
-        } else if (result === '1/2-1/2') {
-          rating += 10;
-        }
-
-        const checkmates = moves.filter(mv => mv && typeof mv.san === 'string' && mv.san.includes('#')).length;
-        rating += checkmates * 15;
-
-        const evalMoves = moves.filter(mv => mv && typeof mv.lossCp === 'number');
-        if (evalMoves.length) {
-          const avgLoss = evalMoves.reduce((sum, mv) => sum + Math.max(0, mv.lossCp), 0) / evalMoves.length;
-          const pawnLoss = avgLoss / 100;
-          rating += Math.max(-240, Math.min(240, (3 - pawnLoss) * 60));
-        }
-
-        const termination = state.headers?.Termination || '';
-        if (/time forfeit/i.test(termination)) {
-          rating -= 20;
-        }
-
-        rating = Math.round(Math.max(600, Math.min(2800, rating)));
-        return {
-          value: rating,
-          source: 'estimate',
-          description: 'Heuristic estimate from move annotations and engine loss'
-        };
-      }
-
-      function guessPlayerRatings() {
-        state.ratingGuess = {
-          white: estimateRatingFromGame('white'),
-          black: estimateRatingFromGame('black')
-        };
-        updateEloGuessDisplay();
-      }
-
-      function gradeMove(lossPawns, whiteBefore, whiteAfter, moverIsWhite) {
-        if (lossPawns <= -1.5) return 'Brilliant';
-        if (lossPawns <= -0.75) return 'Great';
-        if (Math.abs(lossPawns) <= 0.05) return 'Best';
-        if (lossPawns <= 0.2) return 'Excellent';
-        if (lossPawns <= 0.5) return 'Good';
-        if (lossPawns <= 1.0) return 'Inaccuracy';
-        if (lossPawns <= 2.5) return 'Mistake';
-
-        const winningThreshold = 250; // centipawns
-        const safeThreshold = 100;
-        if (moverIsWhite) {
-          if (whiteBefore >= winningThreshold && whiteAfter <= safeThreshold) {
-            return 'Missed Win';
-          }
-        } else {
-          if (whiteBefore <= -winningThreshold && whiteAfter >= -safeThreshold) {
-            return 'Missed Win';
-          }
-        }
-        return 'Blunder';
-      }
-
-      function computeMoveImpact(plyIndex, currentEntry) {
-        if (!currentEntry) return null;
-        const prevCp = state.bestEvalByPly[plyIndex];
-        const currentCp = typeof currentEntry.cp === 'number'
-          ? currentEntry.cp
-          : typeof currentEntry.mate === 'number'
-            ? mateToCp(currentEntry.mate)
-            : null;
-        if (prevCp === null || prevCp === undefined || currentCp === null) {
-          return null;
-        }
-
-        const moverIsWhite = plyIndex % 2 === 0;
-        const whiteBefore = moverIsWhite ? prevCp : -prevCp;
-        const whiteAfter = (plyIndex + 1) % 2 === 0 ? currentCp : -currentCp;
-        const lossCp = moverIsWhite
-          ? whiteBefore - whiteAfter
-          : whiteAfter - whiteBefore;
-
-        const lossPawns = lossCp / 100;
-        const classification = gradeMove(lossPawns, whiteBefore, whiteAfter, moverIsWhite);
-
-        return {
-          lossCp: Math.round(lossCp),
-          classification
-        };
-      }
 
       function initBoard() {
         const box = byId('board');
@@ -1178,28 +476,18 @@
           position: 'start', draggable: false,
           pieceTheme: 'chesspieces/wikipedia/{piece}.png'
         });
-        syncBoardMetrics();
-        const handleResize = () => { state.board.resize(); syncBoardMetrics(); };
+        syncArrowLayer();
+        const handleResize = () => { state.board.resize(); syncArrowLayer(); };
         window.addEventListener('resize', handleResize);
       }
 
-      function syncBoardMetrics() {
+      function syncArrowLayer() {
         const boardEl = byId('board');
-        if (!boardEl) return;
+        const svg = byId('arrowLayer');
         const rect = boardEl.getBoundingClientRect();
-        if (!rect || rect.width === 0) {
-          return;
-        }
-        const size = rect.width;
-        const height = rect.height || size;
-        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-        svg.setAttribute('width', size);
-        svg.setAttribute('height', size);
-        const evalBar = byId('evalBar');
-        if (evalBar) {
-          evalBar.style.height = `${height}px`;
-        }
-        requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
+        svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.width}`);
+        svg.setAttribute('width', rect.width);
+        svg.setAttribute('height', rect.width);
       }
 
       function setStatus(id, msg, type) {
@@ -1220,26 +508,25 @@
         }
       }
 
-      async function fetchPGN(input) {
+      async function fetchPGN(input, token) {
         const id = extractGameId(input);
         if (!id) throw new Error('Please provide a Lichess URL or game ID.');
         const params = new URLSearchParams({ moves: '1', tags: '1', clocks: '1', opening: '1', evals: '0', literate: '0' });
         const headers = { 'Accept': 'application/x-chess-pgn' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch(`https://lichess.org/game/export/${id}.pgn?${params.toString()}`, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
         return res.text();
       }
 
       function populateHeaders(headers) {
-        const safe = headers || {};
-        state.headers = safe;
-        byId('tagWhite').textContent = safe.White || '—';
-        byId('tagBlack').textContent = safe.Black || '—';
-        byId('tagEvent').textContent = safe.Event || '—';
-        byId('tagSite').textContent = safe.Site || '—';
-        byId('tagDate').textContent = safe.Date || '—';
-        byId('tagResult').textContent = safe.Result || '—';
-        byId('tagOpening').textContent = safe.Opening || safe.ECO || '—';
+        byId('tagWhite').textContent = headers.White || '—';
+        byId('tagBlack').textContent = headers.Black || '—';
+        byId('tagEvent').textContent = headers.Event || '—';
+        byId('tagSite').textContent = headers.Site || '—';
+        byId('tagDate').textContent = headers.Date || '—';
+        byId('tagResult').textContent = headers.Result || '—';
+        byId('tagOpening').textContent = headers.Opening || headers.ECO || '—';
       }
 
       function parseHeaders(pgn) {
@@ -1252,137 +539,52 @@
         return out;
       }
 
-      function buildHistory(game, initialFen) {
+      function buildHistory(game) {
         const verbose = [];
-        const startFen = initialFen || START_FEN;
-        const temp = new Chess(startFen);
-        const moves = game.history({ verbose: true });
-        for (let idx = 0; idx < moves.length; idx++) {
-          const mv = moves[idx];
+        const temp = new Chess();
+        const moves = game.history();
+        temp.reset();
+        for (const mv of moves) {
           const played = temp.move(mv);
-          if (!played) continue;
-          verbose.push({
-            ...played,
-            ply: idx + 1,
-            fen: temp.fen(),
-            eval: null,
-            evalCp: null,
-            evalMate: null,
-            classification: null,
-            lossCp: null
-          });
+          verbose.push({ ...played, fen: temp.fen(), eval: null });
         }
         return verbose;
-      }
-
-      function determineInitialFen(headers) {
-        if (headers && headers.SetUp === '1' && headers.FEN) {
-          return headers.FEN;
-        }
-        return START_FEN;
-      }
-
-      function determineInitialPositionKey(initialFen) {
-        return !initialFen || initialFen === START_FEN ? 'start' : initialFen;
-      }
-
-      function resetCurrentGame() {
-        state.game = new Chess(state.initialFen || START_FEN);
-      }
-
-      function getFenForPly(ply) {
-        if (ply <= 0) {
-          return state.initialFen || START_FEN;
-        }
-        const entry = state.verboseHistory[ply - 1];
-        return entry ? entry.fen : (state.initialFen || START_FEN);
       }
 
       function renderMoves() {
         const container = byId('moves');
         container.innerHTML = '';
-        const history = state.verboseHistory;
-        for (let i = 0; i < history.length; i += 2) {
+        const h = state.verboseHistory;
+        for (let i = 0; i < h.length; i += 2) {
           const moveNo = document.createElement('div');
           moveNo.textContent = `${Math.floor(i / 2) + 1}.`;
           moveNo.className = 'muted';
-          container.appendChild(moveNo);
 
-          container.appendChild(createMoveCell(history[i], i));
-          container.appendChild(createMoveCell(history[i + 1], i + 1));
-        }
-        if (!history.length) {
-          const placeholder = document.createElement('div');
-          placeholder.className = 'muted';
-          placeholder.textContent = 'No moves available for this position.';
-          container.appendChild(placeholder);
+          const white = document.createElement('div');
+          white.className = 'mv';
+          white.textContent = h[i] ? h[i].san : '';
+
+          const whiteEval = document.createElement('div');
+          whiteEval.className = 'eval';
+          whiteEval.textContent = h[i] && h[i].eval ? h[i].eval : '';
+          white.appendChild(whiteEval);
+
+          const black = document.createElement('div');
+          black.className = 'mv';
+          black.textContent = h[i + 1] ? h[i + 1].san : '';
+
+          const blackEval = document.createElement('div');
+          blackEval.className = 'eval';
+          blackEval.textContent = h[i + 1] && h[i + 1].eval ? h[i + 1].eval : '';
+          black.appendChild(blackEval);
+
+          white.addEventListener('click', () => goToPly(i + 1));
+          black.addEventListener('click', () => goToPly(i + 2));
+          container.appendChild(moveNo);
+          container.appendChild(white);
+          container.appendChild(black);
         }
         highlightActive();
-      }
-
-      function createMoveCell(move, idx) {
-        const cell = document.createElement('div');
-        cell.className = 'mv';
-        if (!move) {
-          cell.classList.add('empty');
-          return cell;
-        }
-
-        const header = document.createElement('div');
-        header.className = 'mv-header';
-        const san = document.createElement('span');
-        san.className = 'mv-san';
-        san.textContent = move.san || '';
-        header.appendChild(san);
-
-        if (move.classification) {
-          const badge = document.createElement('span');
-          badge.className = 'mv-badge';
-          badge.dataset.grade = move.classification;
-          const iconFile = CLASSIFICATION_ICONS[move.classification];
-          if (iconFile) {
-            const img = document.createElement('img');
-            img.src = `move-classifications/${iconFile}`;
-            img.alt = move.classification;
-            badge.appendChild(img);
-          }
-          const label = document.createElement('span');
-          label.textContent = move.classification;
-          badge.appendChild(label);
-          header.appendChild(badge);
-        }
-
-        cell.appendChild(header);
-
-        const meta = document.createElement('div');
-        meta.className = 'mv-meta';
-        const evalSpan = document.createElement('span');
-        evalSpan.className = 'mv-eval';
-        evalSpan.textContent = move.eval && move.eval.trim() ? move.eval : '—';
-        meta.appendChild(evalSpan);
-
-        const lossSpan = document.createElement('span');
-        lossSpan.className = 'mv-loss';
-        if (typeof move.lossCp === 'number') {
-          const delta = -move.lossCp / 100;
-          if (delta > 0.01) {
-            lossSpan.textContent = `Δ +${delta.toFixed(2)}`;
-            lossSpan.classList.add('gain');
-          } else if (delta < -0.01) {
-            lossSpan.textContent = `Δ ${delta.toFixed(2)}`;
-            lossSpan.classList.add('loss');
-          } else {
-            lossSpan.textContent = 'Δ 0.00';
-          }
-        } else {
-          lossSpan.textContent = 'Δ —';
-        }
-        meta.appendChild(lossSpan);
-
-        cell.appendChild(meta);
-
-        cell.addEventListener('click', () => goToPly(idx + 1));
-        return cell;
       }
 
       function highlightActive() {
@@ -1399,123 +601,90 @@
       function goToPly(ply) {
         const max = state.verboseHistory.length;
         state.ply = Math.max(0, Math.min(max, ply));
-        resetCurrentGame();
-
-        if (state.board) {
-          if (state.ply === 0) {
-            state.board.position(state.initialPositionKey);
-          } else {
-            for (let i = 0; i < state.ply; i++) {
-              const mv = state.verboseHistory[i];
-              state.game.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
-            }
-            state.board.position(state.game.fen());
+        if (state.ply === 0) {
+          state.board.position('start');
+          state.game.reset();
+        } else {
+          state.board.position(state.verboseHistory[state.ply - 1].fen);
+          state.game.reset();
+          for (let i = 0; i < state.ply; i++) {
+            const mv = state.verboseHistory[i];
+            state.game.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
           }
         }
-
-        updateMaterialBalance();
         highlightActive();
         analyzeCurrent();
 
         // Update evaluation bar with stored evaluation for this position
-        if (state.ply > 0) {
-          const last = state.verboseHistory[state.ply - 1];
-          const entry = last && (last.eval || typeof last.evalCp === 'number' || typeof last.evalMate === 'number')
-            ? { eval: last.eval, cp: last.evalCp, mate: last.evalMate ?? null }
-            : null;
-          updateEvalBar(entry, { ply: state.ply });
+        if (state.ply > 0 && state.verboseHistory[state.ply - 1].eval) {
+          updateEvalBar(state.verboseHistory[state.ply - 1].eval);
         } else {
           updateEvalBar(null); // Reset to neutral
         }
 
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
-        setUrlParam('ply', state.ply > 0 ? state.ply : null);
       }
 
       function drawArrows(list) {
         const svg = byId('arrowLayer');
-        const boardEl = byId('board');
-        if (!svg || !boardEl) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-        const entries = Array.isArray(list) ? list.filter(Boolean) : [];
-        if (!entries.length) return;
-
-        const rect = boardEl.getBoundingClientRect();
-        const size = rect && rect.width ? rect.width : 0;
-        if (!size) return;
-
-        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-        svg.setAttribute('width', size);
-        svg.setAttribute('height', size);
-
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         defs.innerHTML = `
-        <marker id="arrowHead1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#28a745" />
         </marker>
-        <marker id="arrowHead2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#007bff" />
         </marker>
-        <marker id="arrowHead3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#dc3545" />
         </marker>`;
         svg.appendChild(defs);
-
-        const squareSize = size / 8;
-
-        const squareCenter = (square) => {
-          if (!square || square.length < 2) return null;
-          const file = square.charCodeAt(0) - 97;
-          const rank = parseInt(square[1], 10) - 1;
-          if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
-            return null;
+        if (!list || !list.length) return;
+        const boardRect = byId('board').getBoundingClientRect();
+        const squareSize = boardRect.width / 8;
+        function squareCenter(sq) {
+          const file = sq.charCodeAt(0) - 97;
+          const rank = parseInt(sq[1], 10) - 1;
+          if (state.orientation === 'white') {
+            return {
+              x: (file + 0.5) * squareSize,
+              y: ((7 - rank) + 0.5) * squareSize
+            };
+          } else {
+            return {
+              x: ((7 - file) + 0.5) * squareSize,
+              y: (rank + 0.5) * squareSize
+            };
           }
-          let x = (file + 0.5) * squareSize;
-          let y = ((7 - rank) + 0.5) * squareSize;
-          if (state.orientation === 'black') {
-            x = ((7 - file) + 0.5) * squareSize;
-            y = (rank + 0.5) * squareSize;
-          }
-          return { x, y };
-        };
-
-        const colors = ['#28a745', '#007bff', '#dc3545'];
-        const opacities = [1, 0.45, 0.45];
-        const widths = [6, 5, 4];
-
-        entries.slice(0, 3).forEach((entry, index) => {
-          if (!entry || !entry.uci || entry.uci.length < 4) return;
+        }
+        const colors = ['#28a745', '#007bff', '#dc3545']; // Green, Blue, Red - distinct colors
+        const opacities = [1.0, 0.25, 0.25]; // Best solid, 2nd more transparent, 3rd medium
+        list.forEach((entry, i) => {
+          if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
-          if (!from || !to) return;
-
           const dx = to.x - from.x;
           const dy = to.y - from.y;
-          const distance = Math.hypot(dx, dy);
-          if (!distance) return;
-
-          const shorten = Math.min(squareSize * 0.6, distance * 0.3);
-          const startOffset = Math.min(squareSize * 0.4, distance * 0.2);
-
-          const unitX = dx / distance;
-          const unitY = dy / distance;
-
-          const startX = from.x + unitX * startOffset;
-          const startY = from.y + unitY * startOffset;
-          const endX = to.x - unitX * shorten;
-          const endY = to.y - unitY * shorten;
-
+          const len = Math.hypot(dx, dy);
+          if (!len) return;
+          // Make arrows smaller - reduce the shorten amount and starting offset
+          const shorten = Math.min(12, len * 0.15); // Reduced from 20 to 12, 0.2 to 0.15
+          const startOffset = Math.min(12, len * 0.1); // Start closer to the piece
+          const sx = from.x + (dx / len) * startOffset;
+          const sy = from.y + (dy / len) * startOffset;
+          const ex = to.x - (dx / len) * shorten;
+          const ey = to.y - (dy / len) * shorten;
           const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', startX);
-          line.setAttribute('y1', startY);
-          line.setAttribute('x2', endX);
-          line.setAttribute('y2', endY);
-          line.setAttribute('stroke', colors[index] || colors[colors.length - 1]);
-          line.setAttribute('stroke-width', widths[index] || widths[widths.length - 1]);
+          line.setAttribute('x1', sx);
+          line.setAttribute('y1', sy);
+          line.setAttribute('x2', ex);
+          line.setAttribute('y2', ey);
+          line.setAttribute('stroke', colors[i] || colors[2]);
+          line.setAttribute('stroke-width', Math.max(4, 6 - i * 0.8)); // Smaller base width, progressive reduction
           line.setAttribute('stroke-linecap', 'round');
-          line.setAttribute('marker-end', `url(#arrowHead${index + 1})`);
-          line.setAttribute('opacity', opacities[index] || opacities[opacities.length - 1]);
+          line.setAttribute('marker-end', `url(#m${i + 1})`);
+          line.setAttribute('opacity', opacities[i] || opacities[2]);
           svg.appendChild(line);
         });
       }
@@ -1538,113 +707,70 @@
       function updatePVDisplay(entries) {
         const ids = [1, 2, 3];
 
-        const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
-        if (!list.length) {
-          ids.forEach((idx) => {
-            const moveEl = byId(`pv${idx}`);
-            const evalEl = byId(`ev${idx}`);
-            if (moveEl) moveEl.textContent = '—';
-            if (evalEl) evalEl.textContent = '';
-          });
-          updateEvalBar(null);
-          return;
-        }
-
-        const bestEntry = list[0] || null;
-        const bestCp = bestEntry
-          ? (typeof bestEntry.cp === 'number'
-            ? bestEntry.cp
-            : typeof bestEntry.mate === 'number'
-              ? mateToCp(bestEntry.mate)
-              : null)
-          : null;
-
-        if (bestCp !== null) {
-          state.bestEvalByPly[state.ply] = bestCp;
-        }
+        // Get the best move's evaluation as baseline
+        const bestEval = entries[0] && entries[0].eval ? parseFloat(entries[0].eval) || 0 : 0;
 
         ids.forEach((idx, i) => {
           const moveEl = byId(`pv${idx}`);
           const evalEl = byId(`ev${idx}`);
-          const entry = list[i] || null;
-          if (!moveEl || !evalEl) return;
+          const entry = entries[i] || null;
           if (entry) {
             moveEl.textContent = entry.san || entry.uci;
-            const evalText = entry.eval && entry.eval.trim() ? entry.eval : formatEvalDisplay(entry);
-            evalEl.textContent = evalText;
+            evalEl.textContent = entry.eval || '';
+
+            // Add rating change info (difference from best move)
+            const moveEval = parseFloat(entry.eval) || 0;
+            const ratingChange = (moveEval - bestEval) * 100; // Convert to rating points
+
+            // Update the display to include rating change
+            if (!isNaN(ratingChange) && Math.abs(ratingChange) > 1) { // Only show if significant difference
+              const sign = ratingChange > 0 ? '+' : '';
+              evalEl.textContent = `${entry.eval} (${sign}${ratingChange.toFixed(0)})`;
+            } else {
+              evalEl.textContent = entry.eval || '';
+            }
           } else {
             moveEl.textContent = '—';
             evalEl.textContent = '';
           }
         });
 
-        if (bestEntry) {
-          updateEvalBar(bestEntry, { ply: state.ply });
+        // Update evaluation bar with the best move's evaluation
+        if (entries[0] && entries[0].eval) {
+          updateEvalBar(entries[0].eval);
         }
       }
 
-      function updateEvalBar(entry, opts = {}) {
+      function updateEvalBar(evalStr) {
         const evalValueEl = byId('evalValue');
-        const pointerEl = byId('evalPointer');
-        const barEl = byId('evalBar');
-        const whiteFill = byId('evalWhiteFill');
-        const blackFill = byId('evalBlackFill');
-        if (!evalValueEl || !pointerEl || !barEl) return;
+        const evalFillEl = byId('evalFill');
 
-        const setNeutralFill = () => {
-          if (whiteFill) whiteFill.style.height = '50%';
-          if (blackFill) blackFill.style.height = '50%';
-        };
-
-        if (!entry) {
+        if (!evalStr) {
           evalValueEl.textContent = '0.00';
-          pointerEl.style.top = '50%';
-          pointerEl.classList.remove('adv-white', 'adv-black');
-          setNeutralFill();
+          evalFillEl.style.transform = 'translateX(-50%)';
           return;
         }
 
-        const displayText = entry.eval && entry.eval.trim() ? entry.eval : formatEvalDisplay(entry);
-        evalValueEl.textContent = displayText;
-
-        const ply = typeof opts.ply === 'number' ? opts.ply : state.ply;
-
-        let cpValue = null;
-        if (typeof entry.cp === 'number') {
-          cpValue = entry.cp;
-        } else if (typeof entry.mate === 'number') {
-          cpValue = mateToCp(entry.mate);
-        } else if (entry.eval && entry.eval.startsWith('#')) {
-          const mateVal = parseInt(entry.eval.substring(1), 10);
-          if (!Number.isNaN(mateVal)) {
-            cpValue = mateToCp(mateVal);
-          }
-        } else if (entry.eval) {
-          const parsed = parseFloat(entry.eval);
-          if (!Number.isNaN(parsed)) cpValue = parsed * 100;
-        }
-
-        if (cpValue === null) {
-          pointerEl.style.top = '50%';
-          pointerEl.classList.remove('adv-white', 'adv-black');
-          setNeutralFill();
+        // Handle mate scores
+        if (evalStr.startsWith('#')) {
+          const mateIn = parseInt(evalStr.substring(1));
+          evalValueEl.textContent = evalStr;
+          // Position bar based on mate score (very positive or negative)
+          const position = mateIn > 0 ? 100 : 0;
+          evalFillEl.style.transform = `translateX(${position - 50}%)`;
           return;
         }
 
-        const cpWhite = ply % 2 === 0 ? cpValue : -cpValue;
-        const clamped = clampCp(cpWhite);
-        const percentWhite = (clamped + MAX_CP) / (2 * MAX_CP);
-        const boundedWhite = Math.max(0, Math.min(1, percentWhite));
-        pointerEl.style.top = `${(1 - boundedWhite) * 100}%`;
-        if (whiteFill) whiteFill.style.height = `${boundedWhite * 100}%`;
-        if (blackFill) blackFill.style.height = `${(1 - boundedWhite) * 100}%`;
+        // Handle centipawn scores
+        const cp = parseFloat(evalStr);
+        evalValueEl.textContent = evalStr;
 
-        pointerEl.classList.remove('adv-white', 'adv-black');
-        if (cpWhite > 80) {
-          pointerEl.classList.add('adv-white');
-        } else if (cpWhite < -80) {
-          pointerEl.classList.add('adv-black');
-        }
+        // Convert centipawn to percentage (clamp between -300 to +300 cp for display)
+        const clampedCp = Math.max(-300, Math.min(300, cp));
+        const percentage = (clampedCp + 300) / 600; // 0 to 1 range
+        const position = percentage * 100; // 0 to 100%
+
+        evalFillEl.style.transform = `translateX(${position - 50}%)`;
       }
 
       function ensureEngine() {
@@ -1721,20 +847,8 @@
             // Store the current position's evaluation in history
             if (state.ply > 0 && state.multiPv && state.multiPv.has(1)) {
               const bestMove = state.multiPv.get(1);
-              const historyEntry = state.verboseHistory[state.ply - 1];
-              if (bestMove && historyEntry) {
-                const evalText = bestMove.eval && bestMove.eval.trim() ? bestMove.eval : formatEvalDisplay(bestMove);
-                historyEntry.eval = evalText;
-                historyEntry.evalCp = typeof bestMove.cp === 'number' ? bestMove.cp : null;
-                historyEntry.evalMate = typeof bestMove.mate === 'number' ? bestMove.mate : null;
-                const impact = computeMoveImpact(state.ply - 1, bestMove);
-                if (impact) {
-                  historyEntry.lossCp = impact.lossCp;
-                  historyEntry.classification = impact.classification;
-                } else {
-                  historyEntry.lossCp = null;
-                  historyEntry.classification = null;
-                }
+              if (bestMove && bestMove.eval) {
+                state.verboseHistory[state.ply - 1].eval = bestMove.eval;
                 renderMoves(); // Re-render to show the evaluation
               }
             }
@@ -1757,28 +871,23 @@
         if (rank < 1 || rank > 3) return;
         const moves = pv[1].trim().split(/\s+/);
         let evalStr = '';
-        let mateVal = null;
-        let cpVal = null;
         if (scoreMate) {
-          mateVal = parseInt(scoreMate[1], 10);
-          evalStr = `#${mateVal}`;
-          cpVal = mateToCp(mateVal);
+          evalStr = `#${scoreMate[1]}`;
         } else if (scoreCp) {
-          cpVal = parseInt(scoreCp[1], 10);
-          evalStr = `${cpVal >= 0 ? '+' : ''}${(cpVal / 100).toFixed(2)}`;
+          const cp = parseInt(scoreCp[1], 10);
+          evalStr = `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
         }
         const entry = {
           rank,
           uci: moves[0],
-          eval: evalStr,
-          mate: mateVal,
-          cp: cpVal
+          eval: evalStr
         };
         const baseFen = state.ply === 0 ? new Chess().fen() : state.verboseHistory[state.ply - 1].fen;
         entry.san = uciToSan(baseFen, entry.uci);
         state.multiPv = state.multiPv || new Map();
         state.multiPv.set(rank, entry);
         const list = [1, 2, 3].map(r => state.multiPv.get(r) || null);
+        drawArrows(list);
         updatePVDisplay(list);
         setStatus('engStatus', `Analyzing… depth ${line.match(/\bdepth (\d+)/)?.[1] || ''}`);
       }
@@ -1793,10 +902,11 @@
 
         state.pendingAnalysis = false;
         state.multiPv = new Map();
+        drawArrows([]);
         updatePVDisplay([]);
         setStatus('engStatus', 'Analyzing…');
 
-        const fen = getFenForPly(state.ply);
+        const fen = state.ply === 0 ? new Chess().fen() : state.verboseHistory[state.ply - 1].fen;
 
         // Stop any previous analysis
         state.engine.postMessage('stop');
@@ -1831,235 +941,54 @@
         window.history.replaceState({}, '', url);
       }
 
-      function getInputType() {
-        const select = byId('inputType');
-        return select ? (select.value || INPUT_TYPES.PGN) : INPUT_TYPES.PGN;
-      }
-
-      function setInputType(type) {
-        const select = byId('inputType');
-        if (!select) return;
-        const normalized = Object.values(INPUT_TYPES).includes(type) ? type : INPUT_TYPES.PGN;
-        select.value = normalized;
-        updateInputAppearance();
-      }
-
-      function getCurrentInputValue() {
-        const textarea = byId('gameInput');
-        return textarea ? textarea.value.trim() : '';
-      }
-
-      function setCurrentInputValue(value) {
-        const textarea = byId('gameInput');
-        if (textarea) textarea.value = value || '';
-      }
-
-      function updateInputAppearance() {
-        const select = byId('inputType');
-        const textarea = byId('gameInput');
-        if (!select || !textarea) return;
-        const type = select.value || INPUT_TYPES.PGN;
-        textarea.classList.remove('compact');
-        let placeholder = 'Paste a PGN';
-        if (type === INPUT_TYPES.LICHESS) {
-          placeholder = 'Paste a Lichess game URL or ID';
-          textarea.classList.add('compact');
-        } else if (type === INPUT_TYPES.FEN) {
-          placeholder = 'Paste a FEN string';
-          textarea.classList.add('compact');
-        }
-        textarea.placeholder = placeholder;
-      }
-
-      function updateQueryFromInput() {
-        const type = getInputType();
-        const value = getCurrentInputValue();
-        const trimmedValue = value ? value.trim() : '';
-        if (type === INPUT_TYPES.LICHESS) {
-          const id = extractGameId(value);
-          setUrlParam('game', id || null);
-          setUrlParam('source', null);
-        } else {
-          setUrlParam('game', null);
-          setUrlParam('source', trimmedValue ? trimmedValue : null);
-        }
-        setUrlParam('inputType', type === INPUT_TYPES.PGN ? null : type);
-      }
-
-      async function setupGameFromPgn(pgn, targetPly = null) {
-        const raw = (pgn || '').trim();
-        if (!raw) throw new Error('PGN data is empty.');
-        const fullGame = new Chess();
-        const loaded = fullGame.loadPgn(raw, { sloppy: true });
-        if (!loaded) throw new Error('Invalid PGN data.');
-
-        state.fullGame = fullGame;
-        const headers = parseHeaders(raw);
-        populateHeaders(headers);
-
-        state.initialFen = determineInitialFen(headers);
-        state.initialPositionKey = determineInitialPositionKey(state.initialFen);
-        state.verboseHistory = buildHistory(fullGame, state.initialFen);
-        state.bestEvalByPly = [];
-        state.multiPv = new Map();
-        state.ply = 0;
-        resetCurrentGame();
-
-        if (state.board) {
-          state.board.position(state.initialPositionKey);
-        }
-
-        renderMoves();
-        updateMaterialBalance();
-        updateEvalBar(null);
-
-        if (state.engineReady) {
-          state.engine.postMessage('ucinewgame');
-        }
-
-        const maxPly = state.verboseHistory.length;
-        const desiredPly = typeof targetPly === 'number'
-          ? Math.max(0, Math.min(maxPly, targetPly))
-          : maxPly;
-        goToPly(desiredPly);
-      }
-
-      function setupGameFromFen(fen) {
-        const trimmed = (fen || '').trim();
-        const temp = new Chess();
-        if (!trimmed || !temp.load(trimmed)) {
-          throw new Error('Invalid FEN string.');
-        }
-
-        const headers = {
-          White: '—',
-          Black: '—',
-          Event: 'Custom Position',
-          Site: '—',
-          Date: new Date().toISOString().slice(0, 10),
-          Result: '*',
-          Opening: '—',
-          FEN: trimmed,
-          SetUp: '1'
-        };
-        populateHeaders(headers);
-
-        state.fullGame = null;
-        state.initialFen = trimmed;
-        state.initialPositionKey = determineInitialPositionKey(trimmed);
-        state.verboseHistory = [];
-        state.bestEvalByPly = [];
-        state.multiPv = new Map();
-        state.ply = 0;
-        resetCurrentGame();
-
-        if (state.board) {
-          state.board.position(state.initialPositionKey);
-        }
-
-        renderMoves();
-        updateMaterialBalance();
-        updateEvalBar(null);
-
-        if (state.engineReady) {
-          state.engine.postMessage('ucinewgame');
-        }
-
-        goToPly(0);
-      }
-
-      async function loadFromSource(source, targetPly = null) {
-        if (!source) return;
-        const type = source.type || getInputType();
-        const value = source.value ?? getCurrentInputValue();
-        state.currentSource = { type, value };
-
-        updatePVDisplay([]);
-        clearRatingGuess();
-        updateEloGuessDisplay();
-        setUrlParam('ply', null);
-
+      function extractGameId(input) {
+        if (!input) return null;
         try {
-          if (type === INPUT_TYPES.LICHESS) {
-            const id = extractGameId(value);
-            if (!id) {
-              setStatus('loadStatus', 'Please provide a Lichess URL or game ID.', 'error');
-              return;
-            }
-            setStatus('loadStatus', 'Fetching PGN…');
-            const pgn = await fetchPGN(id);
-            await setupGameFromPgn(pgn, targetPly);
-            setUrlParam('game', id);
-            setUrlParam('source', null);
-            setStatus('loadStatus', 'Game ready.', 'ok');
-          } else if (type === INPUT_TYPES.FEN) {
-            if (!value || !value.trim()) {
-              setStatus('loadStatus', 'Please paste a FEN string.', 'error');
-              return;
-            }
-            setStatus('loadStatus', 'Loading position…');
-            setupGameFromFen(value);
-            setUrlParam('game', null);
-            setUrlParam('source', value.trim());
-            setStatus('loadStatus', 'Position ready.', 'ok');
-          } else {
-            if (!value || !value.trim()) {
-              setStatus('loadStatus', 'Please paste a PGN.', 'error');
-              return;
-            }
-            setStatus('loadStatus', 'Loading PGN…');
-            await setupGameFromPgn(value, targetPly);
-            setUrlParam('game', null);
-            setUrlParam('source', value.trim());
-            setStatus('loadStatus', 'Game ready.', 'ok');
-          }
+          const url = new URL(input);
+          const pathSegments = url.pathname.split('/').filter(Boolean);
+          return pathSegments[0] || input;
+        } catch (e) {
+          return input; // Assume it's already a game ID
+        }
+      }
+
+      async function loadGame(gameId, token = '') {
+        if (!gameId) return;
+        try {
+          setStatus('loadStatus', 'Fetching PGN…');
+          const pgn = await fetchPGN(gameId, token);
+          state.game.loadPgn(pgn);
+          state.verboseHistory = buildHistory(state.game);
+          state.game.reset();
+          state.ply = 0;
+          state.board.position('start');
+          populateHeaders(parseHeaders(pgn));
+          renderMoves();
+          if (state.engineReady) state.engine.postMessage('ucinewgame');
+          goToPly(state.verboseHistory.length);
+          setStatus('loadStatus', 'Game ready.', 'ok');
         } catch (err) {
           console.error(err);
-          setStatus('loadStatus', err.message || 'Failed to load data.', 'error');
-          throw err;
+          setStatus('loadStatus', err.message || 'Failed to load game.', 'error');
         }
       }
 
       function bindUi() {
-        const loadButton = byId('loadBtn');
-        if (loadButton) {
-          loadButton.addEventListener('click', async () => {
-            const type = getInputType();
-            const value = getCurrentInputValue();
-            if (!value) {
-              const message = type === INPUT_TYPES.LICHESS
-                ? 'Please paste a Lichess URL or ID.'
-                : type === INPUT_TYPES.FEN
-                  ? 'Please paste a FEN string.'
-                  : 'Please paste a PGN.';
-              setStatus('loadStatus', message, 'error');
-              return;
-            }
-            await loadFromSource({ type, value });
-          });
-        }
+        byId('loadBtn').addEventListener('click', async () => {
+          const input = byId('lichessUrl').value.trim();
+          const token = byId('token').value;
+          if (!input) return setStatus('loadStatus', 'Please paste a Lichess URL or ID.', 'error');
 
-        const input = byId('gameInput');
-        if (input) {
-          input.addEventListener('input', () => {
-            updateQueryFromInput();
-          });
-        }
+          const gameId = extractGameId(input);
+          setUrlParam('game', gameId);
+          await loadGame(gameId, token);
+        });
 
-        const typeSelect = byId('inputType');
-        if (typeSelect) {
-          typeSelect.addEventListener('change', () => {
-            updateInputAppearance();
-            updateQueryFromInput();
-          });
-        }
-
-        const guessButton = byId('guessEloBtn');
-        if (guessButton) {
-          guessButton.addEventListener('click', () => {
-            guessPlayerRatings();
-          });
-        }
+        byId('lichessUrl').addEventListener('input', () => {
+          const input = byId('lichessUrl').value.trim();
+          const gameId = extractGameId(input);
+          setUrlParam('game', gameId || null);
+        });
 
         byId('firstBtn').addEventListener('click', () => goToPly(0));
         byId('prevBtn').addEventListener('click', () => goToPly(state.ply - 1));
@@ -2068,6 +997,7 @@
         byId('flipBtn').addEventListener('click', () => {
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
+          requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
         });
         byId('timeMs').addEventListener('change', analyzeCurrent);
         byId('depth').addEventListener('change', analyzeCurrent);
@@ -2077,10 +1007,7 @@
           const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
           setTheme(newTheme);
         });
-
-        updateInputAppearance();
       }
-
 
       // Theme management
       function getSystemTheme() {
@@ -2138,37 +1065,16 @@
         initBoard();
         bindUi();
         updateEvalBar(null); // Initialize evaluation bar to neutral
-        updateMaterialBalance();
-        updateEloGuessDisplay();
         setStatus('engStatus', 'Initializing engine…');
         ensureEngine();
 
-        // Check for parameters in URL and auto-load
-        const inputTypeParam = getUrlParam('inputType');
-        const sourceParam = getUrlParam('source');
+        // Check for game parameter in URL and auto-load
         const gameParam = getUrlParam('game');
-        const plyParam = parseInt(getUrlParam('ply'), 10);
-        const targetPly = Number.isFinite(plyParam) ? plyParam : null;
-
-        let initialType = inputTypeParam && Object.values(INPUT_TYPES).includes(inputTypeParam)
-          ? inputTypeParam
-          : INPUT_TYPES.PGN;
-        let initialValue = sourceParam || '';
-
         if (gameParam) {
-          initialType = INPUT_TYPES.LICHESS;
-          initialValue = gameParam;
-        }
-
-        setInputType(initialType);
-        setCurrentInputValue(initialValue);
-        updateInputAppearance();
-        updateQueryFromInput();
-
-        if ((initialType === INPUT_TYPES.LICHESS && initialValue) || (initialType !== INPUT_TYPES.LICHESS && initialValue)) {
-          setTimeout(() => loadFromSource({ type: initialType, value: initialValue }, targetPly), 800);
-        } else if (targetPly !== null) {
-          setUrlParam('ply', null);
+          byId('lichessUrl').value = gameParam;
+          setUrlParam('game', gameParam); // Ensure it's in URL
+          // Auto-load after a short delay to ensure engine is ready
+          setTimeout(() => loadGame(gameParam), 1000);
         }
       }
 
