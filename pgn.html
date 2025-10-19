@@ -338,6 +338,39 @@
       max-width: 420px;
     }
 
+    #arrowLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    #board .square-55d63 {
+      position: relative;
+    }
+
+    #board .square-55d63::after {
+      content: '';
+      position: absolute;
+      inset: 6px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+
+    #board .square-55d63.highlight-last-from::after {
+      background: rgba(112, 167, 255, 0.45);
+      opacity: 1;
+    }
+
+    #board .square-55d63.highlight-last-to::after {
+      background: rgba(63, 208, 134, 0.45);
+      opacity: 1;
+    }
+
     .kv {
       display: grid;
       grid-template-columns: 120px 1fr;
@@ -890,6 +923,40 @@
         return entry.eval || '—';
       }
 
+      function squareToDisplayCoords(square) {
+        if (!square || square.length < 2) return null;
+        const file = square.charCodeAt(0) - 97;
+        const rank = parseInt(square[1], 10) - 1;
+        if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
+          return null;
+        }
+        let col = file;
+        let row = 7 - rank;
+        if (state.orientation === 'black') {
+          col = 7 - col;
+          row = 7 - row;
+        }
+        return { col, row };
+      }
+
+      function refreshBoardHighlights() {
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        boardEl.querySelectorAll('.square-55d63').forEach((el) => {
+          el.classList.remove('highlight-last-from', 'highlight-last-to');
+        });
+        const last = state.lastHighlightedMove;
+        if (!last) return;
+        if (last.from) {
+          const fromEl = boardEl.querySelector(`[data-square="${last.from}"]`);
+          if (fromEl) fromEl.classList.add('highlight-last-from');
+        }
+        if (last.to) {
+          const toEl = boardEl.querySelector(`[data-square="${last.to}"]`);
+          if (toEl) toEl.classList.add('highlight-last-to');
+        }
+      }
+
       function formatMaterialScore(score) {
         if (!Number.isFinite(score) || score === 0) return '0';
         return score > 0 ? `+${score}` : `${score}`;
@@ -1123,11 +1190,16 @@
         if (!rect || rect.width === 0) {
           return;
         }
-        const height = rect.height || rect.width;
+        const size = rect.width;
+        const height = rect.height || size;
+        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
         const evalBar = byId('evalBar');
         if (evalBar) {
           evalBar.style.height = `${height}px`;
         }
+        requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
       }
 
       function setStatus(id, msg, type) {
@@ -1358,6 +1430,94 @@
 
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
         setUrlParam('ply', state.ply > 0 ? state.ply : null);
+      }
+
+      function drawArrows(list) {
+        const svg = byId('arrowLayer');
+        const boardEl = byId('board');
+        if (!svg || !boardEl) return;
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        const entries = Array.isArray(list) ? list.filter(Boolean) : [];
+        if (!entries.length) return;
+
+        const rect = boardEl.getBoundingClientRect();
+        const size = rect && rect.width ? rect.width : 0;
+        if (!size) return;
+
+        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        defs.innerHTML = `
+        <marker id="arrowHead1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#28a745" />
+        </marker>
+        <marker id="arrowHead2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#007bff" />
+        </marker>
+        <marker id="arrowHead3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#dc3545" />
+        </marker>`;
+        svg.appendChild(defs);
+
+        const squareSize = size / 8;
+
+        const squareCenter = (square) => {
+          if (!square || square.length < 2) return null;
+          const file = square.charCodeAt(0) - 97;
+          const rank = parseInt(square[1], 10) - 1;
+          if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
+            return null;
+          }
+          let x = (file + 0.5) * squareSize;
+          let y = ((7 - rank) + 0.5) * squareSize;
+          if (state.orientation === 'black') {
+            x = ((7 - file) + 0.5) * squareSize;
+            y = (rank + 0.5) * squareSize;
+          }
+          return { x, y };
+        };
+
+        const colors = ['#28a745', '#007bff', '#dc3545'];
+        const opacities = [1, 0.45, 0.45];
+        const widths = [6, 5, 4];
+
+        entries.slice(0, 3).forEach((entry, index) => {
+          if (!entry || !entry.uci || entry.uci.length < 4) return;
+          const from = squareCenter(entry.uci.slice(0, 2));
+          const to = squareCenter(entry.uci.slice(2, 4));
+          if (!from || !to) return;
+
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const distance = Math.hypot(dx, dy);
+          if (!distance) return;
+
+          const shorten = Math.min(squareSize * 0.6, distance * 0.3);
+          const startOffset = Math.min(squareSize * 0.4, distance * 0.2);
+
+          const unitX = dx / distance;
+          const unitY = dy / distance;
+
+          const startX = from.x + unitX * startOffset;
+          const startY = from.y + unitY * startOffset;
+          const endX = to.x - unitX * shorten;
+          const endY = to.y - unitY * shorten;
+
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', startX);
+          line.setAttribute('y1', startY);
+          line.setAttribute('x2', endX);
+          line.setAttribute('y2', endY);
+          line.setAttribute('stroke', colors[index] || colors[colors.length - 1]);
+          line.setAttribute('stroke-width', widths[index] || widths[widths.length - 1]);
+          line.setAttribute('stroke-linecap', 'round');
+          line.setAttribute('marker-end', `url(#arrowHead${index + 1})`);
+          line.setAttribute('opacity', opacities[index] || opacities[opacities.length - 1]);
+          svg.appendChild(line);
+        });
       }
 
       function uciToSan(fen, uci) {
