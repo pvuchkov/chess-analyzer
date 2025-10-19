@@ -1985,24 +1985,85 @@
         actualEntry,
         winPercentBefore,
         winPercentAfter,
-        pvEntries
+        pvEntries,
+        cpLoss,
+        bestCp,
+        actualCp,
+        bestEval,
+        actualEval
       }) {
         const safeBefore = Number.isFinite(beforeEp) ? beforeEp : null;
         const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
-        const loss = Math.max(0, bestEp - actualEp);
+        const moverIsWhite = !moveEntry || moveEntry.color !== 'b';
+        let loss = null;
+        if (Number.isFinite(bestEp) && Number.isFinite(actualEp)) {
+          const oriented = moverIsWhite ? bestEp - actualEp : actualEp - bestEp;
+          loss = Math.max(0, oriented);
+        }
+
+        const cpLossValue = Number.isFinite(cpLoss) ? Math.max(0, cpLoss) : null;
+        const cpGap = Number.isFinite(bestCp) && Number.isFinite(actualCp)
+          ? Math.abs(bestCp - actualCp)
+          : null;
+
+        const bestMateVal = bestEval && bestEval.type === 'mate' ? bestEval.value : null;
+        const actualMateVal = actualEval && actualEval.type === 'mate' ? actualEval.value : null;
+        const bestMateDistance = bestMateVal != null ? Math.abs(bestMateVal) : null;
+        const actualMateDistance = actualMateVal != null ? Math.abs(actualMateVal) : null;
+
+        const bestMateForMover = bestMateVal != null
+          && ((moverIsWhite && bestMateVal > 0) || (!moverIsWhite && bestMateVal < 0));
+        const bestMateForOpponent = bestMateVal != null
+          && ((moverIsWhite && bestMateVal < 0) || (!moverIsWhite && bestMateVal > 0));
+        const actualMateForMover = actualMateVal != null
+          && ((moverIsWhite && actualMateVal > 0) || (!moverIsWhite && actualMateVal < 0));
+        const actualMateForOpponent = actualMateVal != null
+          && ((moverIsWhite && actualMateVal < 0) || (!moverIsWhite && actualMateVal > 0));
+
         let classification;
-        if (loss < 0.0005 && sameAsBest) {
-          classification = 'best';
-        } else if (loss <= 0.02) {
-          classification = sameAsBest ? 'best' : 'excellent';
-        } else if (loss <= 0.05) {
-          classification = 'good';
-        } else if (loss <= 0.1) {
-          classification = 'inaccuracy';
-        } else if (loss <= 0.2) {
-          classification = 'mistake';
+        if (actualMateForOpponent) {
+          if (bestMateForOpponent && actualMateDistance != null && bestMateDistance != null) {
+            if (actualMateDistance < bestMateDistance) {
+              classification = 'blunder';
+            } else {
+              classification = 'best';
+            }
+          } else {
+            classification = 'blunder';
+          }
         } else {
-          classification = 'blunder';
+          const withinTolerance = (cpLossValue != null && cpLossValue <= 10)
+            || (cpGap != null && cpGap <= 15)
+            || sameAsBest;
+          if (withinTolerance) {
+            classification = 'best';
+          } else if (cpLossValue == null) {
+            classification = sameAsBest ? 'best' : 'good';
+          } else if (cpLossValue <= 30) {
+            classification = 'excellent';
+          } else if (cpLossValue <= 60) {
+            classification = 'great';
+          } else if (cpLossValue <= 90) {
+            classification = 'good';
+          } else if (cpLossValue <= 120) {
+            classification = 'inaccuracy';
+          } else if (cpLossValue <= 250) {
+            classification = 'mistake';
+          } else {
+            classification = 'blunder';
+          }
+
+          if (bestMateForMover && !actualMateForMover) {
+            classification = 'blunder';
+          } else if (actualMateForMover && !bestMateForMover) {
+            if (classification !== 'best' && classification !== 'excellent') {
+              classification = 'excellent';
+            }
+          } else if (actualMateForMover && bestMateForMover && actualMateDistance != null && bestMateDistance != null && actualMateDistance > bestMateDistance) {
+            if (classification === 'best') {
+              classification = 'excellent';
+            }
+          }
         }
 
         const baseline = classification;
@@ -2369,6 +2430,8 @@
         }
         const accuracyPercent = computeMoveAccuracy(winPercentBefore, winPercentAfter);
         const cpLoss = computeCpLoss(bestCp, actualCp, moveEntry.color);
+        const bestEvalParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
+        const actualEvalParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
         const classificationData = classifyMoveContext({
           bestEp,
           actualEp,
@@ -2378,7 +2441,12 @@
           actualEntry,
           winPercentBefore,
           winPercentAfter,
-          pvEntries
+          pvEntries,
+          cpLoss,
+          bestCp,
+          actualCp,
+          bestEval: bestEvalParsed,
+          actualEval: actualEvalParsed
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
         moveEntry.analysis = {
