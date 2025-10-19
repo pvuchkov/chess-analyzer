@@ -356,6 +356,9 @@
       background: rgba(148, 163, 184, 0.12);
       transition: background 0.12s ease, transform 0.12s ease;
       position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .mv:hover {
@@ -379,6 +382,13 @@
       border-radius: 3px;
       white-space: nowrap;
       opacity: 0.85;
+    }
+
+    .classification-icon {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 2px rgba(15, 23, 42, 0.5));
     }
 
     .pv-list {
@@ -542,9 +552,9 @@
       </div>
       <div class="row" style="margin-top:12px; align-items:center;">
         <label style="font-size:13px; color:var(--muted);">Engine: time (ms)</label>
-        <input id="timeMs" type="number" min="100" max="10000" step="100" value="1500" style="width:120px;" />
+        <input id="timeMs" type="number" min="100" max="10000" step="100" value="2000" style="width:120px;" disabled />
         <label style="font-size:13px; color:var(--muted);">Depth</label>
-        <input id="depth" type="number" min="1" max="40" step="1" value="20" style="width:100px;" />
+        <input id="depth" type="number" min="1" max="40" step="1" value="20" style="width:100px;" disabled />
       </div>
       <div id="navStatus" class="status"></div>
     </div>
@@ -612,12 +622,15 @@
         engineReady: false,
         engineConfigured: false,
         engineVersion: 'unknown',
-        pendingAnalysis: null,
-        multiPv: new Map(),
         initialFen: 'start',
         initialPieceCounts: null,
         source: 'pgn',
-        rawInput: ''
+        rawInput: '',
+        analysisCache: new Map(),
+        analysisStatus: 'idle',
+        engineQueue: [],
+        currentRequest: null,
+        analysisToken: 0
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -628,6 +641,7 @@
         lichess: 'Paste a public Lichess game URL or ID. For best results run this page from http://localhost/.',
         fen: 'Paste a FEN string to analyze a specific position.'
       };
+      const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
 
       function createBaseGame(fen = state.initialFen) {
         if (fen && fen !== 'start') {
@@ -898,12 +912,46 @@
         const temp = initialFen && initialFen !== 'start' ? new Chess(initialFen) : new Chess();
         const moves = game.history();
         for (const mv of moves) {
+          const preFen = temp.fen();
           const played = temp.move(mv);
           if (played) {
-            verbose.push({ ...played, fen: temp.fen(), eval: null });
+            verbose.push({ ...played, fen: temp.fen(), preFen, eval: null, analysis: null });
           }
         }
         return verbose;
+      }
+
+      function classificationToIcon(classification) {
+        if (!classification) return null;
+        const file = classification.toLowerCase().replace(/\s+/g, '-');
+        return classificationIconSet.has(file) ? `./move-classifications/${file}.png` : null;
+      }
+
+      function createMoveCell(entry, plyIndex) {
+        const cell = document.createElement('div');
+        cell.className = 'mv';
+        const label = document.createElement('span');
+        label.textContent = entry ? entry.san : '';
+        cell.appendChild(label);
+
+        if (entry && entry.analysis && entry.analysis.classification) {
+          const iconPath = classificationToIcon(entry.analysis.classification);
+          if (iconPath) {
+            const icon = document.createElement('img');
+            icon.src = iconPath;
+            icon.alt = entry.analysis.classification;
+            icon.className = 'classification-icon';
+            cell.appendChild(icon);
+          }
+        }
+
+        const evalBadge = document.createElement('div');
+        evalBadge.className = 'eval';
+        evalBadge.textContent = entry && entry.eval ? entry.eval : '';
+        cell.appendChild(evalBadge);
+
+        cell.addEventListener('click', () => goToPly(plyIndex));
+        return cell;
       }
 
       function renderMoves() {
@@ -916,26 +964,9 @@
           moveNo.textContent = `${Math.floor(i / 2) + 1}.`;
           moveNo.className = 'muted';
 
-          const white = document.createElement('div');
-          white.className = 'mv';
-          white.textContent = h[i] ? h[i].san : '';
+          const white = createMoveCell(h[i], i + 1);
+          const black = createMoveCell(h[i + 1], i + 2);
 
-          const whiteEval = document.createElement('div');
-          whiteEval.className = 'eval';
-          whiteEval.textContent = h[i] && h[i].eval ? h[i].eval : '';
-          white.appendChild(whiteEval);
-
-          const black = document.createElement('div');
-          black.className = 'mv';
-          black.textContent = h[i + 1] ? h[i + 1].san : '';
-
-          const blackEval = document.createElement('div');
-          blackEval.className = 'eval';
-          blackEval.textContent = h[i + 1] && h[i + 1].eval ? h[i + 1].eval : '';
-          black.appendChild(blackEval);
-
-          white.addEventListener('click', () => goToPly(i + 1));
-          black.addEventListener('click', () => goToPly(i + 2));
           container.appendChild(moveNo);
           container.appendChild(white);
           container.appendChild(black);
@@ -974,13 +1005,7 @@
 
         highlightActive();
         updateMaterialDiff();
-        analyzeCurrent();
-
-        if (state.ply > 0 && state.verboseHistory[state.ply - 1].eval) {
-          updateEvalBar(state.verboseHistory[state.ply - 1].eval);
-        } else {
-          updateEvalBar(null);
-        }
+        applyAnalysisForCurrentPly();
 
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
         updateUrlState();
@@ -1205,6 +1230,184 @@
         }
       }
 
+      function cpToExpectedPoints(cp) {
+        if (cp == null || Number.isNaN(cp)) return 0.5;
+        const capped = Math.max(-1000, Math.min(1000, cp));
+        const exponent = Math.pow(10, -capped / 400);
+        return 1 / (1 + exponent);
+      }
+
+      function detectSacrifice(moveEntry) {
+        if (!moveEntry || !moveEntry.preFen || !moveEntry.fen) return false;
+        try {
+          const beforeGame = new Chess(moveEntry.preFen);
+          const afterGame = new Chess(moveEntry.fen);
+          const beforeCounts = countPiecesOnBoard(beforeGame.board());
+          const afterCounts = countPiecesOnBoard(afterGame.board());
+          const mover = moveEntry.color;
+          const opponent = mover === 'w' ? 'b' : 'w';
+          const beforeMaterial = sumMaterial(beforeCounts[mover]);
+          const afterMaterial = sumMaterial(afterCounts[mover]);
+          const beforeOpponent = sumMaterial(beforeCounts[opponent]);
+          const afterOpponent = sumMaterial(afterCounts[opponent]);
+          const materialLost = beforeMaterial - afterMaterial;
+          const materialTaken = beforeOpponent - afterOpponent;
+          return materialLost >= 3 && materialTaken <= 1;
+        } catch (err) {
+          console.warn('Failed to evaluate sacrifice', err);
+          return false;
+        }
+      }
+
+      function classifyMoveContext({ bestEp, actualEp, beforeEp, moveEntry, bestEntry, actualEntry }) {
+        const safeBefore = Number.isFinite(beforeEp) ? beforeEp : null;
+        const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
+        const loss = Math.max(0, bestEp - actualEp);
+        let classification;
+        if (loss < 0.0005 && sameAsBest) {
+          classification = 'best';
+        } else if (loss <= 0.02) {
+          classification = sameAsBest ? 'best' : 'excellent';
+        } else if (loss <= 0.05) {
+          classification = 'good';
+        } else if (loss <= 0.1) {
+          classification = 'inaccuracy';
+        } else if (loss <= 0.2) {
+          classification = 'mistake';
+        } else {
+          classification = 'blunder';
+        }
+
+        if ((classification === 'best' || classification === 'excellent' || classification === 'good') && safeBefore != null) {
+          if (actualEp >= safeBefore + 0.25 && actualEp >= 0.55) {
+            classification = 'great';
+          }
+        }
+
+        if ((classification === 'best' || classification === 'excellent') && detectSacrifice(moveEntry) && actualEp >= 0.45 && bestEp >= 0.45) {
+          classification = 'brilliant';
+        }
+
+        if (safeBefore != null && safeBefore >= 0.65 && bestEp >= 0.85 && actualEp <= 0.55) {
+          classification = 'miss';
+        }
+
+        return { classification, expectedLoss: loss };
+      }
+
+      const engineController = {
+        running: null,
+        run(config) {
+          return new Promise((resolve, reject) => {
+            const request = {
+              config: {
+                fen: config.fen,
+                depth: config.depth ?? 20,
+                movetime: config.movetime ?? 2000,
+                searchMoves: config.searchMoves ? [...config.searchMoves] : [],
+                ply: config.ply ?? 0
+              },
+              resolve,
+              reject,
+              pv: new Map(),
+              depth: 0
+            };
+            state.engineQueue.push(request);
+            engineController.pump();
+          });
+        },
+        pump() {
+          if (!state.engineReady) return;
+          if (engineController.running || state.engineQueue.length === 0) return;
+          engineController.running = state.engineQueue.shift();
+          state.currentRequest = engineController.running;
+          state.engine.postMessage('stop');
+          setTimeout(() => {
+            if (!engineController.running) return;
+            const { fen, depth, movetime, searchMoves } = engineController.running.config;
+            state.engine.postMessage(`position fen ${fen}`);
+            const goParts = ['go'];
+            if (depth) {
+              goParts.push('depth', String(depth));
+            }
+            if (movetime) {
+              goParts.push('movetime', String(movetime));
+            }
+            if (searchMoves && searchMoves.length) {
+              goParts.push('searchmoves', searchMoves.join(' '));
+            }
+            state.engine.postMessage(goParts.join(' '));
+          }, 50);
+        },
+        handleInfo(line) {
+          const req = engineController.running;
+          if (!req) return;
+          const depthMatch = line.match(/\bdepth (\d+)/);
+          if (depthMatch) {
+            const depthVal = parseInt(depthMatch[1], 10);
+            if (Number.isFinite(depthVal)) {
+              req.depth = depthVal;
+            }
+          }
+          const multi = line.match(/\bmultipv (\d+)/);
+          const pv = line.match(/\bpv ((?:[a-h][1-8]){2}[qrbn]?\b.*)/);
+          if (!multi || !pv) return;
+          const rank = parseInt(multi[1], 10);
+          if (!Number.isFinite(rank) || rank < 1) return;
+          const moves = pv[1].trim().split(/\s+/);
+          if (!moves.length) return;
+          let evalStr = '';
+          const scoreMate = line.match(/\bscore mate (-?\d+)/);
+          const scoreCp = line.match(/\bscore cp (-?\d+)/);
+          if (scoreMate) {
+            evalStr = `#${scoreMate[1]}`;
+          } else if (scoreCp) {
+            const cp = parseInt(scoreCp[1], 10);
+            if (Number.isFinite(cp)) {
+              evalStr = `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
+            }
+          }
+          const entry = {
+            rank,
+            uci: moves[0],
+            eval: evalStr
+          };
+          entry.san = uciToSan(req.config.fen, entry.uci);
+          req.pv.set(rank, entry);
+        },
+        handleBestMove(line) {
+          const req = engineController.running;
+          if (!req) return;
+          const entries = Array.from(req.pv.values())
+            .sort((a, b) => a.rank - b.rank)
+            .map((item) => ({ ...item }));
+          req.resolve({
+            entries,
+            depth: req.depth,
+            bestmove: line.split(/\s+/)[1] || null
+          });
+          engineController.running = null;
+          state.currentRequest = null;
+          engineController.pump();
+        },
+        reset() {
+          if (engineController.running && typeof engineController.running.reject === 'function') {
+            engineController.running.reject(new Error('Analysis cancelled'));
+          }
+          engineController.running = null;
+          state.currentRequest = null;
+          while (state.engineQueue.length) {
+            const pending = state.engineQueue.shift();
+            if (pending && typeof pending.reject === 'function') {
+              pending.reject(new Error('Analysis cancelled'));
+            }
+          }
+          if (state.engine && state.engineReady) {
+            state.engine.postMessage('stop');
+          }
+        }
+      };
+
       function ensureEngine() {
         if (state.engine) return;
         setStatus('engStatus', 'Loading engine…');
@@ -1236,14 +1439,12 @@
           if (!line && e.data && typeof e.data === 'object') {
             line = e.data.data || e.data.text || '';
           }
-          if (!line) {
-            console.warn('Engine sent empty message:', e);
-            return;
-          }
+          if (!line) return;
 
           if (line.startsWith('id name')) {
             state.engineVersion = line.substring(8).trim();
             engineLabel = state.engineVersion;
+            return;
           }
 
           if (line.startsWith('uciok')) {
@@ -1254,95 +1455,175 @@
               state.engine.postMessage('setoption name MultiPV value 3');
               state.engineConfigured = true;
             }
-            if (state.pendingAnalysis) {
-              state.pendingAnalysis = null;
-              analyzeCurrent();
+            engineController.pump();
+            if (state.analysisStatus === 'queued') {
+              precomputeFullAnalysis();
             }
             return;
           }
 
           if (line.startsWith('info')) {
-            handleInfo(line);
+            engineController.handleInfo(line);
             return;
           }
 
           if (line.startsWith('bestmove')) {
-            if (state.ply > 0 && state.multiPv && state.multiPv.has(1)) {
-              const bestMove = state.multiPv.get(1);
-              if (bestMove && bestMove.eval) {
-                state.verboseHistory[state.ply - 1].eval = bestMove.eval;
-                renderMoves();
-                updateEloEstimates();
-              }
-            }
-            setStatus('engStatus', `Analysis complete (${engineLabel})`);
+            engineController.handleBestMove(line);
+            return;
           }
         };
 
         state.engine.postMessage('uci');
       }
 
-      function handleInfo(line) {
-        const multi = line.match(/\bmultipv (\d+)/);
-        const pv = line.match(/\bpv ((?:[a-h][1-8]){2}[qrbn]?\b.*)/);
-        const scoreMate = line.match(/\bscore mate (-?\d+)/);
-        const scoreCp = line.match(/\bscore cp (-?\d+)/);
-        if (!multi || !pv) return;
-        const rank = parseInt(multi[1], 10);
-        if (rank < 1 || rank > 3) return;
-        const moves = pv[1].trim().split(/\s+/);
-        let evalStr = '';
-        if (scoreMate) {
-          evalStr = `#${scoreMate[1]}`;
-        } else if (scoreCp) {
-          const cp = parseInt(scoreCp[1], 10);
-          evalStr = `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
-        }
-        const entry = {
-          rank,
-          uci: moves[0],
-          eval: evalStr
-        };
-        const baseFen = state.ply === 0 ? effectiveInitialFen() : state.verboseHistory[state.ply - 1].fen;
-        entry.san = uciToSan(baseFen, entry.uci);
-        state.multiPv = state.multiPv || new Map();
-        state.multiPv.set(rank, entry);
-        const list = [1, 2, 3].map((r) => state.multiPv.get(r) || null);
-        drawArrows(list);
-        updatePVDisplay(list);
-        setStatus('engStatus', `Analyzing… depth ${line.match(/\bdepth (\d+)/)?.[1] || ''}`);
+      function waitForEngineReady() {
+        if (state.engineReady) return Promise.resolve();
+        return new Promise((resolve) => {
+          const check = () => {
+            if (state.engineReady) {
+              resolve();
+            } else {
+              setTimeout(check, 50);
+            }
+          };
+          check();
+        });
       }
 
-      function analyzeCurrent() {
-        ensureEngine();
-        if (!state.engineConfigured || !state.engineReady) {
-          state.pendingAnalysis = true;
-          setStatus('engStatus', 'Waiting for engine…');
+      function nextAnalysisToken() {
+        state.analysisToken = (state.analysisToken || 0) + 1;
+        return state.analysisToken;
+      }
+
+      function resetAnalysisState() {
+        nextAnalysisToken();
+        state.analysisCache = new Map();
+        state.analysisStatus = 'idle';
+        engineController.reset();
+      }
+
+      function applyAnalysisForCurrentPly() {
+        const analysis = state.analysisCache.get(state.ply);
+        if (analysis) {
+          drawArrows(analysis.pvEntries || []);
+          updatePVDisplay(analysis.pvEntries || []);
+          const evalText = analysis.actualEntry && analysis.actualEntry.eval
+            ? analysis.actualEntry.eval
+            : analysis.bestEntry && analysis.bestEntry.eval
+              ? analysis.bestEntry.eval
+              : null;
+          updateEvalBar(evalText);
+          setStatus('engStatus', `Precomputed (depth ${analysis.depth || 0})`);
+        } else {
+          drawArrows([]);
+          updatePVDisplay([]);
+          if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
+            setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
+          }
+          if (state.ply === 0) {
+            updateEvalBar(null);
+          } else {
+            const entry = state.verboseHistory[state.ply - 1];
+            updateEvalBar(entry && entry.eval ? entry.eval : null);
+          }
+        }
+      }
+
+      async function analyzeMoveAtIndex(index, beforeEp, token, depth, movetime) {
+        const moveEntry = state.verboseHistory[index];
+        if (!moveEntry) return { afterEp: beforeEp };
+        const fen = moveEntry.preFen || effectiveInitialFen();
+        const actualUci = `${moveEntry.from}${moveEntry.to}${moveEntry.promotion || ''}`;
+        const baseConfig = { fen, depth, movetime, ply: index + 1 };
+        let multiResult;
+        try {
+          multiResult = await engineController.run(baseConfig);
+        } catch (err) {
+          return { afterEp: beforeEp };
+        }
+        if (token !== state.analysisToken) return { afterEp: beforeEp };
+        const pvEntries = multiResult.entries.map((entry) => ({ ...entry }));
+        const bestEntry = pvEntries.find((entry) => entry.rank === 1) || pvEntries[0] || null;
+        let actualEntry = pvEntries.find((entry) => entry.uci === actualUci);
+        if (!actualEntry) {
+          let forcedResult;
+          try {
+            forcedResult = await engineController.run({ ...baseConfig, searchMoves: [actualUci] });
+          } catch (err) {
+            forcedResult = null;
+          }
+          if (token !== state.analysisToken) return { afterEp: beforeEp };
+          const forcedEntries = forcedResult ? forcedResult.entries.map((entry) => ({ ...entry })) : [];
+          actualEntry = forcedEntries.find((entry) => entry.uci === actualUci) || forcedEntries[0] || null;
+        }
+        const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
+        const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
+        const bestEp = cpToExpectedPoints(bestCp);
+        const actualEp = cpToExpectedPoints(actualCp);
+        const classificationData = classifyMoveContext({
+          bestEp,
+          actualEp,
+          beforeEp,
+          moveEntry,
+          bestEntry,
+          actualEntry
+        });
+        moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
+        moveEntry.analysis = {
+          pvEntries,
+          bestEntry,
+          actualEntry,
+          bestEp,
+          actualEp,
+          beforeEp,
+          expectedLoss: classificationData.expectedLoss,
+          classification: classificationData.classification,
+          depth: multiResult.depth || depth || 0,
+          movetime
+        };
+        state.analysisCache.set(index + 1, moveEntry.analysis);
+        if (state.ply === index + 1) {
+          applyAnalysisForCurrentPly();
+        }
+        renderMoves();
+        updateEloEstimates();
+        return { afterEp: actualEp };
+      }
+
+      async function precomputeFullAnalysis() {
+        const token = nextAnalysisToken();
+        state.analysisCache = new Map();
+        state.analysisStatus = state.verboseHistory.length ? 'running' : 'complete';
+        renderMoves();
+        updatePVDisplay([]);
+        drawArrows([]);
+        if (!state.verboseHistory.length) {
+          updateEvalBar(null);
+          setStatus('engStatus', 'No moves to analyze.');
           return;
         }
-
-        state.pendingAnalysis = null;
-        state.multiPv = new Map();
-        drawArrows([]);
-        updatePVDisplay([]);
-        setStatus('engStatus', 'Analyzing…');
-
-        const fen = state.ply === 0 ? effectiveInitialFen() : state.verboseHistory[state.ply - 1].fen;
-
-        state.engine.postMessage('stop');
-
-        setTimeout(() => {
-          state.engine.postMessage(`position fen ${fen}`);
-
-          const depthVal = parseInt(byId('depth').value, 10);
-          const timeVal = parseInt(byId('timeMs').value, 10) || 300;
-
-          if (depthVal && depthVal > 0) {
-            state.engine.postMessage(`go depth ${depthVal}`);
-          } else {
-            state.engine.postMessage(`go movetime ${timeVal}`);
-          }
-        }, 50);
+        setStatus('engStatus', 'Analyzing full game…');
+        ensureEngine();
+        await waitForEngineReady();
+        if (token !== state.analysisToken) return;
+        if (state.engine) {
+          state.engine.postMessage('ucinewgame');
+        }
+        const fixedDepth = 20;
+        const fixedMovetime = 2000;
+        let beforeEp = 0.5;
+        for (let i = 0; i < state.verboseHistory.length; i++) {
+          if (token !== state.analysisToken) return;
+          const result = await analyzeMoveAtIndex(i, beforeEp, token, fixedDepth, fixedMovetime);
+          if (token !== state.analysisToken) return;
+          beforeEp = 1 - result.afterEp;
+          setStatus('engStatus', `Analyzed ${i + 1}/${state.verboseHistory.length} moves`);
+        }
+        if (token !== state.analysisToken) return;
+        state.analysisStatus = 'complete';
+        setStatus('engStatus', `Analysis complete (${state.engineVersion || 'Stockfish'})`);
+        applyAnalysisForCurrentPly();
+        renderMoves();
       }
 
       function initializeGame({ headers = {}, verboseHistory = [], initialFen = 'start', source, rawInput, targetPly }) {
@@ -1350,8 +1631,7 @@
         state.verboseHistory = verboseHistory;
         if (typeof source === 'string') state.source = source;
         if (typeof rawInput === 'string') state.rawInput = rawInput;
-        state.multiPv = new Map();
-        state.pendingAnalysis = null;
+        resetAnalysisState();
         initializePieceCounts();
         state.game = createBaseGame();
         state.ply = 0;
@@ -1362,10 +1642,11 @@
         updateEvalBar(null);
         updatePVDisplay([]);
         updateEloEstimates();
-        if (state.engineReady) state.engine.postMessage('ucinewgame');
         const destination = typeof targetPly === 'number' ? targetPly : verboseHistory.length;
         drawArrows([]);
         goToPly(destination);
+        state.analysisStatus = 'queued';
+        precomputeFullAnalysis();
         setStatus('loadStatus', 'Game ready.', 'ok');
         updateUrlState();
       }
@@ -1478,10 +1759,11 @@
         byId('flipBtn').addEventListener('click', () => {
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
-          requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map((r) => state.multiPv.get(r) || null) : []));
+          requestAnimationFrame(() => {
+            const analysis = state.analysisCache.get(state.ply);
+            drawArrows(analysis ? analysis.pvEntries || [] : []);
+          });
         });
-        byId('timeMs').addEventListener('change', analyzeCurrent);
-        byId('depth').addEventListener('change', analyzeCurrent);
         byId('themeToggle').addEventListener('click', () => {
           const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
           const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
