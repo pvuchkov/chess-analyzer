@@ -1023,23 +1023,7 @@
         boardEl.querySelectorAll('.square-55d63').forEach((el) => {
           classes.forEach(cls => el.classList.remove(cls));
         });
-
-        const highlightSquare = (square, className) => {
-          if (!square) return;
-          const target = boardEl.querySelector(`.square-55d63[data-square="${square}"]`);
-          if (target) target.classList.add(className);
-        };
-
-        if (state.lastHighlightedMove) {
-          highlightSquare(state.lastHighlightedMove.from, 'highlight-last-from');
-          highlightSquare(state.lastHighlightedMove.to, 'highlight-last-to');
-        }
-
-        const upcoming = state.verboseHistory[state.ply] || null;
-        if (upcoming) {
-          highlightSquare(upcoming.from, 'highlight-next-from');
-          highlightSquare(upcoming.to, 'highlight-next-to');
-        }
+        // Overlay overhaul in progress: skip re-applying highlight classes for now.
       }
 
       function formatMaterialScore(score) {
@@ -1301,12 +1285,15 @@
         const svg = byId('arrowLayer');
         if (!boardEl || !svg) return;
         const rect = boardEl.getBoundingClientRect();
+        if (!rect || rect.width === 0 || rect.height === 0) {
+          return;
+        }
         svg.setAttribute('viewBox', '0 0 8 8');
         svg.setAttribute('width', rect.width);
-        svg.setAttribute('height', rect.width);
+        svg.setAttribute('height', rect.height);
         const evalBar = byId('evalBar');
         if (evalBar) {
-          evalBar.style.height = `${rect.width}px`;
+          evalBar.style.height = `${rect.height}px`;
         }
       }
 
@@ -1544,27 +1531,53 @@
 
       function drawArrows(list) {
         const svg = byId('arrowLayer');
-        if (!svg) return;
+        const boardEl = byId('board');
+        if (!svg || !boardEl) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
-        if (!list || !list.length) return;
+        if (!Array.isArray(list) || !list.length) return;
 
-        const squareCenter = (sq) => {
-          const coords = squareToDisplayCoords(sq);
-          if (!coords) return null;
-          return {
-            x: coords.col + 0.5,
-            y: coords.row + 0.5
+        const boardRect = boardEl.getBoundingClientRect();
+        if (!boardRect || boardRect.width === 0 || boardRect.height === 0) {
+          return;
+        }
+
+        const squareCenter = (() => {
+          const cache = new Map();
+          return (square) => {
+            if (cache.has(square)) {
+              return cache.get(square);
+            }
+            const el = boardEl.querySelector(`[data-square="${square}"]`);
+            if (!el) {
+              cache.set(square, null);
+              return null;
+            }
+            const rect = el.getBoundingClientRect();
+            const centerX = ((rect.left + rect.right) / 2) - boardRect.left;
+            const centerY = ((rect.top + rect.bottom) / 2) - boardRect.top;
+            const coords = {
+              x: (centerX / boardRect.width) * 8,
+              y: (centerY / boardRect.height) * 8
+            };
+            cache.set(square, coords);
+            return coords;
           };
-        };
+        })();
+
+        let missingSquares = false;
 
         const palette = [
-          { color: '#22c55e', width: 0.3 },
-          { color: '#0ea5e9', width: 0.27 },
-          { color: '#f97316', width: 0.25 }
+          { color: '#22c55e', width: 0.22 },
+          { color: '#0ea5e9', width: 0.2 },
+          { color: '#f97316', width: 0.18 }
         ];
 
-        const MIN_ARROW_ALPHA = 0.25;
-        const MAX_ARROW_ALPHA = 0.8;
+        const MIN_ALPHA = 0.35;
+        const MAX_ALPHA = 0.85;
+        const START_INSET = 0.42;
+        const MIN_BODY_LENGTH = 0.3;
+
+        const clampCoord = (value) => Math.max(0.12, Math.min(7.88, value));
 
         const getScore = (entry) => {
           if (!entry) return null;
@@ -1573,7 +1586,7 @@
           return null;
         };
 
-        const scored = list.slice(0, 3).map((entry) => ({
+        const scored = list.filter(Boolean).slice(0, 3).map((entry) => ({
           entry,
           score: getScore(entry)
         }));
@@ -1587,85 +1600,105 @@
         });
         const maxDiff = scoreDiffs.reduce((acc, diff) => (diff !== null ? Math.max(acc, diff) : acc), 0);
 
-        scored.forEach(({ entry }, i) => {
+        scored.forEach(({ entry }, index) => {
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
-          if (!from || !to) return;
+          if (!from || !to) {
+            missingSquares = true;
+            return;
+          }
 
           const dx = to.x - from.x;
           const dy = to.y - from.y;
-          const len = Math.hypot(dx, dy);
-          if (len < 1e-3) return;
+          const rawLength = Math.hypot(dx, dy);
+          if (rawLength < 1e-4) return;
 
-          const nx = dx / len;
-          const ny = dy / len;
-          const px = -ny;
-          const py = nx;
+          const ux = dx / rawLength;
+          const uy = dy / rawLength;
+          const inset = Math.min(START_INSET, rawLength / 2 - 0.05);
+          const startX = from.x + ux * inset;
+          const startY = from.y + uy * inset;
+          const tipX = to.x - ux * inset;
+          const tipY = to.y - uy * inset;
 
-          const headLength = Math.min(Math.max(len * 0.45, 0.35), len - 0.1);
-          const tailPadding = Math.min(Math.max(len * 0.2, 0.25), len - headLength - 0.05);
-          if (headLength <= 0 || tailPadding < 0) return;
+          const bodyDx = tipX - startX;
+          const bodyDy = tipY - startY;
+          const bodyLength = Math.hypot(bodyDx, bodyDy);
+          if (bodyLength < MIN_BODY_LENGTH) return;
 
-          const tipX = to.x;
-          const tipY = to.y;
-          const baseX = tipX - nx * headLength;
-          const baseY = tipY - ny * headLength;
-          const startX = from.x + nx * tailPadding;
-          const startY = from.y + ny * tailPadding;
+          const bux = bodyDx / bodyLength;
+          const buy = bodyDy / bodyLength;
+          const pux = -buy;
+          const puy = bux;
 
-          let opacity = 1;
-          if (i > 0) {
-            const diff = scoreDiffs[i];
+          const maxHead = Math.min(0.5, bodyLength * 0.45);
+          const headLength = Math.max(0.24, Math.min(maxHead, bodyLength * 0.35));
+          const shaftLength = bodyLength - headLength;
+          if (shaftLength <= 0.05) return;
+
+          const baseX = tipX - bux * headLength;
+          const baseY = tipY - buy * headLength;
+
+          let opacity = MAX_ALPHA;
+          if (index > 0) {
+            const diff = scoreDiffs[index];
             if (diff === null || maxDiff === 0) {
-              opacity = MAX_ARROW_ALPHA;
+              opacity = (MAX_ALPHA + MIN_ALPHA) / 2;
             } else {
-              const closeness = 1 - diff / maxDiff;
-              opacity = MIN_ARROW_ALPHA + Math.max(0, Math.min(1, closeness)) * (MAX_ARROW_ALPHA - MIN_ARROW_ALPHA);
+              const ratio = Math.min(1, diff / maxDiff);
+              opacity = MAX_ALPHA - ratio * (MAX_ALPHA - MIN_ALPHA);
             }
           }
 
-          const paletteEntry = palette[i] || palette[palette.length - 1];
+          const paletteEntry = palette[index] || palette[palette.length - 1];
 
           const shaft = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          shaft.setAttribute('x1', startX);
-          shaft.setAttribute('y1', startY);
-          shaft.setAttribute('x2', baseX);
-          shaft.setAttribute('y2', baseY);
+          shaft.setAttribute('x1', clampCoord(startX));
+          shaft.setAttribute('y1', clampCoord(startY));
+          shaft.setAttribute('x2', clampCoord(baseX));
+          shaft.setAttribute('y2', clampCoord(baseY));
           shaft.setAttribute('stroke', paletteEntry.color);
           shaft.setAttribute('stroke-width', paletteEntry.width);
           shaft.setAttribute('stroke-linecap', 'round');
           shaft.setAttribute('opacity', opacity);
           svg.appendChild(shaft);
 
-          const headWidth = headLength * 0.55;
-          const leftX = baseX + px * headWidth;
-          const leftY = baseY + py * headWidth;
-          const rightX = baseX - px * headWidth;
-          const rightY = baseY - py * headWidth;
+          const headWidth = headLength * 0.6;
+          const leftX = baseX + pux * headWidth;
+          const leftY = baseY + puy * headWidth;
+          const rightX = baseX - pux * headWidth;
+          const rightY = baseY - puy * headWidth;
 
           const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          head.setAttribute('d', `M ${tipX} ${tipY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`);
+          head.setAttribute('d', `M ${clampCoord(tipX)} ${clampCoord(tipY)} L ${clampCoord(leftX)} ${clampCoord(leftY)} L ${clampCoord(rightX)} ${clampCoord(rightY)} Z`);
           head.setAttribute('fill', paletteEntry.color);
           head.setAttribute('opacity', opacity);
           svg.appendChild(head);
 
           if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange)) {
-            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            const labelAlong = Math.min(len - headLength * 0.5, Math.max(len * 0.55, headLength + 0.2));
-            const labelPerp = 0.35;
-            const tx = from.x + nx * labelAlong + px * labelPerp;
-            const ty = from.y + ny * labelAlong + py * labelPerp;
-            label.setAttribute('x', tx);
-            label.setAttribute('y', ty);
-            label.setAttribute('text-anchor', 'middle');
-            label.setAttribute('dominant-baseline', 'middle');
-            label.setAttribute('fill', paletteEntry.color);
-            label.setAttribute('opacity', Math.min(1, opacity + 0.1));
-            label.textContent = formatRatingDelta(entry.ratingChange);
-            svg.appendChild(label);
+            const usableBody = Math.max(0, shaftLength - 0.1);
+            if (usableBody > 0.1) {
+              const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              const along = Math.min(usableBody, Math.max(0.45, usableBody * 0.55));
+              const offset = Math.min(0.35, Math.max(0.18, bodyLength * 0.18));
+              const tx = clampCoord(startX + bux * along + pux * offset);
+              const ty = clampCoord(startY + buy * along + puy * offset);
+              label.setAttribute('x', tx);
+              label.setAttribute('y', ty);
+              label.setAttribute('text-anchor', 'middle');
+              label.setAttribute('dominant-baseline', 'middle');
+              label.setAttribute('fill', paletteEntry.color);
+              label.setAttribute('opacity', Math.min(1, opacity + 0.1));
+              label.textContent = formatRatingDelta(entry.ratingChange);
+              svg.appendChild(label);
+            }
           }
         });
+
+        if (missingSquares) {
+          requestAnimationFrame(() => drawArrows(list));
+        }
       }
 
       function uciToSan(fen, uci) {
