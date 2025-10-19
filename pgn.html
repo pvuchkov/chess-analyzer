@@ -218,21 +218,6 @@
       cursor: not-allowed;
     }
 
-    .toggle-row {
-      margin-top: 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    .toggle-row input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-    }
-
     .load-controls {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -361,73 +346,30 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      display: block;
       z-index: 2;
-    }
-
-    #arrowLayer text {
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      fill: var(--text);
-      stroke: rgba(0, 0, 0, 0.55);
-      stroke-width: 3px;
-      paint-order: stroke fill;
-      pointer-events: none;
     }
 
     #board .square-55d63 {
       position: relative;
-      overflow: hidden;
     }
 
     #board .square-55d63::after {
       content: '';
       position: absolute;
-      inset: 8px;
-      border-radius: 10px;
+      inset: 6px;
+      border-radius: 8px;
       opacity: 0;
-      transition: opacity 0.18s ease, transform 0.18s ease;
+      transition: opacity 0.12s ease;
     }
 
-    #board .highlight-last-from::after {
-      background: rgba(56, 189, 248, 0.3);
-      box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
+    #board .square-55d63.highlight-last-from::after {
+      background: rgba(112, 167, 255, 0.45);
       opacity: 1;
     }
 
-    #board .highlight-last-to::after {
-      background: rgba(94, 225, 163, 0.32);
-      box-shadow: 0 0 18px rgba(94, 225, 163, 0.45);
+    #board .square-55d63.highlight-last-to::after {
+      background: rgba(63, 208, 134, 0.45);
       opacity: 1;
-    }
-
-    #board .highlight-next-from::after,
-    #board .highlight-next-to::after {
-      opacity: 1;
-      border: 1px solid rgba(148, 163, 196, 0.4);
-      transform: scale(0.95);
-    }
-
-    #board .highlight-next-from::after {
-      background: rgba(250, 204, 21, 0.18);
-      box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
-    }
-
-    #board .highlight-next-to::after {
-      background: rgba(125, 196, 255, 0.18);
-      box-shadow: 0 0 14px rgba(125, 196, 255, 0.32);
-    }
-
-    #arrowLayer text {
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      fill: var(--text);
-      stroke: rgba(0, 0, 0, 0.55);
-      stroke-width: 3px;
-      paint-order: stroke fill;
-      pointer-events: none;
     }
 
     .kv {
@@ -833,11 +775,6 @@
         </div>
       </div>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="toggleArrowRatings" checked>
-        <span>Show rating delta on arrows</span>
-      </label>
-
       <div class="row" style="margin-top:14px; align-items:center;">
         <button id="firstBtn" class="secondary">⏮ First</button>
         <button id="prevBtn" class="secondary">◀ Prev</button>
@@ -926,10 +863,7 @@
         engineVersion: 'unknown',
         pendingAnalysis: null,
         multiPv: new Map(),
-        bestEvalByPly: [],
-        settings: {
-          showArrowRatings: true
-        }
+        bestEvalByPly: []
       };
 
       const INPUT_TYPES = {
@@ -970,7 +904,6 @@
         'Missed Win': 'miss.png'
       };
 
-      const ELO_PER_PAWN = 60;
       const MAX_CP = 4000;
 
       function mateToCp(mate) {
@@ -980,13 +913,6 @@
 
       function clampCp(cp) {
         return Math.max(-MAX_CP, Math.min(MAX_CP, cp));
-      }
-
-      function formatRatingDelta(value) {
-        if (typeof value !== 'number' || Number.isNaN(value)) return 'Δ —';
-        if (value === 0) return 'Δ 0';
-        const sign = value > 0 ? '+' : '';
-        return `Δ ${sign}${value}`;
       }
 
       function formatEvalDisplay(entry) {
@@ -1019,11 +945,19 @@
       function refreshBoardHighlights() {
         const boardEl = byId('board');
         if (!boardEl) return;
-        const classes = ['highlight-last-from', 'highlight-last-to', 'highlight-next-from', 'highlight-next-to'];
         boardEl.querySelectorAll('.square-55d63').forEach((el) => {
-          classes.forEach(cls => el.classList.remove(cls));
+          el.classList.remove('highlight-last-from', 'highlight-last-to');
         });
-        // Overlay overhaul in progress: skip re-applying highlight classes for now.
+        const last = state.lastHighlightedMove;
+        if (!last) return;
+        if (last.from) {
+          const fromEl = boardEl.querySelector(`[data-square="${last.from}"]`);
+          if (fromEl) fromEl.classList.add('highlight-last-from');
+        }
+        if (last.to) {
+          const toEl = boardEl.querySelector(`[data-square="${last.to}"]`);
+          if (toEl) toEl.classList.add('highlight-last-to');
+        }
       }
 
       function formatMaterialScore(score) {
@@ -1241,34 +1175,6 @@
         };
       }
 
-      function loadSettings() {
-        try {
-          const raw = localStorage.getItem('analyzerSettings');
-          if (!raw) return;
-          const parsed = JSON.parse(raw);
-          if (typeof parsed.showArrowRatings === 'boolean') {
-            state.settings.showArrowRatings = parsed.showArrowRatings;
-          }
-        } catch (err) {
-          console.warn('Failed to load settings', err);
-        }
-      }
-
-      function saveSettings() {
-        try {
-          localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
-        } catch (err) {
-          console.warn('Failed to save settings', err);
-        }
-      }
-
-      function applySettingsToUi() {
-        const toggle = byId('toggleArrowRatings');
-        if (toggle) {
-          toggle.checked = !!state.settings.showArrowRatings;
-        }
-      }
-
       function initBoard() {
         const box = byId('board');
         state.board = Chessboard('board', {
@@ -1285,16 +1191,19 @@
         const svg = byId('arrowLayer');
         if (!boardEl || !svg) return;
         const rect = boardEl.getBoundingClientRect();
-        if (!rect || rect.width === 0 || rect.height === 0) {
+        if (!rect || rect.width === 0) {
           return;
         }
-        svg.setAttribute('viewBox', '0 0 8 8');
-        svg.setAttribute('width', rect.width);
-        svg.setAttribute('height', rect.height);
+        const size = rect.width;
+        const height = rect.height || size;
+        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
         const evalBar = byId('evalBar');
         if (evalBar) {
-          evalBar.style.height = `${rect.height}px`;
+          evalBar.style.height = `${height}px`;
         }
+        requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
       }
 
       function setStatus(id, msg, type) {
@@ -1534,171 +1443,87 @@
         const boardEl = byId('board');
         if (!svg || !boardEl) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
-        if (!Array.isArray(list) || !list.length) return;
 
-        const boardRect = boardEl.getBoundingClientRect();
-        if (!boardRect || boardRect.width === 0 || boardRect.height === 0) {
-          return;
-        }
+        const entries = Array.isArray(list) ? list.filter(Boolean) : [];
+        if (!entries.length) return;
 
-        const squareCenter = (() => {
-          const cache = new Map();
-          return (square) => {
-            if (cache.has(square)) {
-              return cache.get(square);
-            }
-            const el = boardEl.querySelector(`[data-square="${square}"]`);
-            if (!el) {
-              cache.set(square, null);
-              return null;
-            }
-            const rect = el.getBoundingClientRect();
-            const centerX = ((rect.left + rect.right) / 2) - boardRect.left;
-            const centerY = ((rect.top + rect.bottom) / 2) - boardRect.top;
-            const coords = {
-              x: (centerX / boardRect.width) * 8,
-              y: (centerY / boardRect.height) * 8
-            };
-            cache.set(square, coords);
-            return coords;
-          };
-        })();
+        const rect = boardEl.getBoundingClientRect();
+        const size = rect && rect.width ? rect.width : 0;
+        if (!size) return;
 
-        let missingSquares = false;
+        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
 
-        const palette = [
-          { color: '#22c55e', width: 0.22 },
-          { color: '#0ea5e9', width: 0.2 },
-          { color: '#f97316', width: 0.18 }
-        ];
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        defs.innerHTML = `
+        <marker id="arrowHead1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#28a745" />
+        </marker>
+        <marker id="arrowHead2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#007bff" />
+        </marker>
+        <marker id="arrowHead3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#dc3545" />
+        </marker>`;
+        svg.appendChild(defs);
 
-        const MIN_ALPHA = 0.35;
-        const MAX_ALPHA = 0.85;
-        const START_INSET = 0.42;
-        const MIN_BODY_LENGTH = 0.3;
+        const squareSize = size / 8;
 
-        const clampCoord = (value) => Math.max(0.12, Math.min(7.88, value));
-
-        const getScore = (entry) => {
-          if (!entry) return null;
-          if (typeof entry.cp === 'number') return entry.cp;
-          if (typeof entry.mate === 'number') return mateToCp(entry.mate);
-          return null;
+        const squareCenter = (square) => {
+          if (!square || square.length < 2) return null;
+          const file = square.charCodeAt(0) - 97;
+          const rank = parseInt(square[1], 10) - 1;
+          if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
+            return null;
+          }
+          let x = (file + 0.5) * squareSize;
+          let y = ((7 - rank) + 0.5) * squareSize;
+          if (state.orientation === 'black') {
+            x = ((7 - file) + 0.5) * squareSize;
+            y = (rank + 0.5) * squareSize;
+          }
+          return { x, y };
         };
 
-        const scored = list.filter(Boolean).slice(0, 3).map((entry) => ({
-          entry,
-          score: getScore(entry)
-        }));
+        const colors = ['#28a745', '#007bff', '#dc3545'];
+        const opacities = [1, 0.45, 0.45];
+        const widths = [6, 5, 4];
 
-        if (!scored.length) return;
-
-        const bestScore = scored[0].score;
-        const scoreDiffs = scored.map(({ score }) => {
-          if (bestScore === null || score === null) return null;
-          return Math.abs(score - bestScore);
-        });
-        const maxDiff = scoreDiffs.reduce((acc, diff) => (diff !== null ? Math.max(acc, diff) : acc), 0);
-
-        scored.forEach(({ entry }, index) => {
-          if (!entry || !entry.uci) return;
+        entries.slice(0, 3).forEach((entry, index) => {
+          if (!entry || !entry.uci || entry.uci.length < 4) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
-          if (!from || !to) {
-            missingSquares = true;
-            return;
-          }
+          if (!from || !to) return;
 
           const dx = to.x - from.x;
           const dy = to.y - from.y;
-          const rawLength = Math.hypot(dx, dy);
-          if (rawLength < 1e-4) return;
+          const distance = Math.hypot(dx, dy);
+          if (!distance) return;
 
-          const ux = dx / rawLength;
-          const uy = dy / rawLength;
-          const inset = Math.min(START_INSET, rawLength / 2 - 0.05);
-          const startX = from.x + ux * inset;
-          const startY = from.y + uy * inset;
-          const tipX = to.x - ux * inset;
-          const tipY = to.y - uy * inset;
+          const shorten = Math.min(squareSize * 0.6, distance * 0.3);
+          const startOffset = Math.min(squareSize * 0.4, distance * 0.2);
 
-          const bodyDx = tipX - startX;
-          const bodyDy = tipY - startY;
-          const bodyLength = Math.hypot(bodyDx, bodyDy);
-          if (bodyLength < MIN_BODY_LENGTH) return;
+          const unitX = dx / distance;
+          const unitY = dy / distance;
 
-          const bux = bodyDx / bodyLength;
-          const buy = bodyDy / bodyLength;
-          const pux = -buy;
-          const puy = bux;
+          const startX = from.x + unitX * startOffset;
+          const startY = from.y + unitY * startOffset;
+          const endX = to.x - unitX * shorten;
+          const endY = to.y - unitY * shorten;
 
-          const maxHead = Math.min(0.5, bodyLength * 0.45);
-          const headLength = Math.max(0.24, Math.min(maxHead, bodyLength * 0.35));
-          const shaftLength = bodyLength - headLength;
-          if (shaftLength <= 0.05) return;
-
-          const baseX = tipX - bux * headLength;
-          const baseY = tipY - buy * headLength;
-
-          let opacity = MAX_ALPHA;
-          if (index > 0) {
-            const diff = scoreDiffs[index];
-            if (diff === null || maxDiff === 0) {
-              opacity = (MAX_ALPHA + MIN_ALPHA) / 2;
-            } else {
-              const ratio = Math.min(1, diff / maxDiff);
-              opacity = MAX_ALPHA - ratio * (MAX_ALPHA - MIN_ALPHA);
-            }
-          }
-
-          const paletteEntry = palette[index] || palette[palette.length - 1];
-
-          const shaft = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          shaft.setAttribute('x1', clampCoord(startX));
-          shaft.setAttribute('y1', clampCoord(startY));
-          shaft.setAttribute('x2', clampCoord(baseX));
-          shaft.setAttribute('y2', clampCoord(baseY));
-          shaft.setAttribute('stroke', paletteEntry.color);
-          shaft.setAttribute('stroke-width', paletteEntry.width);
-          shaft.setAttribute('stroke-linecap', 'round');
-          shaft.setAttribute('opacity', opacity);
-          svg.appendChild(shaft);
-
-          const headWidth = headLength * 0.6;
-          const leftX = baseX + pux * headWidth;
-          const leftY = baseY + puy * headWidth;
-          const rightX = baseX - pux * headWidth;
-          const rightY = baseY - puy * headWidth;
-
-          const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          head.setAttribute('d', `M ${clampCoord(tipX)} ${clampCoord(tipY)} L ${clampCoord(leftX)} ${clampCoord(leftY)} L ${clampCoord(rightX)} ${clampCoord(rightY)} Z`);
-          head.setAttribute('fill', paletteEntry.color);
-          head.setAttribute('opacity', opacity);
-          svg.appendChild(head);
-
-          if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange)) {
-            const usableBody = Math.max(0, shaftLength - 0.1);
-            if (usableBody > 0.1) {
-              const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-              const along = Math.min(usableBody, Math.max(0.45, usableBody * 0.55));
-              const offset = Math.min(0.35, Math.max(0.18, bodyLength * 0.18));
-              const tx = clampCoord(startX + bux * along + pux * offset);
-              const ty = clampCoord(startY + buy * along + puy * offset);
-              label.setAttribute('x', tx);
-              label.setAttribute('y', ty);
-              label.setAttribute('text-anchor', 'middle');
-              label.setAttribute('dominant-baseline', 'middle');
-              label.setAttribute('fill', paletteEntry.color);
-              label.setAttribute('opacity', Math.min(1, opacity + 0.1));
-              label.textContent = formatRatingDelta(entry.ratingChange);
-              svg.appendChild(label);
-            }
-          }
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', startX);
+          line.setAttribute('y1', startY);
+          line.setAttribute('x2', endX);
+          line.setAttribute('y2', endY);
+          line.setAttribute('stroke', colors[index] || colors[colors.length - 1]);
+          line.setAttribute('stroke-width', widths[index] || widths[widths.length - 1]);
+          line.setAttribute('stroke-linecap', 'round');
+          line.setAttribute('marker-end', `url(#arrowHead${index + 1})`);
+          line.setAttribute('opacity', opacities[index] || opacities[opacities.length - 1]);
+          svg.appendChild(line);
         });
-
-        if (missingSquares) {
-          requestAnimationFrame(() => drawArrows(list));
-        }
       }
 
       function uciToSan(fen, uci) {
@@ -1719,17 +1544,19 @@
       function updatePVDisplay(entries) {
         const ids = [1, 2, 3];
 
-        if (!entries || entries.length === 0) {
+        const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
+        if (!list.length) {
           ids.forEach((idx) => {
             const moveEl = byId(`pv${idx}`);
             const evalEl = byId(`ev${idx}`);
             if (moveEl) moveEl.textContent = '—';
             if (evalEl) evalEl.textContent = '';
           });
+          updateEvalBar(null);
           return;
         }
 
-        const bestEntry = entries[0] || null;
+        const bestEntry = list[0] || null;
         const bestCp = bestEntry
           ? (typeof bestEntry.cp === 'number'
             ? bestEntry.cp
@@ -1745,36 +1572,15 @@
         ids.forEach((idx, i) => {
           const moveEl = byId(`pv${idx}`);
           const evalEl = byId(`ev${idx}`);
-          const entry = entries[i] || null;
+          const entry = list[i] || null;
           if (!moveEl || !evalEl) return;
           if (entry) {
             moveEl.textContent = entry.san || entry.uci;
             const evalText = entry.eval && entry.eval.trim() ? entry.eval : formatEvalDisplay(entry);
-
-            const entryCp = typeof entry.cp === 'number'
-              ? entry.cp
-              : typeof entry.mate === 'number'
-                ? mateToCp(entry.mate)
-                : null;
-
-            if (bestCp !== null && entryCp !== null) {
-              const diffCp = entryCp - bestCp;
-              const ratingChange = Math.round((diffCp / 100) * ELO_PER_PAWN);
-              const clampedRating = Math.max(-600, Math.min(600, ratingChange));
-              entry.ratingChange = clampedRating;
-              if (Math.abs(clampedRating) >= 1) {
-                const sign = clampedRating > 0 ? '+' : '';
-                evalEl.textContent = `${evalText} (${sign}${clampedRating})`;
-              } else {
-                evalEl.textContent = evalText;
-              }
-            } else {
-              entry.ratingChange = null;
-              evalEl.textContent = evalText;
-            }
+            evalEl.textContent = evalText;
           } else {
-            if (moveEl) moveEl.textContent = '—';
-            if (evalEl) evalEl.textContent = '';
+            moveEl.textContent = '—';
+            evalEl.textContent = '';
           }
         });
 
@@ -2290,16 +2096,6 @@
           setTheme(newTheme);
         });
 
-        const arrowToggle = byId('toggleArrowRatings');
-        if (arrowToggle) {
-          arrowToggle.addEventListener('change', (event) => {
-            state.settings.showArrowRatings = event.target.checked;
-            saveSettings();
-            requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
-          });
-        }
-
-        applySettingsToUi();
         updateInputAppearance();
       }
 
@@ -2356,7 +2152,6 @@
           return;
         }
 
-        loadSettings();
         initTheme();
         initBoard();
         bindUi();
