@@ -218,21 +218,6 @@
       cursor: not-allowed;
     }
 
-    .toggle-row {
-      margin-top: 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    .toggle-row input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-    }
-
     .load-controls {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -345,89 +330,12 @@
     }
 
     .board-wrap {
-      position: relative;
       width: min(100%, 420px);
     }
 
     #board {
       width: 100%;
       max-width: 420px;
-    }
-
-    #arrowLayer {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      display: block;
-      z-index: 2;
-    }
-
-    #arrowLayer text {
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      fill: var(--text);
-      stroke: rgba(0, 0, 0, 0.55);
-      stroke-width: 3px;
-      paint-order: stroke fill;
-      pointer-events: none;
-    }
-
-    #board .square-55d63 {
-      position: relative;
-      overflow: hidden;
-    }
-
-    #board .square-55d63::after {
-      content: '';
-      position: absolute;
-      inset: 8px;
-      border-radius: 10px;
-      opacity: 0;
-      transition: opacity 0.18s ease, transform 0.18s ease;
-    }
-
-    #board .highlight-last-from::after {
-      background: rgba(56, 189, 248, 0.3);
-      box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
-      opacity: 1;
-    }
-
-    #board .highlight-last-to::after {
-      background: rgba(94, 225, 163, 0.32);
-      box-shadow: 0 0 18px rgba(94, 225, 163, 0.45);
-      opacity: 1;
-    }
-
-    #board .highlight-next-from::after,
-    #board .highlight-next-to::after {
-      opacity: 1;
-      border: 1px solid rgba(148, 163, 196, 0.4);
-      transform: scale(0.95);
-    }
-
-    #board .highlight-next-from::after {
-      background: rgba(250, 204, 21, 0.18);
-      box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
-    }
-
-    #board .highlight-next-to::after {
-      background: rgba(125, 196, 255, 0.18);
-      box-shadow: 0 0 14px rgba(125, 196, 255, 0.32);
-    }
-
-    #arrowLayer text {
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      fill: var(--text);
-      stroke: rgba(0, 0, 0, 0.55);
-      stroke-width: 3px;
-      paint-order: stroke fill;
-      pointer-events: none;
     }
 
     .kv {
@@ -811,7 +719,6 @@
         </div>
         <div class="board-wrap">
           <div id="board"></div>
-          <svg id="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
         </div>
       </div>
 
@@ -832,11 +739,6 @@
           <span class="material-score" id="materialBlackScore">0</span>
         </div>
       </div>
-
-      <label class="toggle-row">
-        <input type="checkbox" id="toggleArrowRatings" checked>
-        <span>Show rating delta on arrows</span>
-      </label>
 
       <div class="row" style="margin-top:14px; align-items:center;">
         <button id="firstBtn" class="secondary">⏮ First</button>
@@ -917,7 +819,6 @@
           white: null,
           black: null
         },
-        lastHighlightedMove: null,
         currentSource: null,
         ply: 0,
         engine: null,
@@ -926,10 +827,7 @@
         engineVersion: 'unknown',
         pendingAnalysis: null,
         multiPv: new Map(),
-        bestEvalByPly: [],
-        settings: {
-          showArrowRatings: true
-        }
+        bestEvalByPly: []
       };
 
       const INPUT_TYPES = {
@@ -970,7 +868,6 @@
         'Missed Win': 'miss.png'
       };
 
-      const ELO_PER_PAWN = 60;
       const MAX_CP = 4000;
 
       function mateToCp(mate) {
@@ -982,13 +879,6 @@
         return Math.max(-MAX_CP, Math.min(MAX_CP, cp));
       }
 
-      function formatRatingDelta(value) {
-        if (typeof value !== 'number' || Number.isNaN(value)) return 'Δ —';
-        if (value === 0) return 'Δ 0';
-        const sign = value > 0 ? '+' : '';
-        return `Δ ${sign}${value}`;
-      }
-
       function formatEvalDisplay(entry) {
         if (!entry) return '—';
         if (entry.mate !== undefined && entry.mate !== null) {
@@ -998,32 +888,6 @@
           return `${entry.cp >= 0 ? '+' : ''}${(entry.cp / 100).toFixed(2)}`;
         }
         return entry.eval || '—';
-      }
-
-      function squareToDisplayCoords(square) {
-        if (!square || square.length < 2) return null;
-        const file = square.charCodeAt(0) - 97;
-        const rank = parseInt(square[1], 10) - 1;
-        if (file < 0 || file > 7 || Number.isNaN(rank) || rank < 0 || rank > 7) {
-          return null;
-        }
-        let col = file;
-        let row = 7 - rank;
-        if (state.orientation === 'black') {
-          col = 7 - col;
-          row = 7 - row;
-        }
-        return { col, row };
-      }
-
-      function refreshBoardHighlights() {
-        const boardEl = byId('board');
-        if (!boardEl) return;
-        const classes = ['highlight-last-from', 'highlight-last-to', 'highlight-next-from', 'highlight-next-to'];
-        boardEl.querySelectorAll('.square-55d63').forEach((el) => {
-          classes.forEach(cls => el.classList.remove(cls));
-        });
-        // Overlay overhaul in progress: skip re-applying highlight classes for now.
       }
 
       function formatMaterialScore(score) {
@@ -1241,59 +1105,28 @@
         };
       }
 
-      function loadSettings() {
-        try {
-          const raw = localStorage.getItem('analyzerSettings');
-          if (!raw) return;
-          const parsed = JSON.parse(raw);
-          if (typeof parsed.showArrowRatings === 'boolean') {
-            state.settings.showArrowRatings = parsed.showArrowRatings;
-          }
-        } catch (err) {
-          console.warn('Failed to load settings', err);
-        }
-      }
-
-      function saveSettings() {
-        try {
-          localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
-        } catch (err) {
-          console.warn('Failed to save settings', err);
-        }
-      }
-
-      function applySettingsToUi() {
-        const toggle = byId('toggleArrowRatings');
-        if (toggle) {
-          toggle.checked = !!state.settings.showArrowRatings;
-        }
-      }
-
       function initBoard() {
         const box = byId('board');
         state.board = Chessboard('board', {
           position: 'start', draggable: false,
           pieceTheme: 'chesspieces/wikipedia/{piece}.png'
         });
-        syncArrowLayer();
-        const handleResize = () => { state.board.resize(); syncArrowLayer(); };
+        syncBoardMetrics();
+        const handleResize = () => { state.board.resize(); syncBoardMetrics(); };
         window.addEventListener('resize', handleResize);
       }
 
-      function syncArrowLayer() {
+      function syncBoardMetrics() {
         const boardEl = byId('board');
-        const svg = byId('arrowLayer');
-        if (!boardEl || !svg) return;
+        if (!boardEl) return;
         const rect = boardEl.getBoundingClientRect();
-        if (!rect || rect.width === 0 || rect.height === 0) {
+        if (!rect || rect.width === 0) {
           return;
         }
-        svg.setAttribute('viewBox', '0 0 8 8');
-        svg.setAttribute('width', rect.width);
-        svg.setAttribute('height', rect.height);
+        const height = rect.height || rect.width;
         const evalBar = byId('evalBar');
         if (evalBar) {
-          evalBar.style.height = `${rect.height}px`;
+          evalBar.style.height = `${height}px`;
         }
       }
 
@@ -1509,8 +1342,6 @@
         }
 
         updateMaterialBalance();
-        state.lastHighlightedMove = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
-        refreshBoardHighlights();
         highlightActive();
         analyzeCurrent();
 
@@ -1527,178 +1358,6 @@
 
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
         setUrlParam('ply', state.ply > 0 ? state.ply : null);
-      }
-
-      function drawArrows(list) {
-        const svg = byId('arrowLayer');
-        const boardEl = byId('board');
-        if (!svg || !boardEl) return;
-        while (svg.firstChild) svg.removeChild(svg.firstChild);
-        if (!Array.isArray(list) || !list.length) return;
-
-        const boardRect = boardEl.getBoundingClientRect();
-        if (!boardRect || boardRect.width === 0 || boardRect.height === 0) {
-          return;
-        }
-
-        const squareCenter = (() => {
-          const cache = new Map();
-          return (square) => {
-            if (cache.has(square)) {
-              return cache.get(square);
-            }
-            const el = boardEl.querySelector(`[data-square="${square}"]`);
-            if (!el) {
-              cache.set(square, null);
-              return null;
-            }
-            const rect = el.getBoundingClientRect();
-            const centerX = ((rect.left + rect.right) / 2) - boardRect.left;
-            const centerY = ((rect.top + rect.bottom) / 2) - boardRect.top;
-            const coords = {
-              x: (centerX / boardRect.width) * 8,
-              y: (centerY / boardRect.height) * 8
-            };
-            cache.set(square, coords);
-            return coords;
-          };
-        })();
-
-        let missingSquares = false;
-
-        const palette = [
-          { color: '#22c55e', width: 0.22 },
-          { color: '#0ea5e9', width: 0.2 },
-          { color: '#f97316', width: 0.18 }
-        ];
-
-        const MIN_ALPHA = 0.35;
-        const MAX_ALPHA = 0.85;
-        const START_INSET = 0.42;
-        const MIN_BODY_LENGTH = 0.3;
-
-        const clampCoord = (value) => Math.max(0.12, Math.min(7.88, value));
-
-        const getScore = (entry) => {
-          if (!entry) return null;
-          if (typeof entry.cp === 'number') return entry.cp;
-          if (typeof entry.mate === 'number') return mateToCp(entry.mate);
-          return null;
-        };
-
-        const scored = list.filter(Boolean).slice(0, 3).map((entry) => ({
-          entry,
-          score: getScore(entry)
-        }));
-
-        if (!scored.length) return;
-
-        const bestScore = scored[0].score;
-        const scoreDiffs = scored.map(({ score }) => {
-          if (bestScore === null || score === null) return null;
-          return Math.abs(score - bestScore);
-        });
-        const maxDiff = scoreDiffs.reduce((acc, diff) => (diff !== null ? Math.max(acc, diff) : acc), 0);
-
-        scored.forEach(({ entry }, index) => {
-          if (!entry || !entry.uci) return;
-          const from = squareCenter(entry.uci.slice(0, 2));
-          const to = squareCenter(entry.uci.slice(2, 4));
-          if (!from || !to) {
-            missingSquares = true;
-            return;
-          }
-
-          const dx = to.x - from.x;
-          const dy = to.y - from.y;
-          const rawLength = Math.hypot(dx, dy);
-          if (rawLength < 1e-4) return;
-
-          const ux = dx / rawLength;
-          const uy = dy / rawLength;
-          const inset = Math.min(START_INSET, rawLength / 2 - 0.05);
-          const startX = from.x + ux * inset;
-          const startY = from.y + uy * inset;
-          const tipX = to.x - ux * inset;
-          const tipY = to.y - uy * inset;
-
-          const bodyDx = tipX - startX;
-          const bodyDy = tipY - startY;
-          const bodyLength = Math.hypot(bodyDx, bodyDy);
-          if (bodyLength < MIN_BODY_LENGTH) return;
-
-          const bux = bodyDx / bodyLength;
-          const buy = bodyDy / bodyLength;
-          const pux = -buy;
-          const puy = bux;
-
-          const maxHead = Math.min(0.5, bodyLength * 0.45);
-          const headLength = Math.max(0.24, Math.min(maxHead, bodyLength * 0.35));
-          const shaftLength = bodyLength - headLength;
-          if (shaftLength <= 0.05) return;
-
-          const baseX = tipX - bux * headLength;
-          const baseY = tipY - buy * headLength;
-
-          let opacity = MAX_ALPHA;
-          if (index > 0) {
-            const diff = scoreDiffs[index];
-            if (diff === null || maxDiff === 0) {
-              opacity = (MAX_ALPHA + MIN_ALPHA) / 2;
-            } else {
-              const ratio = Math.min(1, diff / maxDiff);
-              opacity = MAX_ALPHA - ratio * (MAX_ALPHA - MIN_ALPHA);
-            }
-          }
-
-          const paletteEntry = palette[index] || palette[palette.length - 1];
-
-          const shaft = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          shaft.setAttribute('x1', clampCoord(startX));
-          shaft.setAttribute('y1', clampCoord(startY));
-          shaft.setAttribute('x2', clampCoord(baseX));
-          shaft.setAttribute('y2', clampCoord(baseY));
-          shaft.setAttribute('stroke', paletteEntry.color);
-          shaft.setAttribute('stroke-width', paletteEntry.width);
-          shaft.setAttribute('stroke-linecap', 'round');
-          shaft.setAttribute('opacity', opacity);
-          svg.appendChild(shaft);
-
-          const headWidth = headLength * 0.6;
-          const leftX = baseX + pux * headWidth;
-          const leftY = baseY + puy * headWidth;
-          const rightX = baseX - pux * headWidth;
-          const rightY = baseY - puy * headWidth;
-
-          const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          head.setAttribute('d', `M ${clampCoord(tipX)} ${clampCoord(tipY)} L ${clampCoord(leftX)} ${clampCoord(leftY)} L ${clampCoord(rightX)} ${clampCoord(rightY)} Z`);
-          head.setAttribute('fill', paletteEntry.color);
-          head.setAttribute('opacity', opacity);
-          svg.appendChild(head);
-
-          if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange)) {
-            const usableBody = Math.max(0, shaftLength - 0.1);
-            if (usableBody > 0.1) {
-              const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-              const along = Math.min(usableBody, Math.max(0.45, usableBody * 0.55));
-              const offset = Math.min(0.35, Math.max(0.18, bodyLength * 0.18));
-              const tx = clampCoord(startX + bux * along + pux * offset);
-              const ty = clampCoord(startY + buy * along + puy * offset);
-              label.setAttribute('x', tx);
-              label.setAttribute('y', ty);
-              label.setAttribute('text-anchor', 'middle');
-              label.setAttribute('dominant-baseline', 'middle');
-              label.setAttribute('fill', paletteEntry.color);
-              label.setAttribute('opacity', Math.min(1, opacity + 0.1));
-              label.textContent = formatRatingDelta(entry.ratingChange);
-              svg.appendChild(label);
-            }
-          }
-        });
-
-        if (missingSquares) {
-          requestAnimationFrame(() => drawArrows(list));
-        }
       }
 
       function uciToSan(fen, uci) {
@@ -1719,17 +1378,19 @@
       function updatePVDisplay(entries) {
         const ids = [1, 2, 3];
 
-        if (!entries || entries.length === 0) {
+        const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
+        if (!list.length) {
           ids.forEach((idx) => {
             const moveEl = byId(`pv${idx}`);
             const evalEl = byId(`ev${idx}`);
             if (moveEl) moveEl.textContent = '—';
             if (evalEl) evalEl.textContent = '';
           });
+          updateEvalBar(null);
           return;
         }
 
-        const bestEntry = entries[0] || null;
+        const bestEntry = list[0] || null;
         const bestCp = bestEntry
           ? (typeof bestEntry.cp === 'number'
             ? bestEntry.cp
@@ -1745,36 +1406,15 @@
         ids.forEach((idx, i) => {
           const moveEl = byId(`pv${idx}`);
           const evalEl = byId(`ev${idx}`);
-          const entry = entries[i] || null;
+          const entry = list[i] || null;
           if (!moveEl || !evalEl) return;
           if (entry) {
             moveEl.textContent = entry.san || entry.uci;
             const evalText = entry.eval && entry.eval.trim() ? entry.eval : formatEvalDisplay(entry);
-
-            const entryCp = typeof entry.cp === 'number'
-              ? entry.cp
-              : typeof entry.mate === 'number'
-                ? mateToCp(entry.mate)
-                : null;
-
-            if (bestCp !== null && entryCp !== null) {
-              const diffCp = entryCp - bestCp;
-              const ratingChange = Math.round((diffCp / 100) * ELO_PER_PAWN);
-              const clampedRating = Math.max(-600, Math.min(600, ratingChange));
-              entry.ratingChange = clampedRating;
-              if (Math.abs(clampedRating) >= 1) {
-                const sign = clampedRating > 0 ? '+' : '';
-                evalEl.textContent = `${evalText} (${sign}${clampedRating})`;
-              } else {
-                evalEl.textContent = evalText;
-              }
-            } else {
-              entry.ratingChange = null;
-              evalEl.textContent = evalText;
-            }
+            evalEl.textContent = evalText;
           } else {
-            if (moveEl) moveEl.textContent = '—';
-            if (evalEl) evalEl.textContent = '';
+            moveEl.textContent = '—';
+            evalEl.textContent = '';
           }
         });
 
@@ -1936,7 +1576,6 @@
                   historyEntry.classification = null;
                 }
                 renderMoves(); // Re-render to show the evaluation
-                refreshBoardHighlights();
               }
             }
             setStatus('engStatus', `Analysis complete (${engineLabel})`);
@@ -1981,7 +1620,6 @@
         state.multiPv.set(rank, entry);
         const list = [1, 2, 3].map(r => state.multiPv.get(r) || null);
         updatePVDisplay(list);
-        drawArrows(list);
         setStatus('engStatus', `Analyzing… depth ${line.match(/\bdepth (\d+)/)?.[1] || ''}`);
       }
 
@@ -1995,7 +1633,6 @@
 
         state.pendingAnalysis = false;
         state.multiPv = new Map();
-        drawArrows([]);
         updatePVDisplay([]);
         setStatus('engStatus', 'Analyzing…');
 
@@ -2106,7 +1743,6 @@
         state.bestEvalByPly = [];
         state.multiPv = new Map();
         state.ply = 0;
-        state.lastHighlightedMove = null;
         resetCurrentGame();
 
         if (state.board) {
@@ -2115,7 +1751,6 @@
 
         renderMoves();
         updateMaterialBalance();
-        refreshBoardHighlights();
         updateEvalBar(null);
 
         if (state.engineReady) {
@@ -2156,7 +1791,6 @@
         state.bestEvalByPly = [];
         state.multiPv = new Map();
         state.ply = 0;
-        state.lastHighlightedMove = null;
         resetCurrentGame();
 
         if (state.board) {
@@ -2165,7 +1799,6 @@
 
         renderMoves();
         updateMaterialBalance();
-        refreshBoardHighlights();
         updateEvalBar(null);
 
         if (state.engineReady) {
@@ -2181,7 +1814,6 @@
         const value = source.value ?? getCurrentInputValue();
         state.currentSource = { type, value };
 
-        drawArrows([]);
         updatePVDisplay([]);
         clearRatingGuess();
         updateEloGuessDisplay();
@@ -2276,10 +1908,6 @@
         byId('flipBtn').addEventListener('click', () => {
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
-          requestAnimationFrame(() => {
-            drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []);
-            refreshBoardHighlights();
-          });
         });
         byId('timeMs').addEventListener('change', analyzeCurrent);
         byId('depth').addEventListener('change', analyzeCurrent);
@@ -2290,16 +1918,6 @@
           setTheme(newTheme);
         });
 
-        const arrowToggle = byId('toggleArrowRatings');
-        if (arrowToggle) {
-          arrowToggle.addEventListener('change', (event) => {
-            state.settings.showArrowRatings = event.target.checked;
-            saveSettings();
-            requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
-          });
-        }
-
-        applySettingsToUi();
         updateInputAppearance();
       }
 
@@ -2356,7 +1974,6 @@
           return;
         }
 
-        loadSettings();
         initTheme();
         initBoard();
         bindUi();
