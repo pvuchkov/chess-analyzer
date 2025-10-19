@@ -81,8 +81,8 @@
       display: grid;
       gap: 18px;
       align-items: start;
-      grid-template-columns: minmax(320px, 420px) minmax(340px, 1fr);
-      max-width: 1200px;
+      grid-template-columns: minmax(360px, 660px) minmax(360px, 1fr);
+      max-width: 1320px;
       margin: 0 auto;
     }
 
@@ -215,7 +215,7 @@
 
     #board {
       width: 100%;
-      max-width: 420px;
+      max-width: 560px;
       margin: 0 auto;
     }
 
@@ -477,9 +477,29 @@
 
     .moves {
       display: grid;
-      grid-template-columns: 40px 1fr 1fr;
+      grid-template-columns: 50px 1fr 1fr;
       gap: 6px 12px;
       font-size: 14px;
+    }
+
+    .moves-header-cell {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: var(--muted);
+      padding: 2px 10px;
+    }
+
+    .moves-header-cell:first-child {
+      text-align: right;
+      padding-right: 6px;
+    }
+
+    .moves-index {
+      text-align: right;
+      padding-right: 6px;
+      font-weight: 600;
     }
 
     .mv {
@@ -1019,6 +1039,7 @@
             }
           }
         });
+        updateEloEstimates(summary);
       }
 
       function createBaseGame(fen = state.initialFen) {
@@ -1442,11 +1463,20 @@
         const container = byId('moves');
         if (!container) return;
         container.innerHTML = '';
+        const headerLabels = ['Move', 'White', 'Black'];
+        headerLabels.forEach((label, index) => {
+          const headerCell = document.createElement('div');
+          headerCell.className = 'moves-header-cell';
+          headerCell.textContent = label;
+          if (index === 0) headerCell.classList.add('muted');
+          container.appendChild(headerCell);
+        });
+        container.dataset.headerOffset = String(headerLabels.length);
         const h = state.verboseHistory;
         for (let i = 0; i < h.length; i += 2) {
           const moveNo = document.createElement('div');
           moveNo.textContent = `${Math.floor(i / 2) + 1}.`;
-          moveNo.className = 'muted';
+          moveNo.className = 'muted moves-index';
 
           const white = createMoveCell(h[i], i + 1);
           const black = createMoveCell(h[i + 1], i + 2);
@@ -1467,7 +1497,8 @@
         const col = idx % 2;
         const container = byId('moves');
         if (!container) return;
-        const cell = container.children[row * 3 + 1 + col];
+        const headerOffset = parseInt(container.dataset.headerOffset || '0', 10);
+        const cell = container.children[headerOffset + row * 3 + 1 + col];
         if (cell) cell.classList.add('active');
       }
 
@@ -1666,45 +1697,47 @@
           }
         });
 
-        updateEvalBar(entries[0] && entries[0].eval ? entries[0].eval : null);
       }
 
-      function estimateEloFromHistory(history) {
-        if (!history || history.length === 0) {
+      function estimateEloFromSummary(summary) {
+        if (!summary) {
           return { white: null, black: null };
         }
-        const stats = {
-          white: { moves: 0, swingSum: 0, mistakes: 0 },
-          black: { moves: 0, swingSum: 0, mistakes: 0 }
-        };
-        const evals = history.map((entry) => evalStringToCentipawns(entry.eval));
-        let prev = null;
-        for (let i = 0; i < evals.length; i++) {
-          const current = evals[i];
-          if (current == null) continue;
-          if (prev != null) {
-            const color = i % 2 === 0 ? 'white' : 'black';
-            const swing = current - prev;
-            stats[color].moves++;
-            stats[color].swingSum += Math.abs(swing);
-            if (color === 'white' && swing < -150) stats[color].mistakes++;
-            if (color === 'black' && swing > 150) stats[color].mistakes++;
+        const compute = (bucket) => {
+          if (!bucket) return null;
+          const moves = bucket.moves || 0;
+          if (moves < 4) return null;
+          let rating = 600;
+          const accuracy = bucket.accuracyCount > 0 ? bucket.accuracySum / bucket.accuracyCount : null;
+          if (Number.isFinite(accuracy)) {
+            rating += accuracy * 14;
+            if (accuracy > 75) {
+              rating += (accuracy - 75) * 2.5;
+            }
+          } else {
+            rating += 650;
           }
-          prev = current;
-        }
-        const compute = (stat) => {
-          if (stat.moves < 3) return null;
-          const avgSwing = stat.swingSum / stat.moves;
-          const stability = Math.max(0, 220 - Math.min(220, avgSwing));
-          const base = 900 + Math.min(stat.moves, 60) * 6;
-          const rating = base + stability * 1.4 - stat.mistakes * 40;
-          return Math.max(700, Math.min(2800, rating));
+          const cpLoss = bucket.cpLossCount > 0 ? bucket.cpLossSum / bucket.cpLossCount : null;
+          if (Number.isFinite(cpLoss)) {
+            rating -= Math.min(250, cpLoss) * 1.8;
+          }
+          const goodMoves = (bucket.counts.best || 0)
+            + (bucket.counts.excellent || 0)
+            + (bucket.counts.great || 0)
+            + (bucket.counts.brilliant || 0);
+          const inaccuracies = (bucket.counts.inaccuracy || 0) + (bucket.counts.miss || 0);
+          const mistakes = (bucket.counts.mistake || 0) + (bucket.counts.blunder || 0);
+          rating += goodMoves * 6;
+          rating -= inaccuracies * 8;
+          rating -= mistakes * 28;
+          rating += Math.min(moves, 60) * 2;
+          return Math.max(400, Math.min(2800, rating));
         };
-        return { white: compute(stats.white), black: compute(stats.black) };
+        return { white: compute(summary.w), black: compute(summary.b) };
       }
 
-      function updateEloEstimates() {
-        const estimates = estimateEloFromHistory(state.verboseHistory);
+      function updateEloEstimates(summary) {
+        const estimates = estimateEloFromSummary(summary || computeMoveSummary());
         const whiteEl = byId('eloWhite');
         const blackEl = byId('eloBlack');
         if (whiteEl) {
@@ -2063,15 +2096,16 @@
         if (analysis) {
           drawArrows(analysis.pvEntries || []);
           updatePVDisplay(analysis.pvEntries || []);
-          const evalText = state.suggestionMode === 'played'
-            ? (analysis.actualEntry && analysis.actualEntry.eval
-              ? analysis.actualEntry.eval
-              : analysis.bestEntry && analysis.bestEntry.eval
-                ? analysis.bestEntry.eval
-                : null)
-            : analysis.bestEntry && analysis.bestEntry.eval
-              ? analysis.bestEntry.eval
-              : null;
+          let evalText = null;
+          if (state.suggestionMode === 'played') {
+            if (analysis.actualEntry && analysis.actualEntry.eval) {
+              evalText = analysis.actualEntry.eval;
+            } else if (state.ply > 0 && analysis.bestEntry && analysis.bestEntry.eval) {
+              evalText = analysis.bestEntry.eval;
+            }
+          } else if (analysis.bestEntry && analysis.bestEntry.eval) {
+            evalText = analysis.bestEntry.eval;
+          }
           updateEvalBar(evalText);
           setStatus('engStatus', `Precomputed (depth ${analysis.depth || 0})`);
           return;
@@ -2098,7 +2132,11 @@
           updateEvalBar(null);
         } else {
           const entry = state.verboseHistory[state.ply - 1];
-          updateEvalBar(entry && entry.eval ? entry.eval : null);
+          let evalText = entry && entry.eval ? entry.eval : null;
+          if (!evalText && entry && entry.san && entry.san.includes('#')) {
+            evalText = entry.color === 'b' ? '#-1' : '#1';
+          }
+          updateEvalBar(evalText);
         }
       }
 
