@@ -1842,47 +1842,54 @@ class Chess {
         }
         tokens = fen.split(/\s+/);
         if (!skipValidation) {
-            const { ok, error } = validateFen(fen);
+            const { ok } = validateFen(fen);
             if (!ok) {
-                throw new Error(error);
+                return false;
             }
         }
-        const position = tokens[0];
-        let square = 0;
-        this.clear({ preserveHeaders });
-        for (let i = 0; i < position.length; i++) {
-            const piece = position.charAt(i);
-            if (piece === '/') {
-                square += 8;
+        try {
+            const position = tokens[0];
+            let square = 0;
+            this.clear({ preserveHeaders });
+            for (let i = 0; i < position.length; i++) {
+                const piece = position.charAt(i);
+                if (piece === '/') {
+                    square += 8;
+                }
+                else if (isDigit(piece)) {
+                    square += parseInt(piece, 10);
+                }
+                else {
+                    const color = piece < 'a' ? WHITE : BLACK;
+                    this._put({ type: piece.toLowerCase(), color }, algebraic(square));
+                    square++;
+                }
             }
-            else if (isDigit(piece)) {
-                square += parseInt(piece, 10);
+            this._turn = tokens[1];
+            if (tokens[2].indexOf('K') > -1) {
+                this._castling.w |= BITS.KSIDE_CASTLE;
             }
-            else {
-                const color = piece < 'a' ? WHITE : BLACK;
-                this._put({ type: piece.toLowerCase(), color }, algebraic(square));
-                square++;
+            if (tokens[2].indexOf('Q') > -1) {
+                this._castling.w |= BITS.QSIDE_CASTLE;
             }
+            if (tokens[2].indexOf('k') > -1) {
+                this._castling.b |= BITS.KSIDE_CASTLE;
+            }
+            if (tokens[2].indexOf('q') > -1) {
+                this._castling.b |= BITS.QSIDE_CASTLE;
+            }
+            this._epSquare = tokens[3] === '-' ? EMPTY : Ox88[tokens[3]];
+            this._halfMoves = parseInt(tokens[4], 10);
+            this._moveNumber = parseInt(tokens[5], 10);
+            this._hash = this._computeHash();
+            this._updateSetup(fen);
+            this._incPositionCount();
         }
-        this._turn = tokens[1];
-        if (tokens[2].indexOf('K') > -1) {
-            this._castling.w |= BITS.KSIDE_CASTLE;
+        catch (_error) {
+            this.clear({ preserveHeaders });
+            return false;
         }
-        if (tokens[2].indexOf('Q') > -1) {
-            this._castling.w |= BITS.QSIDE_CASTLE;
-        }
-        if (tokens[2].indexOf('k') > -1) {
-            this._castling.b |= BITS.KSIDE_CASTLE;
-        }
-        if (tokens[2].indexOf('q') > -1) {
-            this._castling.b |= BITS.QSIDE_CASTLE;
-        }
-        this._epSquare = tokens[3] === '-' ? EMPTY : Ox88[tokens[3]];
-        this._halfMoves = parseInt(tokens[4], 10);
-        this._moveNumber = parseInt(tokens[5], 10);
-        this._hash = this._computeHash();
-        this._updateSetup(fen);
-        this._incPositionCount();
+        return true;
     }
     fen({ forceEnpassantSquare = false, } = {}) {
         let empty = 0;
@@ -2918,69 +2925,86 @@ class Chess {
         if (newlineChar !== '\r?\n') {
             pgn = pgn.replace(new RegExp(newlineChar, 'g'), '\n');
         }
-        const parsedPgn = peg$parse(pgn);
+        let parsedPgn;
+        try {
+            parsedPgn = peg$parse(pgn);
+        }
+        catch (_error) {
+            return false;
+        }
         // Put the board in the starting position
         this.reset();
-        // parse PGN header
-        const headers = parsedPgn.headers;
-        let fen = '';
-        for (const key in headers) {
-            // check to see user is including fen (possibly with wrong tag case)
-            if (key.toLowerCase() === 'fen') {
-                fen = headers[key];
+        try {
+            // parse PGN header
+            const headers = parsedPgn.headers;
+            let fen = '';
+            for (const key in headers) {
+                // check to see user is including fen (possibly with wrong tag case)
+                if (key.toLowerCase() === 'fen') {
+                    fen = headers[key];
+                }
+                this.header(key, headers[key]);
             }
-            this.header(key, headers[key]);
-        }
-        /*
-         * the permissive parser should attempt to load a fen tag, even if it's the
-         * wrong case and doesn't include a corresponding [SetUp "1"] tag
-         */
-        if (!strict) {
-            if (fen) {
-                this.load(fen, { preserveHeaders: true });
-            }
-        }
-        else {
             /*
-             * strict parser - load the starting position indicated by [Setup '1']
-             * and [FEN position]
+             * the permissive parser should attempt to load a fen tag, even if it's the
+             * wrong case and doesn't include a corresponding [SetUp "1"] tag
              */
-            if (headers['SetUp'] === '1') {
-                if (!('FEN' in headers)) {
-                    throw new Error('Invalid PGN: FEN tag must be supplied with SetUp tag');
-                }
-                // don't clear the headers when loading
-                this.load(headers['FEN'], { preserveHeaders: true });
-            }
-        }
-        let node = parsedPgn.root;
-        while (node) {
-            if (node.move) {
-                const move = this._moveFromSan(node.move, strict);
-                if (move == null) {
-                    throw new Error(`Invalid move in PGN: ${node.move}`);
-                }
-                else {
-                    this._makeMove(move);
-                    this._incPositionCount();
+            if (!strict) {
+                if (fen) {
+                    if (!this.load(fen, { preserveHeaders: true })) {
+                        throw new Error('Invalid FEN in PGN header');
+                    }
                 }
             }
-            if (node.comment !== undefined) {
-                this._comments[this.fen()] = node.comment;
+            else {
+                /*
+                 * strict parser - load the starting position indicated by [Setup '1']
+                 * and [FEN position]
+                 */
+                if (headers['SetUp'] === '1') {
+                    if (!('FEN' in headers)) {
+                        throw new Error('Invalid PGN: FEN tag must be supplied with SetUp tag');
+                    }
+                    // don't clear the headers when loading
+                    if (!this.load(headers['FEN'], { preserveHeaders: true })) {
+                        throw new Error('Invalid FEN in PGN header');
+                    }
+                }
             }
-            node = node.variations[0];
+            let node = parsedPgn.root;
+            while (node) {
+                if (node.move) {
+                    const move = this._moveFromSan(node.move, strict);
+                    if (move == null) {
+                        throw new Error(`Invalid move in PGN: ${node.move}`);
+                    }
+                    else {
+                        this._makeMove(move);
+                        this._incPositionCount();
+                    }
+                }
+                if (node.comment !== undefined) {
+                    this._comments[this.fen()] = node.comment;
+                }
+                node = node.variations[0];
+            }
+            /*
+             * Per section 8.2.6 of the PGN spec, the Result tag pair must match match
+             * the termination marker. Only do this when headers are present, but the
+             * result tag is missing
+             */
+            const result = parsedPgn.result;
+            if (result &&
+                Object.keys(this._header).length &&
+                this._header['Result'] !== result) {
+                this.setHeader('Result', result);
+            }
         }
-        /*
-         * Per section 8.2.6 of the PGN spec, the Result tag pair must match match
-         * the termination marker. Only do this when headers are present, but the
-         * result tag is missing
-         */
-        const result = parsedPgn.result;
-        if (result &&
-            Object.keys(this._header).length &&
-            this._header['Result'] !== result) {
-            this.setHeader('Result', result);
+        catch (_error) {
+            this.reset();
+            return false;
         }
+        return true;
     }
     /*
      * Convert a move from 0x88 coordinates to Standard Algebraic Notation
