@@ -8,25 +8,49 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
   <style>
     :root {
-      --bg: #0e101d;
-      --panel: #15192b;
-      --text: #f3f6ff;
-      --muted: #8891b0;
-      --accent: #70a7ff;
-      --ok: #3fd086;
-      --warn: #ffc867;
-      --danger: #ff708a;
+      --bg: #0b1020;
+      --panel: rgba(18, 24, 46, 0.92);
+      --text: #f5f7ff;
+      --muted: #94a3c4;
+      --accent: #7dc4ff;
+      --ok: #5ee1a3;
+      --warn: #ffd480;
+      --danger: #ff7aa5;
+      --eval-black: #1f2338;
+      --eval-white: #f7f9ff;
+      --eval-border: rgba(255, 255, 255, 0.12);
+      --eval-zero: rgba(148, 163, 196, 0.5);
+      --eval-pointer: #facc15;
+      --badge-best: #38bdf8;
+      --badge-excellent: #4ade80;
+      --badge-good: #a855f7;
+      --badge-inaccuracy: #f97316;
+      --badge-mistake: #fb7185;
+      --badge-blunder: #ef4444;
+      --badge-brilliant: #eab308;
     }
 
     [data-theme="light"] {
-      --bg: #ffffff;
-      --panel: #f8f9fa;
-      --text: #212529;
-      --muted: #6c757d;
-      --accent: #007bff;
-      --ok: #28a745;
-      --warn: #ffc107;
-      --danger: #dc3545;
+      --bg: #f3f6fb;
+      --panel: rgba(255, 255, 255, 0.92);
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --ok: #16a34a;
+      --warn: #f59e0b;
+      --danger: #dc2626;
+      --eval-black: #111827;
+      --eval-white: #ffffff;
+      --eval-border: rgba(15, 23, 42, 0.15);
+      --eval-zero: rgba(107, 114, 128, 0.45);
+      --eval-pointer: #0ea5e9;
+      --badge-best: #2563eb;
+      --badge-excellent: #16a34a;
+      --badge-good: #7c3aed;
+      --badge-inaccuracy: #d97706;
+      --badge-mistake: #f97316;
+      --badge-blunder: #dc2626;
+      --badge-brilliant: #ca8a04;
     }
 
     * {
@@ -48,11 +72,11 @@
     }
 
     [data-theme="dark"] body {
-      background: radial-gradient(1200px 800px at 10% -10%, #1b2141, #090c18);
+      background: radial-gradient(1200px 800px at 10% -10%, #131b34, #080b17);
     }
 
     [data-theme="light"] body {
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      background: linear-gradient(135deg, #f9fbff 0%, #dbe7ff 100%);
     }
 
     h1 {
@@ -149,19 +173,32 @@
     }
 
     button {
-      background: linear-gradient(180deg, #27386a, #213159);
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: linear-gradient(180deg, rgba(80, 120, 255, 0.95), rgba(46, 84, 214, 0.95));
+      border: 1px solid rgba(125, 196, 255, 0.45);
       color: var(--text);
       padding: 10px 16px;
       border-radius: 10px;
       cursor: pointer;
       font-weight: 600;
       letter-spacing: 0.2px;
-      transition: transform .1s ease, filter .2s;
+      transition: transform .12s ease, filter .18s ease;
+    }
+
+    button:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
     }
 
     button.secondary {
-      background: #161d35;
+      background: rgba(125, 196, 255, 0.12);
+      border: 1px solid rgba(125, 196, 255, 0.25);
+      color: var(--text);
+    }
+
+    [data-theme="light"] button.secondary {
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.18);
+      color: #1f2937;
     }
 
     button:active {
@@ -169,8 +206,23 @@
     }
 
     button:disabled {
-      opacity: 0.6;
+      opacity: 0.55;
       cursor: not-allowed;
+    }
+
+    .toggle-row {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
     }
 
     .status {
@@ -190,12 +242,31 @@
 
     .board-wrap {
       position: relative;
+      width: min(100%, 420px);
     }
 
     #board {
       width: 100%;
       max-width: 420px;
-      margin: 0 auto;
+    }
+
+    .board-overlay {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .board-overlay img {
+      position: absolute;
+      width: calc(100% / 8 * 0.7);
+      transform: translate(-50%, -50%);
+      left: calc((var(--col) + 0.5) * 12.5%);
+      top: calc((var(--row) + 0.5) * 12.5%);
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
     }
 
     #arrowLayer {
@@ -206,6 +277,26 @@
       height: 100%;
       pointer-events: none;
       display: block;
+      z-index: 2;
+    }
+
+    #arrowLayer text {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      fill: var(--text);
+      stroke: rgba(0, 0, 0, 0.55);
+      stroke-width: 3px;
+      paint-order: stroke fill;
+      pointer-events: none;
+    }
+
+    #board .square-last-move {
+      box-shadow: inset 0 0 0 4px rgba(250, 204, 21, 0.85);
+    }
+
+    #board .square-last-destination {
+      box-shadow: inset 0 0 0 4px rgba(125, 196, 255, 0.9);
     }
 
     .kv {
@@ -225,44 +316,143 @@
 
     .moves {
       display: grid;
-      grid-template-columns: 40px 1fr 1fr;
-      gap: 6px 12px;
+      grid-template-columns: 44px 1fr 1fr;
+      gap: 8px 12px;
       font-size: 14px;
     }
 
     .mv {
-      padding: 6px 10px;
-      border-radius: 10px;
+      padding: 8px 12px;
+      border-radius: 12px;
       cursor: pointer;
-      background: rgba(15, 20, 40, 0.6);
-      transition: background .12s, transform .12s;
+      background: rgba(125, 196, 255, 0.08);
+      transition: background 0.15s ease, transform 0.12s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+      border: 1px solid transparent;
     }
 
-    .mv {
-      position: relative;
+    .mv.empty {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    [data-theme="light"] .mv {
+      background: rgba(37, 99, 235, 0.06);
     }
 
     .mv:hover {
-      background: rgba(112, 167, 255, 0.16);
+      background: rgba(125, 196, 255, 0.18);
     }
 
     .mv.active {
-      background: rgba(112, 167, 255, 0.28);
-      box-shadow: 0 0 0 1px rgba(112, 167, 255, 0.5);
+      background: rgba(125, 196, 255, 0.28);
+      border-color: rgba(125, 196, 255, 0.4);
+      box-shadow: 0 10px 25px rgba(18, 24, 46, 0.25);
     }
 
-    .eval {
-      position: absolute;
-      top: -12px;
-      right: 2px;
-      font-size: 10px;
+    .mv-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mv-san {
       font-weight: 600;
-      color: var(--accent);
-      background: rgba(0, 0, 0, 0.7);
-      padding: 1px 3px;
-      border-radius: 3px;
-      white-space: nowrap;
-      opacity: 0.8;
+      letter-spacing: 0.2px;
+    }
+
+    .mv-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .mv-eval {
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    }
+
+    .mv-loss {
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    }
+
+    .mv-loss.loss {
+      color: var(--danger);
+    }
+
+    .mv-loss.gain {
+      color: var(--ok);
+    }
+
+    .mv-badge {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(125, 196, 255, 0.16);
+      color: var(--badge-best);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mv-badge img {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+    .mv-badge[data-grade="Brilliant"] {
+      background: rgba(234, 179, 8, 0.18);
+      color: var(--badge-brilliant);
+    }
+
+    .mv-badge[data-grade="Great"] {
+      background: rgba(59, 130, 246, 0.18);
+      color: var(--badge-best);
+    }
+
+    .mv-badge[data-grade="Best"] {
+      background: rgba(59, 130, 246, 0.18);
+      color: var(--badge-best);
+    }
+
+    .mv-badge[data-grade="Excellent"] {
+      background: rgba(74, 222, 128, 0.18);
+      color: var(--badge-excellent);
+    }
+
+    .mv-badge[data-grade="Good"] {
+      background: rgba(168, 85, 247, 0.18);
+      color: var(--badge-good);
+    }
+
+    .mv-badge[data-grade="Inaccuracy"] {
+      background: rgba(249, 115, 22, 0.18);
+      color: var(--badge-inaccuracy);
+    }
+
+    .mv-badge[data-grade="Mistake"] {
+      background: rgba(251, 113, 133, 0.18);
+      color: var(--badge-mistake);
+    }
+
+    .mv-badge[data-grade="Blunder"] {
+      background: rgba(239, 68, 68, 0.18);
+      color: var(--badge-blunder);
+    }
+
+    .mv-badge[data-grade="Missed Win"] {
+      background: rgba(249, 115, 22, 0.18);
+      color: var(--badge-inaccuracy);
     }
 
     .pv-list {
@@ -317,48 +507,170 @@
       margin-top: 8px;
     }
 
-    .eval-bar-container {
+    .board-eval-wrap {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    @media (max-width:640px) {
+      .board-eval-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .eval-column {
+        order: -1;
+      }
+
+      .eval-column .eval-bar {
+        height: min(220px, 60vw) !important;
+        width: 24px;
+      }
+
+      .eval-scale {
+        flex-direction: row;
+        justify-content: space-between;
+        margin-top: 0;
+        width: 100%;
+      }
+    }
+
+    .eval-column {
       display: flex;
+      flex-direction: column;
       align-items: center;
       gap: 12px;
-      margin-bottom: 8px;
     }
 
     .eval-bar {
-      flex: 1;
-      height: 8px;
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
       position: relative;
+      width: 26px;
+      border-radius: 18px;
+      background: var(--eval-black);
+      border: 1px solid var(--eval-border);
       overflow: hidden;
+      min-height: 320px;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
     .eval-fill {
-      height: 100%;
-      background: linear-gradient(to right, #dc3545 0%, #ffc867 50%, #28a745 100%);
-      width: 50%;
-      transform: translateX(-50%);
-      transition: transform 0.3s ease;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--eval-white);
+      transition: height 0.2s ease;
+      height: 50%;
     }
 
     .eval-zero-line {
       position: absolute;
-      left: 50%;
-      top: 0;
-      bottom: 0;
-      width: 1px;
-      background: var(--text);
-      opacity: 0.5;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--eval-zero);
+      z-index: 1;
     }
 
-    .eval-value {
+    .eval-pointer {
+      position: absolute;
+      left: calc(100% + 14px);
+      transform: translateY(-50%);
+      background: var(--panel);
+      color: var(--text);
       font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
       font-size: 12px;
       font-weight: 600;
-      color: var(--text);
-      min-width: 45px;
-      text-align: right;
+      padding: 4px 8px;
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+      z-index: 2;
+      min-width: 54px;
+      text-align: center;
+    }
+
+    .eval-pointer::before {
+      content: '';
+      position: absolute;
+      right: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 6px solid transparent;
+      border-right-color: var(--panel);
+    }
+
+    .eval-pointer.adv-white {
+      background: linear-gradient(135deg, #fef9c3, #fde68a);
+      color: #92400e;
+    }
+
+    .eval-pointer.adv-white::before {
+      border-right-color: #fde68a;
+    }
+
+    .eval-pointer.adv-black {
+      background: linear-gradient(135deg, #1f2937, #111827);
+      color: #e5e7eb;
+    }
+
+    .eval-pointer.adv-black::before {
+      border-right-color: #1f2937;
+    }
+
+    .eval-scale {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 11px;
+      color: var(--muted);
+      gap: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .material-balance {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(125, 196, 255, 0.08);
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 13px;
+      gap: 16px;
+    }
+
+    [data-theme="light"] .material-balance {
+      background: rgba(37, 99, 235, 0.06);
+    }
+
+    .material-balance span strong {
+      font-weight: 600;
+    }
+
+    .rating-guess {
+      margin-top: 18px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(125, 196, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    [data-theme="light"] .rating-guess {
+      background: rgba(37, 99, 235, 0.06);
+    }
+
+    .rating-guess-values {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -373,9 +685,6 @@
       <h2>Load game</h2>
       <div class="row">
         <input id="lichessUrl" type="text" placeholder="Paste Lichess URL or game ID" autocomplete="off" />
-      </div>
-      <div class="row">
-        <input id="token" type="password" placeholder="Optional: API token for private games" autocomplete="off" />
         <button id="loadBtn">Fetch PGN</button>
       </div>
       <div class="row">
@@ -385,19 +694,36 @@
       <div id="loadStatus" class="status"></div>
 
       <h2>Board</h2>
-      <div class="board-wrap">
-        <div id="board"></div>
-        <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+      <div class="board-eval-wrap">
+        <div class="eval-column">
+          <div class="eval-bar" id="evalBar">
+            <div class="eval-fill" id="evalFill"></div>
+            <div class="eval-zero-line"></div>
+            <div class="eval-pointer" id="evalPointer">
+              <span class="eval-value" id="evalValue">0.00</span>
+            </div>
+          </div>
+          <div class="eval-scale">
+            <span>Black</span>
+            <span>White</span>
+          </div>
+        </div>
+        <div class="board-wrap">
+          <div id="board"></div>
+          <div id="boardOverlay" class="board-overlay"></div>
+          <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+        </div>
       </div>
 
-      <h3 style="margin:18px 0 8px; font-size:14px; color:var(--muted);">Evaluation</h3>
-      <div class="eval-bar-container">
-        <div class="eval-bar">
-          <div class="eval-fill" id="evalFill"></div>
-          <div class="eval-zero-line"></div>
-        </div>
-        <div class="eval-value" id="evalValue">0.00</div>
+      <div class="material-balance" id="materialBalance">
+        <span>White: <strong id="whiteMaterial">+0</strong></span>
+        <span>Black: <strong id="blackMaterial">+0</strong></span>
       </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="toggleArrowRatings" checked>
+        <span>Show rating delta on arrows</span>
+      </label>
 
       <div class="row" style="margin-top:14px; align-items:center;">
         <button id="firstBtn" class="secondary">⏮ First</button>
@@ -434,6 +760,14 @@
         <div id="tagOpening">—</div>
       </div>
 
+      <div class="rating-guess">
+        <button id="guessEloBtn" class="secondary">Guess player ratings</button>
+        <div class="rating-guess-values">
+          <span>White: <span id="whiteEloGuess">—</span></span>
+          <span>Black: <span id="blackEloGuess">—</span></span>
+        </div>
+      </div>
+
       <h2 style="margin-top:22px;">Engine suggestions <span style="font-size:12px; font-weight:400; color:var(--muted);">(eval ± rating change vs best)</span></h2>
       <div class="pv-list">
         <div class="pv"><span class="rank">1</span><span class="move" id="pv1">—</span><span class="eval"
@@ -467,8 +801,273 @@
         engineConfigured: false,
         engineVersion: 'unknown',
         pendingAnalysis: null,
-        multiPv: new Map()
+        multiPv: new Map(),
+        bestEvalByPly: [],
+        lastHighlightedMove: null,
+        ratingGuessRequested: false,
+        settings: {
+          showArrowRatings: true
+        }
       };
+
+      const ELO_PER_PAWN = 60;
+      const MAX_CP = 4000;
+      const MATERIAL_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+      const CLASS_ICON_MAP = {
+        'Brilliant': 'brilliant',
+        'Great': 'great',
+        'Best': 'best',
+        'Excellent': 'excellent',
+        'Good': 'good',
+        'Inaccuracy': 'inaccuracy',
+        'Mistake': 'mistake',
+        'Blunder': 'blunder',
+        'Missed Win': 'missed-win'
+      };
+
+      function mateToCp(mate) {
+        const base = 10000;
+        return mate > 0 ? base - mate * 100 : -base - mate * 100;
+      }
+
+      function clampCp(cp) {
+        return Math.max(-MAX_CP, Math.min(MAX_CP, cp));
+      }
+
+      function formatRatingDelta(value) {
+        if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+        if (value === 0) return '0';
+        return value > 0 ? `+${value}` : `${value}`;
+      }
+
+      function formatEvalDisplay(entry) {
+        if (!entry) return '—';
+        if (entry.mate !== undefined && entry.mate !== null) {
+          return `#${entry.mate}`;
+        }
+        if (typeof entry.cp === 'number') {
+          return `${entry.cp >= 0 ? '+' : ''}${(entry.cp / 100).toFixed(2)}`;
+        }
+        return entry.eval || '—';
+      }
+
+      function getClassificationIcon(name) {
+        if (!name) return null;
+        const key = CLASS_ICON_MAP[name];
+        return key ? `move-classifications/${key}.png` : null;
+      }
+
+      function squareToDisplayCoords(square) {
+        if (!square || square.length < 2) return null;
+        const normalized = square.toLowerCase();
+        const file = normalized.charCodeAt(0) - 97;
+        const rank = parseInt(normalized[1], 10) - 1;
+        if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
+        if (state.orientation === 'white') {
+          return { col: file, row: 7 - rank };
+        }
+        return { col: 7 - file, row: rank };
+      }
+
+      function highlightBoardMove(move) {
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        boardEl.querySelectorAll('.square-last-move').forEach(el => el.classList.remove('square-last-move'));
+        boardEl.querySelectorAll('.square-last-destination').forEach(el => el.classList.remove('square-last-destination'));
+        if (!move) return;
+        const fromKey = move.from ? move.from.toLowerCase() : '';
+        const toKey = move.to ? move.to.toLowerCase() : '';
+        const fromEl = fromKey ? boardEl.querySelector(`[data-square='${fromKey}']`) : null;
+        const toEl = toKey ? boardEl.querySelector(`[data-square='${toKey}']`) : null;
+        const fromFallback = fromEl || (fromKey ? boardEl.querySelector(`.square-${fromKey}`) : null);
+        const toFallback = toEl || (toKey ? boardEl.querySelector(`.square-${toKey}`) : null);
+        if (fromFallback) fromFallback.classList.add('square-last-move');
+        if (toFallback) toFallback.classList.add('square-last-destination');
+      }
+
+      function renderBoardOverlay(move) {
+        const overlay = byId('boardOverlay');
+        if (!overlay) return;
+        overlay.innerHTML = '';
+        if (!move || !move.classification) return;
+        const iconPath = getClassificationIcon(move.classification);
+        if (!iconPath) return;
+        const coords = squareToDisplayCoords(move.to);
+        if (!coords) return;
+        const img = document.createElement('img');
+        img.src = iconPath;
+        img.alt = move.classification;
+        img.dataset.classification = move.classification;
+        img.style.setProperty('--col', coords.col);
+        img.style.setProperty('--row', coords.row);
+        overlay.appendChild(img);
+      }
+
+      function refreshBoardHighlights() {
+        highlightBoardMove(state.lastHighlightedMove);
+        renderBoardOverlay(state.lastHighlightedMove);
+      }
+
+      function formatMaterialDelta(value) {
+        if (!Number.isFinite(value) || value === 0) return '0';
+        return value > 0 ? `+${value}` : `${value}`;
+      }
+
+      function updateMaterialBalance() {
+        const whiteEl = byId('whiteMaterial');
+        const blackEl = byId('blackMaterial');
+        if (!whiteEl || !blackEl) return;
+        const boardMatrix = state.game.board();
+        let whiteTotal = 0;
+        let blackTotal = 0;
+        for (const row of boardMatrix) {
+          for (const piece of row) {
+            if (!piece) continue;
+            const value = MATERIAL_VALUES[piece.type] || 0;
+            if (piece.color === 'w') {
+              whiteTotal += value;
+            } else {
+              blackTotal += value;
+            }
+          }
+        }
+        const diff = whiteTotal - blackTotal;
+        whiteEl.textContent = formatMaterialDelta(diff);
+        blackEl.textContent = formatMaterialDelta(-diff);
+      }
+
+      function computePlayerAcpl(color) {
+        let total = 0;
+        let count = 0;
+        for (const move of state.verboseHistory) {
+          if (!move || move.color !== color) continue;
+          if (typeof move.lossCp === 'number') {
+            total += Math.max(0, Math.abs(move.lossCp));
+            count += 1;
+          }
+        }
+        if (!count) return null;
+        return total / count;
+      }
+
+      function guessEloFromAcpl(acpl) {
+        if (!Number.isFinite(acpl)) return null;
+        const estimate = 2800 - acpl * 12;
+        return Math.round(Math.max(600, Math.min(2800, estimate)));
+      }
+
+      function updateEloGuessDisplay() {
+        const whiteEl = byId('whiteEloGuess');
+        const blackEl = byId('blackEloGuess');
+        if (!whiteEl || !blackEl) return;
+        if (!state.ratingGuessRequested) {
+          whiteEl.textContent = '—';
+          whiteEl.removeAttribute('title');
+          blackEl.textContent = '—';
+          blackEl.removeAttribute('title');
+          return;
+        }
+
+        const whiteAcpl = computePlayerAcpl('w');
+        const blackAcpl = computePlayerAcpl('b');
+
+        if (Number.isFinite(whiteAcpl)) {
+          const guess = guessEloFromAcpl(whiteAcpl);
+          whiteEl.textContent = guess ? `≈${guess} (ACPL ${whiteAcpl.toFixed(1)})` : 'Need more data';
+          whiteEl.title = `Average centipawn loss: ${whiteAcpl.toFixed(1)}`;
+        } else {
+          whiteEl.textContent = 'Need more data';
+          whiteEl.removeAttribute('title');
+        }
+
+        if (Number.isFinite(blackAcpl)) {
+          const guess = guessEloFromAcpl(blackAcpl);
+          blackEl.textContent = guess ? `≈${guess} (ACPL ${blackAcpl.toFixed(1)})` : 'Need more data';
+          blackEl.title = `Average centipawn loss: ${blackAcpl.toFixed(1)}`;
+        } else {
+          blackEl.textContent = 'Need more data';
+          blackEl.removeAttribute('title');
+        }
+      }
+
+      function gradeMove(lossPawns, whiteBefore, whiteAfter, moverIsWhite) {
+        if (lossPawns <= -1.5) return 'Brilliant';
+        if (lossPawns <= -0.75) return 'Great';
+        if (Math.abs(lossPawns) <= 0.05) return 'Best';
+        if (lossPawns <= 0.2) return 'Excellent';
+        if (lossPawns <= 0.5) return 'Good';
+        if (lossPawns <= 1.0) return 'Inaccuracy';
+        if (lossPawns <= 2.5) return 'Mistake';
+
+        const winningThreshold = 250; // centipawns
+        const safeThreshold = 100;
+        if (moverIsWhite) {
+          if (whiteBefore >= winningThreshold && whiteAfter <= safeThreshold) {
+            return 'Missed Win';
+          }
+        } else {
+          if (whiteBefore <= -winningThreshold && whiteAfter >= -safeThreshold) {
+            return 'Missed Win';
+          }
+        }
+        return 'Blunder';
+      }
+
+      function computeMoveImpact(plyIndex, currentEntry) {
+        if (!currentEntry) return null;
+        const prevCp = state.bestEvalByPly[plyIndex];
+        const currentCp = typeof currentEntry.cp === 'number'
+          ? currentEntry.cp
+          : typeof currentEntry.mate === 'number'
+            ? mateToCp(currentEntry.mate)
+            : null;
+        if (prevCp === null || prevCp === undefined || currentCp === null) {
+          return null;
+        }
+
+        const moverIsWhite = plyIndex % 2 === 0;
+        const whiteBefore = moverIsWhite ? prevCp : -prevCp;
+        const whiteAfter = (plyIndex + 1) % 2 === 0 ? currentCp : -currentCp;
+        const lossCp = moverIsWhite
+          ? whiteBefore - whiteAfter
+          : whiteAfter - whiteBefore;
+
+        const lossPawns = lossCp / 100;
+        const classification = gradeMove(lossPawns, whiteBefore, whiteAfter, moverIsWhite);
+
+        return {
+          lossCp: Math.round(lossCp),
+          classification
+        };
+      }
+
+      function loadSettings() {
+        try {
+          const raw = localStorage.getItem('analyzerSettings');
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          if (typeof parsed.showArrowRatings === 'boolean') {
+            state.settings.showArrowRatings = parsed.showArrowRatings;
+          }
+        } catch (err) {
+          console.warn('Failed to load settings', err);
+        }
+      }
+
+      function saveSettings() {
+        try {
+          localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
+        } catch (err) {
+          console.warn('Failed to save settings', err);
+        }
+      }
+
+      function applySettingsToUi() {
+        const toggle = byId('toggleArrowRatings');
+        if (toggle) {
+          toggle.checked = !!state.settings.showArrowRatings;
+        }
+      }
 
       function initBoard() {
         const box = byId('board');
@@ -484,10 +1083,16 @@
       function syncArrowLayer() {
         const boardEl = byId('board');
         const svg = byId('arrowLayer');
+        if (!boardEl || !svg) return;
         const rect = boardEl.getBoundingClientRect();
-        svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.width}`);
+        svg.setAttribute('viewBox', '0 0 8 8');
         svg.setAttribute('width', rect.width);
         svg.setAttribute('height', rect.width);
+        const evalBar = byId('evalBar');
+        if (evalBar) {
+          evalBar.style.height = `${rect.width}px`;
+        }
+        refreshBoardHighlights();
       }
 
       function setStatus(id, msg, type) {
@@ -508,12 +1113,11 @@
         }
       }
 
-      async function fetchPGN(input, token) {
+      async function fetchPGN(input) {
         const id = extractGameId(input);
         if (!id) throw new Error('Please provide a Lichess URL or game ID.');
         const params = new URLSearchParams({ moves: '1', tags: '1', clocks: '1', opening: '1', evals: '0', literate: '0' });
         const headers = { 'Accept': 'application/x-chess-pgn' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch(`https://lichess.org/game/export/${id}.pgn?${params.toString()}`, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
         return res.text();
@@ -544,9 +1148,19 @@
         const temp = new Chess();
         const moves = game.history();
         temp.reset();
-        for (const mv of moves) {
+        for (let idx = 0; idx < moves.length; idx++) {
+          const mv = moves[idx];
           const played = temp.move(mv);
-          verbose.push({ ...played, fen: temp.fen(), eval: null });
+          verbose.push({
+            ...played,
+            ply: idx + 1,
+            fen: temp.fen(),
+            eval: null,
+            evalCp: null,
+            evalMate: null,
+            classification: null,
+            lossCp: null
+          });
         }
         return verbose;
       }
@@ -554,37 +1168,83 @@
       function renderMoves() {
         const container = byId('moves');
         container.innerHTML = '';
-        const h = state.verboseHistory;
-        for (let i = 0; i < h.length; i += 2) {
+        const history = state.verboseHistory;
+        for (let i = 0; i < history.length; i += 2) {
           const moveNo = document.createElement('div');
           moveNo.textContent = `${Math.floor(i / 2) + 1}.`;
           moveNo.className = 'muted';
-
-          const white = document.createElement('div');
-          white.className = 'mv';
-          white.textContent = h[i] ? h[i].san : '';
-
-          const whiteEval = document.createElement('div');
-          whiteEval.className = 'eval';
-          whiteEval.textContent = h[i] && h[i].eval ? h[i].eval : '';
-          white.appendChild(whiteEval);
-
-          const black = document.createElement('div');
-          black.className = 'mv';
-          black.textContent = h[i + 1] ? h[i + 1].san : '';
-
-          const blackEval = document.createElement('div');
-          blackEval.className = 'eval';
-          blackEval.textContent = h[i + 1] && h[i + 1].eval ? h[i + 1].eval : '';
-          black.appendChild(blackEval);
-
-          white.addEventListener('click', () => goToPly(i + 1));
-          black.addEventListener('click', () => goToPly(i + 2));
           container.appendChild(moveNo);
-          container.appendChild(white);
-          container.appendChild(black);
+
+          container.appendChild(createMoveCell(history[i], i));
+          container.appendChild(createMoveCell(history[i + 1], i + 1));
         }
         highlightActive();
+        updateEloGuessDisplay();
+      }
+
+      function createMoveCell(move, idx) {
+        const cell = document.createElement('div');
+        cell.className = 'mv';
+        if (!move) {
+          cell.classList.add('empty');
+          return cell;
+        }
+
+        const header = document.createElement('div');
+        header.className = 'mv-header';
+        const san = document.createElement('span');
+        san.className = 'mv-san';
+        san.textContent = move.san || '';
+        header.appendChild(san);
+
+        if (move.classification) {
+          const badge = document.createElement('span');
+          badge.className = 'mv-badge';
+          badge.dataset.grade = move.classification;
+          const iconPath = getClassificationIcon(move.classification);
+          if (iconPath) {
+            const icon = document.createElement('img');
+            icon.src = iconPath;
+            icon.alt = move.classification;
+            badge.appendChild(icon);
+          }
+          const label = document.createElement('span');
+          label.textContent = move.classification;
+          badge.appendChild(label);
+          header.appendChild(badge);
+        }
+
+        cell.appendChild(header);
+
+        const meta = document.createElement('div');
+        meta.className = 'mv-meta';
+        const evalSpan = document.createElement('span');
+        evalSpan.className = 'mv-eval';
+        evalSpan.textContent = move.eval && move.eval.trim() ? move.eval : '—';
+        meta.appendChild(evalSpan);
+
+        const lossSpan = document.createElement('span');
+        lossSpan.className = 'mv-loss';
+        if (typeof move.lossCp === 'number') {
+          const delta = -move.lossCp / 100;
+          if (delta > 0.01) {
+            lossSpan.textContent = `Δ +${delta.toFixed(2)}`;
+            lossSpan.classList.add('gain');
+          } else if (delta < -0.01) {
+            lossSpan.textContent = `Δ ${delta.toFixed(2)}`;
+            lossSpan.classList.add('loss');
+          } else {
+            lossSpan.textContent = 'Δ 0.00';
+          }
+        } else {
+          lossSpan.textContent = 'Δ —';
+        }
+        meta.appendChild(lossSpan);
+
+        cell.appendChild(meta);
+
+        cell.addEventListener('click', () => goToPly(idx + 1));
+        return cell;
       }
 
       function highlightActive() {
@@ -612,65 +1272,65 @@
             state.game.move({ from: mv.from, to: mv.to, promotion: mv.promotion });
           }
         }
+        updateMaterialBalance();
+        state.lastHighlightedMove = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
+        refreshBoardHighlights();
         highlightActive();
         analyzeCurrent();
 
         // Update evaluation bar with stored evaluation for this position
-        if (state.ply > 0 && state.verboseHistory[state.ply - 1].eval) {
-          updateEvalBar(state.verboseHistory[state.ply - 1].eval);
+        if (state.ply > 0) {
+          const last = state.verboseHistory[state.ply - 1];
+          const entry = last && (last.eval || typeof last.evalCp === 'number' || typeof last.evalMate === 'number')
+            ? { eval: last.eval, cp: last.evalCp, mate: last.evalMate ?? null }
+            : null;
+          updateEvalBar(entry, { ply: state.ply });
         } else {
           updateEvalBar(null); // Reset to neutral
         }
 
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
+        setUrlParam('ply', state.ply > 0 ? state.ply : null);
       }
 
       function drawArrows(list) {
         const svg = byId('arrowLayer');
+        if (!svg) return;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         defs.innerHTML = `
-        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#28a745" />
+        <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="0.6" markerHeight="0.6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#4ade80" />
         </marker>
-        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#007bff" />
+        <marker id="m2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="0.6" markerHeight="0.6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#38bdf8" />
         </marker>
-        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L8,4 L0,8 Z" fill="#dc3545" />
+        <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="0.6" markerHeight="0.6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#f97316" />
         </marker>`;
         svg.appendChild(defs);
         if (!list || !list.length) return;
-        const boardRect = byId('board').getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
         function squareCenter(sq) {
-          const file = sq.charCodeAt(0) - 97;
-          const rank = parseInt(sq[1], 10) - 1;
-          if (state.orientation === 'white') {
-            return {
-              x: (file + 0.5) * squareSize,
-              y: ((7 - rank) + 0.5) * squareSize
-            };
-          } else {
-            return {
-              x: ((7 - file) + 0.5) * squareSize,
-              y: (rank + 0.5) * squareSize
-            };
-          }
+          const coords = squareToDisplayCoords(sq);
+          if (!coords) return null;
+          return {
+            x: coords.col + 0.5,
+            y: coords.row + 0.5
+          };
         }
-        const colors = ['#28a745', '#007bff', '#dc3545']; // Green, Blue, Red - distinct colors
-        const opacities = [1.0, 0.25, 0.25]; // Best solid, 2nd more transparent, 3rd medium
+        const colors = ['#4ade80', '#38bdf8', '#f97316'];
+        const opacities = [0.95, 0.35, 0.35];
         list.forEach((entry, i) => {
           if (!entry || !entry.uci) return;
           const from = squareCenter(entry.uci.slice(0, 2));
           const to = squareCenter(entry.uci.slice(2, 4));
+          if (!from || !to) return;
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const len = Math.hypot(dx, dy);
           if (!len) return;
-          // Make arrows smaller - reduce the shorten amount and starting offset
-          const shorten = Math.min(12, len * 0.15); // Reduced from 20 to 12, 0.2 to 0.15
-          const startOffset = Math.min(12, len * 0.1); // Start closer to the piece
+          const shorten = Math.min(0.6, len * 0.25);
+          const startOffset = Math.min(0.4, len * 0.2);
           const sx = from.x + (dx / len) * startOffset;
           const sy = from.y + (dy / len) * startOffset;
           const ex = to.x - (dx / len) * shorten;
@@ -681,11 +1341,24 @@
           line.setAttribute('x2', ex);
           line.setAttribute('y2', ey);
           line.setAttribute('stroke', colors[i] || colors[2]);
-          line.setAttribute('stroke-width', Math.max(4, 6 - i * 0.8)); // Smaller base width, progressive reduction
+          const strokeWidth = Math.max(0.16, 0.28 - i * 0.04);
+          line.setAttribute('stroke-width', strokeWidth);
           line.setAttribute('stroke-linecap', 'round');
           line.setAttribute('marker-end', `url(#m${i + 1})`);
           line.setAttribute('opacity', opacities[i] || opacities[2]);
           svg.appendChild(line);
+
+          if (state.settings.showArrowRatings && typeof entry.ratingChange === 'number' && !Number.isNaN(entry.ratingChange) && Math.abs(entry.ratingChange) >= 1) {
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            const offsetX = (-dy / len) * 0.45;
+            const offsetY = (dx / len) * 0.45;
+            label.setAttribute('x', ex + offsetX);
+            label.setAttribute('y', ey + offsetY);
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('dominant-baseline', 'middle');
+            label.textContent = formatRatingDelta(entry.ratingChange);
+            svg.appendChild(label);
+          }
         });
       }
 
@@ -707,70 +1380,121 @@
       function updatePVDisplay(entries) {
         const ids = [1, 2, 3];
 
-        // Get the best move's evaluation as baseline
-        const bestEval = entries[0] && entries[0].eval ? parseFloat(entries[0].eval) || 0 : 0;
+        if (!entries || entries.length === 0) {
+          ids.forEach((idx) => {
+            const moveEl = byId(`pv${idx}`);
+            const evalEl = byId(`ev${idx}`);
+            if (moveEl) moveEl.textContent = '—';
+            if (evalEl) evalEl.textContent = '';
+          });
+          return;
+        }
+
+        const bestEntry = entries[0] || null;
+        const bestCp = bestEntry
+          ? (typeof bestEntry.cp === 'number'
+            ? bestEntry.cp
+            : typeof bestEntry.mate === 'number'
+              ? mateToCp(bestEntry.mate)
+              : null)
+          : null;
+
+        if (bestCp !== null) {
+          state.bestEvalByPly[state.ply] = bestCp;
+        }
 
         ids.forEach((idx, i) => {
           const moveEl = byId(`pv${idx}`);
           const evalEl = byId(`ev${idx}`);
           const entry = entries[i] || null;
+          if (!moveEl || !evalEl) return;
           if (entry) {
             moveEl.textContent = entry.san || entry.uci;
-            evalEl.textContent = entry.eval || '';
+            const evalText = entry.eval && entry.eval.trim() ? entry.eval : formatEvalDisplay(entry);
 
-            // Add rating change info (difference from best move)
-            const moveEval = parseFloat(entry.eval) || 0;
-            const ratingChange = (moveEval - bestEval) * 100; // Convert to rating points
+            const entryCp = typeof entry.cp === 'number'
+              ? entry.cp
+              : typeof entry.mate === 'number'
+                ? mateToCp(entry.mate)
+                : null;
 
-            // Update the display to include rating change
-            if (!isNaN(ratingChange) && Math.abs(ratingChange) > 1) { // Only show if significant difference
-              const sign = ratingChange > 0 ? '+' : '';
-              evalEl.textContent = `${entry.eval} (${sign}${ratingChange.toFixed(0)})`;
+            if (bestCp !== null && entryCp !== null) {
+              const diffCp = entryCp - bestCp;
+              const ratingChange = Math.round((diffCp / 100) * ELO_PER_PAWN);
+              const clampedRating = Math.max(-600, Math.min(600, ratingChange));
+              entry.ratingChange = clampedRating;
+              evalEl.textContent = evalText;
             } else {
-              evalEl.textContent = entry.eval || '';
+              entry.ratingChange = null;
+              evalEl.textContent = evalText;
             }
           } else {
-            moveEl.textContent = '—';
-            evalEl.textContent = '';
+            if (moveEl) moveEl.textContent = '—';
+            if (evalEl) evalEl.textContent = '';
           }
         });
 
-        // Update evaluation bar with the best move's evaluation
-        if (entries[0] && entries[0].eval) {
-          updateEvalBar(entries[0].eval);
+        if (bestEntry) {
+          updateEvalBar(bestEntry, { ply: state.ply });
         }
       }
 
-      function updateEvalBar(evalStr) {
+      function updateEvalBar(entry, opts = {}) {
         const evalValueEl = byId('evalValue');
-        const evalFillEl = byId('evalFill');
+        const pointerEl = byId('evalPointer');
+        const barEl = byId('evalBar');
+        const fillEl = byId('evalFill');
+        if (!evalValueEl || !pointerEl || !barEl) return;
 
-        if (!evalStr) {
+        if (!entry) {
           evalValueEl.textContent = '0.00';
-          evalFillEl.style.transform = 'translateX(-50%)';
+          pointerEl.style.top = '50%';
+          pointerEl.classList.remove('adv-white', 'adv-black');
+          if (fillEl) fillEl.style.height = '50%';
           return;
         }
 
-        // Handle mate scores
-        if (evalStr.startsWith('#')) {
-          const mateIn = parseInt(evalStr.substring(1));
-          evalValueEl.textContent = evalStr;
-          // Position bar based on mate score (very positive or negative)
-          const position = mateIn > 0 ? 100 : 0;
-          evalFillEl.style.transform = `translateX(${position - 50}%)`;
+        const displayText = entry.eval && entry.eval.trim() ? entry.eval : formatEvalDisplay(entry);
+        evalValueEl.textContent = displayText;
+
+        const ply = typeof opts.ply === 'number' ? opts.ply : state.ply;
+
+        let cpValue = null;
+        if (typeof entry.cp === 'number') {
+          cpValue = entry.cp;
+        } else if (typeof entry.mate === 'number') {
+          cpValue = mateToCp(entry.mate);
+        } else if (entry.eval && entry.eval.startsWith('#')) {
+          const mateVal = parseInt(entry.eval.substring(1), 10);
+          if (!Number.isNaN(mateVal)) {
+            cpValue = mateToCp(mateVal);
+          }
+        } else if (entry.eval) {
+          const parsed = parseFloat(entry.eval);
+          if (!Number.isNaN(parsed)) cpValue = parsed * 100;
+        }
+
+        if (cpValue === null) {
+          pointerEl.style.top = '50%';
+          pointerEl.classList.remove('adv-white', 'adv-black');
+          if (fillEl) fillEl.style.height = '50%';
           return;
         }
 
-        // Handle centipawn scores
-        const cp = parseFloat(evalStr);
-        evalValueEl.textContent = evalStr;
+        const cpWhite = ply % 2 === 0 ? cpValue : -cpValue;
+        const clamped = clampCp(cpWhite);
+        const percentWhite = (clamped + MAX_CP) / (2 * MAX_CP);
+        pointerEl.style.top = `${(1 - percentWhite) * 100}%`;
+        if (fillEl) {
+          fillEl.style.height = `${percentWhite * 100}%`;
+        }
 
-        // Convert centipawn to percentage (clamp between -300 to +300 cp for display)
-        const clampedCp = Math.max(-300, Math.min(300, cp));
-        const percentage = (clampedCp + 300) / 600; // 0 to 1 range
-        const position = percentage * 100; // 0 to 100%
-
-        evalFillEl.style.transform = `translateX(${position - 50}%)`;
+        pointerEl.classList.remove('adv-white', 'adv-black');
+        if (cpWhite > 80) {
+          pointerEl.classList.add('adv-white');
+        } else if (cpWhite < -80) {
+          pointerEl.classList.add('adv-black');
+        }
       }
 
       function ensureEngine() {
@@ -847,9 +1571,22 @@
             // Store the current position's evaluation in history
             if (state.ply > 0 && state.multiPv && state.multiPv.has(1)) {
               const bestMove = state.multiPv.get(1);
-              if (bestMove && bestMove.eval) {
-                state.verboseHistory[state.ply - 1].eval = bestMove.eval;
+              const historyEntry = state.verboseHistory[state.ply - 1];
+              if (bestMove && historyEntry) {
+                const evalText = bestMove.eval && bestMove.eval.trim() ? bestMove.eval : formatEvalDisplay(bestMove);
+                historyEntry.eval = evalText;
+                historyEntry.evalCp = typeof bestMove.cp === 'number' ? bestMove.cp : null;
+                historyEntry.evalMate = typeof bestMove.mate === 'number' ? bestMove.mate : null;
+                const impact = computeMoveImpact(state.ply - 1, bestMove);
+                if (impact) {
+                  historyEntry.lossCp = impact.lossCp;
+                  historyEntry.classification = impact.classification;
+                } else {
+                  historyEntry.lossCp = null;
+                  historyEntry.classification = null;
+                }
                 renderMoves(); // Re-render to show the evaluation
+                refreshBoardHighlights();
               }
             }
             setStatus('engStatus', `Analysis complete (${engineLabel})`);
@@ -871,24 +1608,30 @@
         if (rank < 1 || rank > 3) return;
         const moves = pv[1].trim().split(/\s+/);
         let evalStr = '';
+        let mateVal = null;
+        let cpVal = null;
         if (scoreMate) {
-          evalStr = `#${scoreMate[1]}`;
+          mateVal = parseInt(scoreMate[1], 10);
+          evalStr = `#${mateVal}`;
+          cpVal = mateToCp(mateVal);
         } else if (scoreCp) {
-          const cp = parseInt(scoreCp[1], 10);
-          evalStr = `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
+          cpVal = parseInt(scoreCp[1], 10);
+          evalStr = `${cpVal >= 0 ? '+' : ''}${(cpVal / 100).toFixed(2)}`;
         }
         const entry = {
           rank,
           uci: moves[0],
-          eval: evalStr
+          eval: evalStr,
+          mate: mateVal,
+          cp: cpVal
         };
         const baseFen = state.ply === 0 ? new Chess().fen() : state.verboseHistory[state.ply - 1].fen;
         entry.san = uciToSan(baseFen, entry.uci);
         state.multiPv = state.multiPv || new Map();
         state.multiPv.set(rank, entry);
         const list = [1, 2, 3].map(r => state.multiPv.get(r) || null);
-        drawArrows(list);
         updatePVDisplay(list);
+        drawArrows(list);
         setStatus('engStatus', `Analyzing… depth ${line.match(/\bdepth (\d+)/)?.[1] || ''}`);
       }
 
@@ -941,31 +1684,29 @@
         window.history.replaceState({}, '', url);
       }
 
-      function extractGameId(input) {
-        if (!input) return null;
-        try {
-          const url = new URL(input);
-          const pathSegments = url.pathname.split('/').filter(Boolean);
-          return pathSegments[0] || input;
-        } catch (e) {
-          return input; // Assume it's already a game ID
-        }
-      }
-
-      async function loadGame(gameId, token = '') {
+      async function loadGame(gameId, targetPly = null) {
         if (!gameId) return;
         try {
           setStatus('loadStatus', 'Fetching PGN…');
-          const pgn = await fetchPGN(gameId, token);
+          const pgn = await fetchPGN(gameId);
           state.game.loadPgn(pgn);
           state.verboseHistory = buildHistory(state.game);
+          state.bestEvalByPly = [];
+          state.multiPv = new Map();
           state.game.reset();
           state.ply = 0;
           state.board.position('start');
+          state.lastHighlightedMove = null;
+          refreshBoardHighlights();
+          updateMaterialBalance();
           populateHeaders(parseHeaders(pgn));
           renderMoves();
           if (state.engineReady) state.engine.postMessage('ucinewgame');
-          goToPly(state.verboseHistory.length);
+          const maxPly = state.verboseHistory.length;
+          const desiredPly = typeof targetPly === 'number'
+            ? Math.max(0, Math.min(maxPly, targetPly))
+            : maxPly;
+          goToPly(desiredPly);
           setStatus('loadStatus', 'Game ready.', 'ok');
         } catch (err) {
           console.error(err);
@@ -976,12 +1717,11 @@
       function bindUi() {
         byId('loadBtn').addEventListener('click', async () => {
           const input = byId('lichessUrl').value.trim();
-          const token = byId('token').value;
           if (!input) return setStatus('loadStatus', 'Please paste a Lichess URL or ID.', 'error');
 
           const gameId = extractGameId(input);
           setUrlParam('game', gameId);
-          await loadGame(gameId, token);
+          await loadGame(gameId);
         });
 
         byId('lichessUrl').addEventListener('input', () => {
@@ -997,7 +1737,10 @@
         byId('flipBtn').addEventListener('click', () => {
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
-          requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
+          requestAnimationFrame(() => {
+            drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []);
+            refreshBoardHighlights();
+          });
         });
         byId('timeMs').addEventListener('change', analyzeCurrent);
         byId('depth').addEventListener('change', analyzeCurrent);
@@ -1007,6 +1750,25 @@
           const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
           setTheme(newTheme);
         });
+
+        const arrowToggle = byId('toggleArrowRatings');
+        if (arrowToggle) {
+          arrowToggle.addEventListener('change', (event) => {
+            state.settings.showArrowRatings = event.target.checked;
+            saveSettings();
+            requestAnimationFrame(() => drawArrows(state.multiPv ? [1, 2, 3].map(r => state.multiPv.get(r) || null) : []));
+          });
+        }
+
+        const guessBtn = byId('guessEloBtn');
+        if (guessBtn) {
+          guessBtn.addEventListener('click', () => {
+            state.ratingGuessRequested = true;
+            updateEloGuessDisplay();
+          });
+        }
+
+        applySettingsToUi();
       }
 
       // Theme management
@@ -1061,20 +1823,27 @@
           return;
         }
 
+        loadSettings();
         initTheme();
         initBoard();
         bindUi();
         updateEvalBar(null); // Initialize evaluation bar to neutral
+        updateMaterialBalance();
+        updateEloGuessDisplay();
         setStatus('engStatus', 'Initializing engine…');
         ensureEngine();
 
         // Check for game parameter in URL and auto-load
         const gameParam = getUrlParam('game');
+        const plyParam = parseInt(getUrlParam('ply'), 10);
+        const targetPly = Number.isFinite(plyParam) ? plyParam : null;
         if (gameParam) {
           byId('lichessUrl').value = gameParam;
           setUrlParam('game', gameParam); // Ensure it's in URL
           // Auto-load after a short delay to ensure engine is ready
-          setTimeout(() => loadGame(gameParam), 1000);
+          setTimeout(() => loadGame(gameParam, targetPly), 1000);
+        } else if (targetPly !== null) {
+          setUrlParam('ply', null);
         }
       }
 
