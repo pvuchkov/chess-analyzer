@@ -229,6 +229,59 @@
       display: block;
     }
 
+    .board-badge-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .board-move-badge {
+      position: absolute;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.82);
+      border: 2px solid transparent;
+      box-shadow: 0 12px 30px rgba(8, 15, 35, 0.45);
+      transform: translate(-50%, -50%);
+    }
+
+    .board-move-badge-icon {
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 4px rgba(8, 15, 35, 0.45));
+    }
+
+    .board-move-badge[data-classification="best"],
+    .board-move-badge[data-classification="excellent"],
+    .board-move-badge[data-classification="good"],
+    .board-move-badge[data-classification="brilliant"],
+    .board-move-badge[data-classification="great"] {
+      border-color: var(--ok);
+      background: rgba(34, 197, 94, 0.2);
+    }
+
+    .board-move-badge[data-classification="book"] {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.22);
+    }
+
+    .board-move-badge[data-classification="inaccuracy"],
+    .board-move-badge[data-classification="miss"] {
+      border-color: var(--warn);
+      background: rgba(250, 204, 21, 0.24);
+    }
+
+    .board-move-badge[data-classification="mistake"],
+    .board-move-badge[data-classification="blunder"] {
+      border-color: var(--danger);
+      background: rgba(248, 113, 113, 0.25);
+    }
+
     .eval-column {
       width: 52px;
       display: flex;
@@ -633,6 +686,11 @@
         <div class="board-wrap">
           <div id="board"></div>
           <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+          <div class="board-badge-layer">
+            <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
+              <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+            </div>
+          </div>
         </div>
         <div class="eval-column">
           <div class="eval-label" id="evalWhiteValue">0.00</div>
@@ -746,7 +804,8 @@
         engineQueue: [],
         currentRequest: null,
         analysisToken: 0,
-        suggestionMode: 'played'
+        suggestionMode: 'played',
+        badgeRaf: null
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -906,9 +965,9 @@
           if (classification && Object.prototype.hasOwnProperty.call(bucket.counts, classification)) {
             bucket.counts[classification] += 1;
           }
-          const expectedLoss = entry.analysis.expectedLoss;
-          if (Number.isFinite(expectedLoss)) {
-            bucket.accuracySum += expectedLoss;
+          const moveAccuracy = entry.analysis.accuracy;
+          if (Number.isFinite(moveAccuracy)) {
+            bucket.accuracySum += moveAccuracy;
             bucket.accuracyCount++;
           }
           const cpLoss = entry.analysis.cpLoss;
@@ -942,9 +1001,8 @@
           const accuracyEl = row.querySelector('[data-role="accuracy"]');
           if (accuracyEl) {
             if (bucket.accuracyCount > 0) {
-              const avgLoss = bucket.accuracySum / bucket.accuracyCount;
-              const accuracy = Math.max(0, Math.min(100, 100 * (1 - avgLoss)));
-              accuracyEl.textContent = `${accuracy.toFixed(1)}%`;
+              const avgAccuracy = bucket.accuracySum / bucket.accuracyCount;
+              accuracyEl.textContent = `${avgAccuracy.toFixed(1)}%`;
             } else {
               accuracyEl.textContent = '—';
             }
@@ -1002,6 +1060,61 @@
         } else {
           state.board.position(fen);
         }
+        scheduleBoardBadgeUpdate();
+      }
+
+      function updateBoardClassificationBadge() {
+        const badge = byId('boardMoveBadge');
+        const icon = byId('boardMoveBadgeIcon');
+        const boardEl = byId('board');
+        if (!badge || !icon || !boardEl) return;
+
+        badge.style.display = 'none';
+        badge.removeAttribute('data-classification');
+        icon.removeAttribute('src');
+        icon.alt = '';
+
+        if (state.ply === 0) {
+          return;
+        }
+
+        const entry = state.verboseHistory[state.ply - 1];
+        if (!entry || !entry.analysis || !entry.analysis.classification || !entry.to) {
+          return;
+        }
+
+        const iconPath = classificationToIcon(entry.analysis.classification);
+        if (!iconPath) {
+          return;
+        }
+
+        const squareEl = boardEl.querySelector(`[data-square="${entry.to}"]`);
+        if (!squareEl) {
+          return;
+        }
+
+        const boardRect = boardEl.getBoundingClientRect();
+        const squareRect = squareEl.getBoundingClientRect();
+        const left = squareRect.left - boardRect.left + squareRect.width / 2;
+        const top = squareRect.top - boardRect.top + squareRect.height / 2;
+
+        const normalizedClass = entry.analysis.classification.toLowerCase().replace(/\s+/g, '-');
+        badge.style.left = `${left}px`;
+        badge.style.top = `${top}px`;
+        badge.setAttribute('data-classification', normalizedClass);
+        icon.src = iconPath;
+        icon.alt = entry.analysis.classification;
+        badge.style.display = 'flex';
+      }
+
+      function scheduleBoardBadgeUpdate() {
+        if (state.badgeRaf != null) {
+          cancelAnimationFrame(state.badgeRaf);
+        }
+        state.badgeRaf = requestAnimationFrame(() => {
+          state.badgeRaf = null;
+          updateBoardClassificationBadge();
+        });
       }
 
       function formatMaterialScore(score) {
@@ -1209,6 +1322,7 @@
         window.addEventListener('resize', () => {
           state.board.resize();
           syncArrowLayer();
+          scheduleBoardBadgeUpdate();
         });
       }
 
@@ -1601,11 +1715,28 @@
         }
       }
 
-      function cpToExpectedPoints(cp) {
-        if (cp == null || Number.isNaN(cp)) return 0.5;
+      function centipawnsToWinPercent(cp) {
+        if (cp == null || Number.isNaN(cp)) return null;
         const capped = Math.max(-1000, Math.min(1000, cp));
-        const exponent = Math.pow(10, -capped / 400);
-        return 1 / (1 + exponent);
+        const expTerm = Math.exp(-0.00368208 * capped);
+        const ratio = 2 / (1 + expTerm) - 1;
+        const winPercent = 50 + 50 * ratio;
+        return Math.max(0, Math.min(100, winPercent));
+      }
+
+      function cpToExpectedPoints(cp) {
+        const winPercent = centipawnsToWinPercent(cp);
+        if (winPercent == null) return 0.5;
+        return winPercent / 100;
+      }
+
+      function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
+        if (!Number.isFinite(winPercentBefore) || !Number.isFinite(winPercentAfter)) {
+          return null;
+        }
+        const delta = winPercentBefore - winPercentAfter;
+        const raw = 103.1668 * Math.exp(-0.04354 * delta) - 3.1669;
+        return Math.max(0, Math.min(100, raw));
       }
 
       function detectSacrifice(moveEntry) {
@@ -1630,7 +1761,17 @@
         }
       }
 
-      function classifyMoveContext({ bestEp, actualEp, beforeEp, moveEntry, bestEntry, actualEntry }) {
+      function classifyMoveContext({
+        bestEp,
+        actualEp,
+        beforeEp,
+        moveEntry,
+        bestEntry,
+        actualEntry,
+        winPercentBefore,
+        winPercentAfter,
+        pvEntries
+      }) {
         const safeBefore = Number.isFinite(beforeEp) ? beforeEp : null;
         const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
         const loss = Math.max(0, bestEp - actualEp);
@@ -1649,21 +1790,55 @@
           classification = 'blunder';
         }
 
-        if ((classification === 'best' || classification === 'excellent' || classification === 'good') && safeBefore != null) {
-          if (actualEp >= safeBefore + 0.25 && actualEp >= 0.55) {
-            classification = 'great';
+        const baseline = classification;
+        const winBefore = Number.isFinite(winPercentBefore) ? winPercentBefore : null;
+        const winAfter = Number.isFinite(winPercentAfter) ? winPercentAfter : null;
+        const winDelta = winBefore != null && winAfter != null ? winAfter - winBefore : null;
+
+        let secondBestWin = null;
+        if (pvEntries && pvEntries.length) {
+          const secondEntry = pvEntries.find((entry) => entry.rank === 2);
+          if (secondEntry) {
+            const secondCp = evalStringToCentipawns(secondEntry.eval);
+            const win = centipawnsToWinPercent(secondCp);
+            if (Number.isFinite(win)) {
+              secondBestWin = win;
+            }
           }
         }
 
-        if ((classification === 'best' || classification === 'excellent') && detectSacrifice(moveEntry) && actualEp >= 0.45 && bestEp >= 0.45) {
-          classification = 'brilliant';
+        let greatCandidate = false;
+        if ((baseline === 'best' || baseline === 'excellent' || baseline === 'good') && winBefore != null && winAfter != null) {
+          const savedFromLosing = winBefore < 35 && winAfter >= 45 && winDelta >= 10;
+          const convertedToWin = winBefore >= 35 && winBefore <= 60 && winAfter >= 65 && winDelta >= 10;
+          const onlyMove = sameAsBest && secondBestWin != null && winAfter - secondBestWin >= 12;
+          if (savedFromLosing || convertedToWin || onlyMove) {
+            greatCandidate = true;
+          }
+        }
+
+        let brilliantCandidate = false;
+        if ((baseline === 'best' || baseline === 'excellent') && detectSacrifice(moveEntry) && winAfter != null) {
+          const notAlreadyWinning = !(winBefore != null && winBefore >= 80);
+          const keepsPositionPlayable = winAfter >= 40;
+          const maintainsStrength = winBefore == null || winAfter >= winBefore - 5;
+          if (notAlreadyWinning && keepsPositionPlayable && maintainsStrength) {
+            brilliantCandidate = true;
+          }
+        }
+
+        let finalClassification = classification;
+        if (brilliantCandidate) {
+          finalClassification = 'brilliant';
+        } else if (greatCandidate) {
+          finalClassification = 'great';
         }
 
         if (safeBefore != null && safeBefore >= 0.65 && bestEp >= 0.85 && actualEp <= 0.55) {
-          classification = 'miss';
+          finalClassification = 'miss';
         }
 
-        return { classification, expectedLoss: loss };
+        return { classification: finalClassification, expectedLoss: loss };
       }
 
       const engineController = {
@@ -1958,6 +2133,15 @@
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
         const bestEp = cpToExpectedPoints(bestCp);
         const actualEp = cpToExpectedPoints(actualCp);
+        let winPercentBefore = centipawnsToWinPercent(bestCp);
+        if (winPercentBefore == null && Number.isFinite(beforeEp)) {
+          winPercentBefore = beforeEp * 100;
+        }
+        let winPercentAfter = centipawnsToWinPercent(actualCp);
+        if (winPercentAfter == null && Number.isFinite(actualEp)) {
+          winPercentAfter = actualEp * 100;
+        }
+        const accuracyPercent = computeMoveAccuracy(winPercentBefore, winPercentAfter);
         const cpLoss = computeCpLoss(bestCp, actualCp, moveEntry.color);
         const classificationData = classifyMoveContext({
           bestEp,
@@ -1965,7 +2149,10 @@
           beforeEp,
           moveEntry,
           bestEntry,
-          actualEntry
+          actualEntry,
+          winPercentBefore,
+          winPercentAfter,
+          pvEntries
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
         moveEntry.analysis = {
@@ -1980,9 +2167,15 @@
           bestCp,
           actualCp,
           cpLoss,
+          winPercentBefore,
+          winPercentAfter,
+          accuracy: accuracyPercent,
           depth: multiResult.depth || depth || 0,
           movetime
         };
+        if (state.ply === index + 1) {
+          scheduleBoardBadgeUpdate();
+        }
         state.analysisCache.set(index + 1, moveEntry.analysis);
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
           applyAnalysisForCurrentPly();
@@ -2164,6 +2357,7 @@
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
             drawArrows(analysis ? analysis.pvEntries || [] : []);
+            updateBoardClassificationBadge();
           });
         });
         byId('themeToggle').addEventListener('click', () => {
