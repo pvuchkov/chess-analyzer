@@ -743,17 +743,17 @@
       background: rgba(148, 163, 184, 0.12);
     }
 
-    .pv:nth-child(1) {
+    .pv-rank-1 {
       background: rgba(34, 197, 94, 0.15);
       box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35);
     }
 
-    .pv:nth-child(2) {
+    .pv-rank-2 {
       background: rgba(56, 189, 248, 0.15);
       box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
     }
 
-    .pv:nth-child(3) {
+    .pv-rank-3 {
       background: rgba(250, 204, 21, 0.18);
       box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
     }
@@ -959,14 +959,7 @@
           <div class="row" style="margin:0; justify-content:flex-end;">
             <button id="suggestionToggle" class="secondary">Show next move advice</button>
           </div>
-          <div class="pv-list">
-            <div class="pv"><span class="rank">1</span><span class="move" id="pv1">—</span><span class="eval"
-                id="ev1"></span></div>
-            <div class="pv"><span class="rank">2</span><span class="move" id="pv2">—</span><span class="eval"
-                id="ev2"></span></div>
-            <div class="pv"><span class="rank">3</span><span class="move" id="pv3">—</span><span class="eval"
-                id="ev3"></span></div>
-          </div>
+          <div class="pv-list" id="pvList"></div>
           <div id="engStatus" class="status"></div>
         </div>
       </details>
@@ -1039,8 +1032,8 @@
           title: 'Switch to played-move review'
         }
       };
-      const MULTIPV_MAX_CANDIDATES = 5;
-      const PV_KEEP_MARGIN = 0.06;
+      const MULTIPV_MAX_CANDIDATES = 10;
+      const PV_KEEP_MARGIN = 0.01;
       const PV_ONLY_ONE_MARGIN = 0.10;
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 1e-6;
@@ -1927,49 +1920,66 @@
       }
 
       function updatePVDisplay(entries) {
-        const ids = [1, 2, 3];
-        const bestEntry = Array.isArray(entries) && entries.length ? entries[0] : null;
+        const listEl = byId('pvList');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (!Array.isArray(entries) || !entries.length) {
+          return;
+        }
+
+        const bestEntry = entries[0];
         const bestEvalNumeric = bestEntry && typeof bestEntry.eval === 'string' ? parseFloat(bestEntry.eval) : NaN;
         const bestEvalValue = Number.isNaN(bestEvalNumeric) ? null : bestEvalNumeric;
         const bestEp = bestEntry && Number.isFinite(bestEntry.expectedPoints) ? bestEntry.expectedPoints : null;
 
-        ids.forEach((idx, i) => {
-          const moveEl = byId(`pv${idx}`);
-          const evalEl = byId(`ev${idx}`);
-          const entry = entries[i] || null;
-          if (!moveEl || !evalEl) return;
-          if (entry) {
-            moveEl.textContent = entry.san || entry.uci;
-            let evalText = entry.eval || '';
-            let annotation = '';
-
-            if (bestEp != null && Number.isFinite(entry.expectedPoints)) {
-              const dropPercent = (bestEp - entry.expectedPoints) * 100;
-              if (dropPercent > 0.5) {
-                const approx = formatWinDeltaDisplay(dropPercent);
-                annotation = approx ? `−${approx}` : `−${dropPercent.toFixed(1)}%`;
-              }
-            } else if (bestEvalValue != null) {
-              const moveEval = entry.eval != null ? parseFloat(entry.eval) : NaN;
-              if (!Number.isNaN(moveEval)) {
-                const ratingChange = (moveEval - bestEvalValue) * 100;
-                if (Math.abs(ratingChange) > 1) {
-                  const sign = ratingChange > 0 ? '+' : '';
-                  annotation = `${sign}${ratingChange.toFixed(0)}`;
-                }
-              }
-            }
-
-            if (annotation) {
-              evalText = evalText ? `${evalText} (${annotation})` : annotation;
-            }
-            evalEl.textContent = evalText;
-          } else {
-            moveEl.textContent = '—';
-            evalEl.textContent = '';
+        entries.slice(0, MULTIPV_MAX_CANDIDATES).forEach((entry, index) => {
+          const item = document.createElement('div');
+          item.className = 'pv';
+          if (index < 3) {
+            item.classList.add(`pv-rank-${index + 1}`);
           }
-        });
 
+          const rankEl = document.createElement('span');
+          rankEl.className = 'rank';
+          rankEl.textContent = index + 1;
+          item.appendChild(rankEl);
+
+          const moveEl = document.createElement('span');
+          moveEl.className = 'move';
+          moveEl.textContent = entry && (entry.san || entry.uci) ? (entry.san || entry.uci) : '—';
+          item.appendChild(moveEl);
+
+          const evalEl = document.createElement('span');
+          evalEl.className = 'eval';
+          let evalText = entry && entry.eval ? entry.eval : '';
+          let annotation = '';
+
+          if (bestEp != null && entry && Number.isFinite(entry.expectedPoints)) {
+            const dropPercent = (bestEp - entry.expectedPoints) * 100;
+            if (dropPercent > 0.5) {
+              const approx = formatWinDeltaDisplay(dropPercent);
+              annotation = approx ? `−${approx}` : `−${dropPercent.toFixed(1)}%`;
+            }
+          } else if (bestEvalValue != null && entry) {
+            const moveEval = entry.eval != null ? parseFloat(entry.eval) : NaN;
+            if (!Number.isNaN(moveEval)) {
+              const ratingChange = (moveEval - bestEvalValue) * 100;
+              if (Math.abs(ratingChange) > 1) {
+                const sign = ratingChange > 0 ? '+' : '';
+                annotation = `${sign}${ratingChange.toFixed(0)}`;
+              }
+            }
+          }
+
+          if (annotation) {
+            evalText = evalText ? `${evalText} (${annotation})` : annotation;
+          }
+          evalEl.textContent = evalText;
+          item.appendChild(evalEl);
+
+          listEl.appendChild(item);
+        });
       }
 
       function clampRating(value) {
@@ -2174,8 +2184,8 @@
 
       function expectedPointsForEntry(entry, moverColor = 'w') {
         if (!entry) return null;
-        const color = moverColor === 'b' ? 'b' : 'w';
-        const epWdl = expectedPointsFromWdl(entry.wdl, color);
+        const normalizedColor = moverColor === 'b' ? 'b' : 'w';
+        const epWdl = expectedPointsFromWdl(entry.wdl, normalizedColor);
         if (Number.isFinite(epWdl)) {
           return epWdl;
         }
@@ -2183,7 +2193,8 @@
         if (!Number.isFinite(cp)) {
           return null;
         }
-        return cpToExpectedPoints(cp);
+        const epWhite = cpToExpectedPoints(cp);
+        return normalizedColor === 'w' ? epWhite : 1 - epWhite;
       }
 
       function shortlistPvEntries(entries, options = {}) {
@@ -3018,11 +3029,10 @@
         let loss = null;
         if (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp)) {
           loss = Math.max(0, bestMoverEp - actualMoverEp);
-          if (cpGap != null && cpGap <= 15) {
-            loss = 0;
-          }
         }
-        const zeroLossThreshold = 0.0025;
+        const bestLossMargin = 0.01;
+        const lossIsKnown = Number.isFinite(loss);
+        const qualifiesAsBest = sameAsBest || (lossIsKnown && loss <= (bestLossMargin + PV_EPSILON));
 
         const bestMateVal = bestEval && bestEval.type === 'mate' ? bestEval.value : null;
         const actualMateVal = actualEval && actualEval.type === 'mate' ? actualEval.value : null;
@@ -3046,9 +3056,9 @@
             classification = 'blunder';
           }
         } else {
-          if (loss == null) {
-            classification = (sameAsBest || (cpGap != null && cpGap <= 15)) ? 'best' : 'good';
-          } else if (sameAsBest || loss <= zeroLossThreshold || (cpGap != null && cpGap <= 15)) {
+          if (!lossIsKnown) {
+            classification = qualifiesAsBest ? 'best' : 'good';
+          } else if (qualifiesAsBest) {
             classification = 'best';
           } else if (loss <= 0.02) {
             classification = 'excellent';
