@@ -237,38 +237,27 @@
 
     .board-move-badge {
       position: absolute;
-      width: 46px;
-      height: 46px;
-      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(15, 23, 42, 0.82);
-      border: 2px solid transparent;
-      box-shadow: 0 12px 30px rgba(8, 15, 35, 0.45);
-      transform: translate(-50%, -50%);
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 6px 14px rgba(8, 15, 35, 0.35);
+      pointer-events: none;
     }
 
     .board-move-badge-icon {
-      width: 26px;
-      height: 26px;
+      width: 14px;
+      height: 14px;
       object-fit: contain;
-      filter: drop-shadow(0 1px 4px rgba(8, 15, 35, 0.45));
+      filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.45));
     }
 
     .board-move-badge-overlay {
-      position: absolute;
-      bottom: -6px;
-      right: -6px;
-      width: 20px;
-      height: 20px;
-      object-fit: contain;
       display: none;
-      filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.55));
-    }
-
-    .board-move-badge[data-overlay] .board-move-badge-overlay {
-      display: block;
     }
 
     .board-move-badge[data-classification="best"],
@@ -670,12 +659,6 @@
       height: 18px;
       object-fit: contain;
       filter: drop-shadow(0 0 2px rgba(15, 23, 42, 0.5));
-    }
-
-    .classification-icon.overlay {
-      width: 16px;
-      height: 16px;
-      opacity: 0.95;
     }
 
     .pv-list {
@@ -1241,7 +1224,12 @@
           return;
         }
 
-        const iconPath = classificationToIcon(entry.analysis.classification);
+        const chosenClass = entry.analysis.overlay || entry.analysis.classification;
+        if (!chosenClass) {
+          return;
+        }
+
+        const iconPath = classificationToIcon(chosenClass);
         if (!iconPath) {
           return;
         }
@@ -1253,26 +1241,18 @@
 
         const boardRect = boardEl.getBoundingClientRect();
         const squareRect = squareEl.getBoundingClientRect();
-        const left = squareRect.left - boardRect.left + squareRect.width / 2;
-        const top = squareRect.top - boardRect.top + squareRect.height / 2;
+        const badgeSize = 22;
+        const margin = 6;
+        const left = Math.max(0, squareRect.left - boardRect.left + squareRect.width - badgeSize - margin);
+        const top = Math.max(0, squareRect.top - boardRect.top + margin);
 
-        const normalizedClass = entry.analysis.classification.toLowerCase().replace(/\s+/g, '-');
+        const normalizedClass = chosenClass.toLowerCase().replace(/\s+/g, '-');
         badge.style.left = `${left}px`;
         badge.style.top = `${top}px`;
         badge.setAttribute('data-classification', normalizedClass);
         icon.src = iconPath;
-        icon.alt = entry.analysis.classification;
-        const overlayClass = entry.analysis.overlay;
-        if (overlayClass) {
-          const normalizedOverlay = overlayClass.toLowerCase().replace(/\s+/g, '-');
-          const overlayPath = classificationToIcon(overlayClass);
-          if (overlayPath) {
-            overlayIcon.src = overlayPath;
-            overlayIcon.alt = `${overlayClass.charAt(0).toUpperCase()}${overlayClass.slice(1)}`;
-            overlayIcon.style.display = 'block';
-            badge.setAttribute('data-overlay', normalizedOverlay);
-          }
-        }
+        icon.alt = chosenClass;
+        badge.removeAttribute('data-overlay');
         badge.style.display = 'flex';
       }
 
@@ -1588,26 +1568,15 @@
         cell.appendChild(label);
 
         if (entry && entry.analysis) {
-          const baseClass = entry.analysis.classification;
-          if (baseClass) {
-            const iconPath = classificationToIcon(baseClass);
+          const chosenClass = entry.analysis.overlay || entry.analysis.classification;
+          if (chosenClass) {
+            const iconPath = classificationToIcon(chosenClass);
             if (iconPath) {
               const icon = document.createElement('img');
               icon.src = iconPath;
-              icon.alt = baseClass;
+              icon.alt = chosenClass;
               icon.className = 'classification-icon';
               cell.appendChild(icon);
-            }
-          }
-          const overlayClass = entry.analysis.overlay;
-          if (overlayClass) {
-            const overlayPath = classificationToIcon(overlayClass);
-            if (overlayPath) {
-              const overlayIcon = document.createElement('img');
-              overlayIcon.src = overlayPath;
-              overlayIcon.alt = `${overlayClass.charAt(0).toUpperCase()}${overlayClass.slice(1)}`;
-              overlayIcon.className = 'classification-icon overlay';
-              cell.appendChild(overlayIcon);
             }
           }
         }
@@ -2078,22 +2047,42 @@
         if (!moveEntry || !moveEntry.preFen || !moveEntry.fen) return false;
         try {
           const beforeGame = new Chess(moveEntry.preFen);
-          const afterGame = new Chess(moveEntry.fen);
-          const beforeCounts = countPiecesOnBoard(beforeGame.board());
-          const afterCounts = countPiecesOnBoard(afterGame.board());
+          const movedPiece = beforeGame.get(moveEntry.from);
+          if (!movedPiece) return false;
+
+          const pieceValue = pieceValues[movedPiece.type];
+          if (!Number.isFinite(pieceValue) || pieceValue < 3) {
+            return false;
+          }
+
           const mover = moveEntry.color;
-          const opponent = mover === 'w' ? 'b' : 'w';
-          const beforeMaterial = sumMaterial(beforeCounts[mover]);
-          const afterMaterial = sumMaterial(afterCounts[mover]);
-          const beforeOpponent = sumMaterial(beforeCounts[opponent]);
-          const afterOpponent = sumMaterial(afterCounts[opponent]);
-          const materialLost = beforeMaterial - afterMaterial;
-          const materialTaken = beforeOpponent - afterOpponent;
-          return materialLost >= 3 && materialTaken <= 1;
+          const beforeCounts = countPiecesOnBoard(beforeGame.board());
+          const materialBefore = sumMaterial(beforeCounts[mover]);
+
+          const afterGame = new Chess(moveEntry.fen);
+          const afterCounts = countPiecesOnBoard(afterGame.board());
+          const materialAfter = sumMaterial(afterCounts[mover]);
+          if (materialBefore - materialAfter >= 3) {
+            return true;
+          }
+
+          const targetSquare = moveEntry.to;
+          const opponentMoves = afterGame.moves({ verbose: true });
+          for (const reply of opponentMoves) {
+            if (!reply || !reply.flags || !reply.flags.includes('c')) continue;
+            if (reply.to !== targetSquare) continue;
+            const replyGame = new Chess(moveEntry.fen);
+            replyGame.move({ from: reply.from, to: reply.to, promotion: reply.promotion });
+            const replyCounts = countPiecesOnBoard(replyGame.board());
+            const materialAfterReply = sumMaterial(replyCounts[mover]);
+            if (materialBefore - materialAfterReply >= 3) {
+              return true;
+            }
+          }
         } catch (err) {
           console.warn('Failed to evaluate sacrifice', err);
-          return false;
         }
+        return false;
       }
 
       function classifyMoveContext({
@@ -2107,7 +2096,9 @@
         bestCp,
         actualCp,
         bestEval,
-        actualEval
+        actualEval,
+        legalMoves,
+        previousMoveEntry
       }) {
         const moverColor = moveEntry && moveEntry.color === 'b' ? 'b' : 'w';
         const moverIsWhite = moverColor === 'w';
@@ -2188,6 +2179,29 @@
 
         const baseline = classification;
 
+        let legalMoveList = Array.isArray(legalMoves) ? legalMoves : [];
+        if (!Array.isArray(legalMoves) && moveEntry && moveEntry.preFen) {
+          try {
+            const legalGame = new Chess(moveEntry.preFen);
+            legalMoveList = legalGame.moves({ verbose: true });
+          } catch (err) {
+            legalMoveList = [];
+          }
+        }
+
+        const legalMoveCount = legalMoveList.length;
+        const forcedMove = legalMoveCount === 1;
+        const previousMove = previousMoveEntry || null;
+        const trivialRecapture = Boolean(
+          previousMove
+          && previousMove.flags
+          && previousMove.flags.includes('c')
+          && moveEntry
+          && moveEntry.flags
+          && moveEntry.flags.includes('c')
+          && previousMove.to === moveEntry.to
+        );
+
         const entryData = [];
         if (Array.isArray(pvEntries)) {
           pvEntries.forEach((entry) => {
@@ -2212,7 +2226,17 @@
           }
         });
 
-        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.022, 0.016);
+        const evaluatedUcis = new Set();
+        entryData.forEach((item) => {
+          if (item.entry && item.entry.uci) {
+            evaluatedUcis.add(item.entry.uci);
+          }
+        });
+
+        const haveAllMovesEvaluated = legalMoveCount > 0
+          && legalMoveList.every((mv) => evaluatedUcis.has(`${mv.from}${mv.to}${mv.promotion || ''}`));
+
+        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.014, 0.01);
         let nearBestCount = 0;
         if (Number.isFinite(bestMoverEp)) {
           entryData.forEach((item) => {
@@ -2238,13 +2262,22 @@
             || (moverWinBefore < 0.5 && moverWinAfter >= 0.5 && moverWinDelta >= crossDelta)
           );
 
-        const onlyMove = sameAsBest && Number.isFinite(bestMoverEp) && nearBestCount === 1;
+        const onlyMove = sameAsBest
+          && Number.isFinite(bestMoverEp)
+          && nearBestCount === 1
+          && haveAllMovesEvaluated
+          && !forcedMove;
         const bigSaveMargin = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
         const bigSave = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
-          && bestMoverEp - alternativeBestMoverEp >= bigSaveMargin;
+          && bestMoverEp - alternativeBestMoverEp >= bigSaveMargin
+          && !forcedMove;
 
         let greatCandidate = false;
-        if ((baseline === 'best' || baseline === 'excellent' || baseline === 'good') && moverWinAfter != null) {
+        if ((baseline === 'best' || baseline === 'excellent')
+          && moverWinAfter != null
+          && moverWinAfter >= losingThreshold
+          && !forcedMove
+          && !trivialRecapture) {
           if (swingImprovement || onlyMove || bigSave) {
             greatCandidate = true;
           }
@@ -2567,6 +2600,14 @@
         const fen = moveEntry.preFen || effectiveInitialFen();
         const actualUci = `${moveEntry.from}${moveEntry.to}${moveEntry.promotion || ''}`;
         const baseConfig = { fen, depth, movetime, ply: index + 1 };
+        let legalMoves = [];
+        try {
+          const legalGame = new Chess(fen);
+          legalMoves = legalGame.moves({ verbose: true });
+        } catch (err) {
+          legalMoves = [];
+        }
+        const previousMoveEntry = index > 0 ? state.verboseHistory[index - 1] : null;
         let multiResult;
         try {
           multiResult = await engineController.run(baseConfig);
@@ -2618,7 +2659,9 @@
           bestCp,
           actualCp,
           bestEval: bestEvalParsed,
-          actualEval: actualEvalParsed
+          actualEval: actualEvalParsed,
+          legalMoves,
+          previousMoveEntry
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
         moveEntry.analysis = {
