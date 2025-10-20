@@ -1039,6 +1039,11 @@
           title: 'Switch to played-move review'
         }
       };
+      const MULTIPV_MAX_CANDIDATES = 5;
+      const PV_KEEP_MARGIN = 0.06;
+      const PV_ONLY_ONE_MARGIN = 0.10;
+      const PV_MATE_SLACK = 1;
+      const PV_EPSILON = 1e-6;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
@@ -1916,20 +1921,40 @@
 
       function updatePVDisplay(entries) {
         const ids = [1, 2, 3];
-        const bestEval = entries[0] && entries[0].eval ? parseFloat(entries[0].eval) || 0 : 0;
+        const bestEntry = Array.isArray(entries) && entries.length ? entries[0] : null;
+        const bestEvalNumeric = bestEntry && typeof bestEntry.eval === 'string' ? parseFloat(bestEntry.eval) : NaN;
+        const bestEvalValue = Number.isNaN(bestEvalNumeric) ? null : bestEvalNumeric;
+        const bestEp = bestEntry && Number.isFinite(bestEntry.expectedPoints) ? bestEntry.expectedPoints : null;
 
         ids.forEach((idx, i) => {
           const moveEl = byId(`pv${idx}`);
           const evalEl = byId(`ev${idx}`);
           const entry = entries[i] || null;
+          if (!moveEl || !evalEl) return;
           if (entry) {
             moveEl.textContent = entry.san || entry.uci;
             let evalText = entry.eval || '';
-            const moveEval = parseFloat(entry.eval) || 0;
-            const ratingChange = (moveEval - bestEval) * 100;
-            if (!Number.isNaN(ratingChange) && Math.abs(ratingChange) > 1) {
-              const sign = ratingChange > 0 ? '+' : '';
-              evalText = `${entry.eval} (${sign}${ratingChange.toFixed(0)})`;
+            let annotation = '';
+
+            if (bestEp != null && Number.isFinite(entry.expectedPoints)) {
+              const dropPercent = (bestEp - entry.expectedPoints) * 100;
+              if (dropPercent > 0.5) {
+                const approx = formatWinDeltaDisplay(dropPercent);
+                annotation = approx ? `−${approx}` : `−${dropPercent.toFixed(1)}%`;
+              }
+            } else if (bestEvalValue != null) {
+              const moveEval = entry.eval != null ? parseFloat(entry.eval) : NaN;
+              if (!Number.isNaN(moveEval)) {
+                const ratingChange = (moveEval - bestEvalValue) * 100;
+                if (Math.abs(ratingChange) > 1) {
+                  const sign = ratingChange > 0 ? '+' : '';
+                  annotation = `${sign}${ratingChange.toFixed(0)}`;
+                }
+              }
+            }
+
+            if (annotation) {
+              evalText = evalText ? `${evalText} (${annotation})` : annotation;
             }
             evalEl.textContent = evalText;
           } else {
@@ -2138,6 +2163,143 @@
           return Math.max(0, Math.min(100, (l / total) * 100));
         }
         return Math.max(0, Math.min(100, (w / total) * 100));
+      }
+
+      function expectedPointsForEntry(entry, moverColor = 'w') {
+        if (!entry) return null;
+        const color = moverColor === 'b' ? 'b' : 'w';
+        const epWdl = expectedPointsFromWdl(entry.wdl, color);
+        if (Number.isFinite(epWdl)) {
+          return epWdl;
+        }
+        const cp = evalStringToCentipawns(entry.eval);
+        if (!Number.isFinite(cp)) {
+          return null;
+        }
+        return cpToExpectedPoints(cp);
+      }
+
+      function shortlistPvEntries(entries, options = {}) {
+        const moverColor = options.moverColor === 'b' ? 'b' : 'w';
+        const keepMargin = Number.isFinite(options.keepMargin) ? options.keepMargin : PV_KEEP_MARGIN;
+        const onlyOneMargin = Number.isFinite(options.onlyOneMargin) ? options.onlyOneMargin : PV_ONLY_ONE_MARGIN;
+        const maxEntries = Number.isFinite(options.maxEntries) ? options.maxEntries : MULTIPV_MAX_CANDIDATES;
+        const mateSlack = Number.isFinite(options.mateSlack) ? options.mateSlack : PV_MATE_SLACK;
+        if (!Array.isArray(entries) || entries.length === 0) {
+          return {
+            entries: [],
+            meta: {
+              moverColor,
+              keepMargin,
+              onlyOneMargin,
+              mateSlack,
+              keptCount: 0,
+              totalCandidates: 0,
+              bestExpectedPoints: null,
+              secondExpectedPoints: null,
+              dropPercent: null,
+              dropPercentDisplay: null,
+              reason: null,
+              message: null,
+              mateDistance: null
+            }
+          };
+        }
+
+        const sorted = [...entries].sort((a, b) => a.rank - b.rank);
+        const best = sorted[0];
+        const originalCount = sorted.length;
+        const bestEp = expectedPointsForEntry(best, moverColor);
+        const second = sorted.find((entry) => entry !== best) || null;
+        const secondEp = second ? expectedPointsForEntry(second, moverColor) : null;
+        const rawDrop = Number.isFinite(bestEp) && Number.isFinite(secondEp) ? bestEp - secondEp : null;
+        const dropPercent = rawDrop != null ? Math.max(0, rawDrop * 100) : null;
+        const dropPercentDisplay = dropPercent != null ? formatWinDeltaDisplay(dropPercent) : null;
+        let kept = [];
+        let reason = 'margin';
+        const bestEvalParsed = parseEvalString(best.eval);
+
+        if (bestEvalParsed && bestEvalParsed.type === 'mate' && bestEvalParsed.value !== 0) {
+          reason = 'mate';
+          const bestSign = Math.sign(bestEvalParsed.value) || 1;
+          const maxDistance = Math.abs(bestEvalParsed.value) + mateSlack;
+          kept = sorted.filter((entry) => {
+            const parsed = parseEvalString(entry.eval);
+            if (!parsed || parsed.type !== 'mate') return false;
+            if (Math.sign(parsed.value || 0) !== bestSign) return false;
+            return Math.abs(parsed.value) <= maxDistance;
+          });
+          if (!kept.length) {
+            kept = [best];
+          }
+        } else if (rawDrop != null && rawDrop >= (onlyOneMargin - PV_EPSILON)) {
+          reason = 'gap';
+          kept = [best];
+        } else {
+          kept = [];
+          for (const entry of sorted) {
+            if (kept.length >= maxEntries) break;
+            if (entry === best) {
+              kept.push(entry);
+              continue;
+            }
+            const entryEp = expectedPointsForEntry(entry, moverColor);
+            if (!Number.isFinite(bestEp) || !Number.isFinite(entryEp) || (bestEp - entryEp) <= (keepMargin + PV_EPSILON)) {
+              kept.push(entry);
+            }
+          }
+          if (!kept.length) {
+            kept = [best];
+          }
+        }
+
+        const normalized = kept.slice(0, maxEntries).map((entry, idx) => {
+          const ep = expectedPointsForEntry(entry, moverColor);
+          return {
+            ...entry,
+            rank: idx + 1,
+            expectedPoints: Number.isFinite(ep) ? ep : null
+          };
+        });
+
+        let message = null;
+        if (originalCount >= 2) {
+          if (reason === 'mate' && bestEvalParsed) {
+            message = normalized.length > 1
+              ? `Mating lines only — all listed moves deliver mate in ≤${Math.abs(bestEvalParsed.value) + mateSlack}.`
+              : `Mate in ${Math.abs(bestEvalParsed.value)} is forced.`;
+          } else if (normalized.length === 1) {
+            if (dropPercentDisplay) {
+              message = `Only one move keeps your chances; the rest drop ≈${dropPercentDisplay}.`;
+            } else if (reason === 'gap') {
+              message = `Only one move keeps your chances; the rest drop ≥${Math.round(onlyOneMargin * 100)}%.`;
+            } else {
+              message = 'Only one move met the quality bar.';
+            }
+          } else if (normalized.length > 1) {
+            const approxMargin = Math.max(1, Math.round(keepMargin * 100));
+            message = `These moves are within ~${approxMargin}% of each other; pick based on style/plan.`;
+          }
+        }
+
+        return {
+          entries: normalized,
+          meta: {
+            moverColor,
+            keepMargin,
+            onlyOneMargin,
+            mateSlack,
+            keptCount: normalized.length,
+            totalCandidates: originalCount,
+            bestExpectedPoints: Number.isFinite(bestEp) ? bestEp : null,
+            secondExpectedPoints: Number.isFinite(secondEp) ? secondEp : null,
+            dropPercent: dropPercent != null ? dropPercent : null,
+            dropPercentDisplay: dropPercentDisplay || null,
+            reason,
+            message,
+            mateDistance: reason === 'mate' && bestEvalParsed ? Math.abs(bestEvalParsed.value) : null
+          }
+        };
       }
 
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
@@ -3215,11 +3377,23 @@
                 pvVerbose: verbose
               };
             });
-          req.resolve({
-            entries,
-            depth: req.depth,
-            bestmove: line.split(/\s+/)[1] || null
+          const moverColor = sideToMoveFromFen(req.config && req.config.fen ? req.config.fen : state.initialFen);
+          const shortlist = shortlistPvEntries(entries, {
+            moverColor,
+            keepMargin: PV_KEEP_MARGIN,
+            onlyOneMargin: PV_ONLY_ONE_MARGIN,
+            maxEntries: MULTIPV_MAX_CANDIDATES,
+            mateSlack: PV_MATE_SLACK
           });
+          req.resolve({
+            entries: shortlist.entries,
+            depth: req.depth,
+            bestmove: line.split(/\s+/)[1] || null,
+            shortlist: shortlist.meta
+          });
+          if (req.pv && typeof req.pv.clear === 'function') {
+            req.pv.clear();
+          }
           engineController.running = null;
           state.currentRequest = null;
           engineController.pump();
@@ -3286,7 +3460,7 @@
             setStatus('engStatus', `Engine ready (${engineLabel})`, 'ok');
             if (!state.engineConfigured) {
               state.engine.postMessage('setoption name Threads value 1');
-              state.engine.postMessage('setoption name MultiPV value 3');
+              state.engine.postMessage(`setoption name MultiPV value ${MULTIPV_MAX_CANDIDATES}`);
               state.engine.postMessage('setoption name UCI_ShowWDL value true');
               state.engineConfigured = true;
             }
@@ -3467,7 +3641,9 @@
             evalText = analysis.bestEntry.eval;
           }
           updateEvalBar(evalText);
-          setStatus('engStatus', `Precomputed (depth ${analysis.depth || 0})`);
+          const baseStatus = `Precomputed (depth ${analysis.depth || 0})`;
+          const shortlistMessage = analysis.shortlist && analysis.shortlist.message ? analysis.shortlist.message : null;
+          setStatus('engStatus', shortlistMessage ? `${baseStatus} — ${shortlistMessage}` : baseStatus);
           return;
         }
 
@@ -3524,6 +3700,7 @@
           return { afterEp: beforeEp };
         }
         if (token !== state.analysisToken) return { afterEp: beforeEp };
+        const shortlistMeta = multiResult && multiResult.shortlist ? { ...multiResult.shortlist } : null;
         const pvEntries = multiResult.entries.map((entry) => ({ ...entry }));
         const bestEntry = pvEntries.find((entry) => entry.rank === 1) || pvEntries[0] || null;
         let actualEntry = pvEntries.find((entry) => entry.uci === actualUci);
@@ -3676,7 +3853,8 @@
           depth: multiResult.depth || depth || 0,
           movetime,
           explanation,
-          planScenarios
+          planScenarios,
+          shortlist: shortlistMeta
         };
         if (state.ply === index + 1) {
           scheduleBoardBadgeUpdate();
