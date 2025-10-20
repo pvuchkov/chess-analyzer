@@ -1110,6 +1110,9 @@
       const PV_BEST_MARGIN = 0.02;
       const PV_KEEP_MARGIN = 0.06;
       const PV_ONLY_ONE_MARGIN = 0.10;
+      const EP_GAP_BEST_MAX = PV_BEST_MARGIN;
+      const EP_GAP_EXCELLENT_MAX = PV_KEEP_MARGIN;
+      const EP_GAP_ONLY_ONE = PV_ONLY_ONE_MARGIN;
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 1e-6;
       const GREAT_ONLY_MOVE_MARGIN = 0.05;
@@ -2294,6 +2297,35 @@
         return (w + 0.5 * d) / total;
       }
 
+      function epFromWdlForMover(wdl, fen, fallbackColor = 'w') {
+        if (!wdl) return null;
+        const stm = typeof fen === 'string'
+          ? sideToMoveFromFen(fen)
+          : (fallbackColor === 'b' ? 'b' : 'w');
+        const w = Number.isFinite(wdl.w) ? Math.max(0, wdl.w) : 0;
+        const d = Number.isFinite(wdl.d) ? Math.max(0, wdl.d) : 0;
+        const l = Number.isFinite(wdl.l) ? Math.max(0, wdl.l) : 0;
+        const total = w + d + l;
+        if (total <= 0) return null;
+        const epWhite = (w + 0.5 * d) / total;
+        return stm === 'w' ? epWhite : 1 - epWhite;
+      }
+
+      function expectedPointsForMover(entry, fen, fallbackColor = 'w') {
+        if (!entry) return null;
+        const moverColor = typeof fallbackColor === 'string' && fallbackColor.toLowerCase() === 'b' ? 'b' : 'w';
+        const epWdl = epFromWdlForMover(entry.wdl, fen, moverColor);
+        if (Number.isFinite(epWdl)) {
+          return epWdl;
+        }
+        const cp = evalStringToCentipawns(entry.eval);
+        if (!Number.isFinite(cp)) {
+          return null;
+        }
+        const epWhite = cpToExpectedPoints(cp);
+        return moverColor === 'w' ? epWhite : 1 - epWhite;
+      }
+
       function winPercentFromWdl(wdl, color = 'w') {
         if (!wdl) return null;
         const w = Number.isFinite(wdl.w) ? Math.max(0, wdl.w) : 0;
@@ -2308,22 +2340,12 @@
       }
 
       function expectedPointsForEntry(entry, moverColor = 'w') {
-        if (!entry) return null;
-        const normalizedColor = moverColor === 'b' ? 'b' : 'w';
-        const epWdl = expectedPointsFromWdl(entry.wdl, normalizedColor);
-        if (Number.isFinite(epWdl)) {
-          return epWdl;
-        }
-        const cp = evalStringToCentipawns(entry.eval);
-        if (!Number.isFinite(cp)) {
-          return null;
-        }
-        const epWhite = cpToExpectedPoints(cp);
-        return normalizedColor === 'w' ? epWhite : 1 - epWhite;
+        return expectedPointsForMover(entry, null, moverColor);
       }
 
       function shortlistPvEntries(entries, options = {}) {
-        const moverColor = options.moverColor === 'b' ? 'b' : 'w';
+        const fen = typeof options.fen === 'string' ? options.fen : null;
+        const moverColor = fen ? sideToMoveFromFen(fen) : (options.moverColor === 'b' ? 'b' : 'w');
         const keepMargin = Number.isFinite(options.keepMargin) ? options.keepMargin : PV_KEEP_MARGIN;
         const onlyOneMargin = Number.isFinite(options.onlyOneMargin) ? options.onlyOneMargin : PV_ONLY_ONE_MARGIN;
         const bestMargin = Number.isFinite(options.bestMargin) ? options.bestMargin : PV_BEST_MARGIN;
@@ -2352,7 +2374,7 @@
         const annotated = entries.map((entry) => {
           const parsedEval = parseEvalString(entry.eval);
           const mateValue = parsedEval && parsedEval.type === 'mate' ? parsedEval.value : null;
-          let ep = expectedPointsForEntry(entry, moverColor);
+          let ep = expectedPointsForMover(entry, fen, moverColor);
           if (!Number.isFinite(ep) && mateValue != null) {
             const mateForMover = (moverColor === 'w' && mateValue > 0) || (moverColor === 'b' && mateValue < 0);
             const mateForOpponent = (moverColor === 'w' && mateValue < 0) || (moverColor === 'b' && mateValue > 0);
@@ -2501,44 +2523,75 @@
         };
       }
 
-      function buildAnalysisSummary({ moverColor = 'w', entries = [], actualEntry = null } = {}) {
-        const normalizedColor = moverColor === 'b' ? 'b' : 'w';
+      function buildPositionSummary(fen, entries = []) {
+        if (!Array.isArray(entries) || entries.length === 0) {
+          return null;
+        }
         const byMove = new Map();
+        const scored = [];
 
-        const rememberEntry = (entry) => {
+        entries.forEach((entry) => {
           if (!entry || !entry.uci) return;
-          let ep = Number.isFinite(entry.expectedPoints) ? entry.expectedPoints : null;
-          if (!Number.isFinite(ep)) {
-            ep = expectedPointsForEntry(entry, normalizedColor);
-          }
+          const ep = expectedPointsForMover(entry, fen);
           if (!Number.isFinite(ep)) return;
-          const normalizedTag = typeof entry.tag === 'string' ? entry.tag.toLowerCase() : null;
-          const payload = {
+          byMove.set(entry.uci, {
             ep,
-            tag: normalizedTag,
+            tag: null,
             eval: entry.eval || null,
             pvSan: Array.isArray(entry.pvSan) ? entry.pvSan.slice() : null
-          };
-          byMove.set(entry.uci, payload);
-        };
+          });
+          scored.push({ uci: entry.uci, ep });
+        });
 
-        if (Array.isArray(entries)) {
-          entries.forEach((entry) => rememberEntry(entry));
+        if (!scored.length) {
+          return null;
         }
-        rememberEntry(actualEntry);
 
-        const scored = [];
-        byMove.forEach((info, uci) => {
-          if (Number.isFinite(info.ep)) {
-            scored.push({ uci, ep: info.ep });
+        scored.sort((a, b) => b.ep - a.ep);
+        const EP1 = scored[0].ep;
+        const bestUci = scored[0].uci;
+        const bestEntry = entries.find((entry) => entry && entry.uci === bestUci) || null;
+        const summaryBest = bestEntry ? { ...bestEntry, expectedPoints: EP1 } : null;
+        const suggestions = [];
+        const onlyOne = scored.length >= 2 && (EP1 - scored[1].ep) >= (EP_GAP_ONLY_ONE - PV_EPSILON);
+
+        scored.forEach((item, idx) => {
+          const gap = EP1 - item.ep;
+          let tag;
+          if (gap <= (EP_GAP_BEST_MAX + PV_EPSILON)) {
+            tag = 'best';
+          } else if (gap <= (EP_GAP_EXCELLENT_MAX + PV_EPSILON)) {
+            tag = 'excellent';
+          } else {
+            tag = 'hide';
+          }
+          const info = byMove.get(item.uci);
+          if (info) {
+            info.tag = tag;
+          }
+          if (tag === 'hide') {
+            return;
+          }
+          if (onlyOne && idx > 0) {
+            return;
+          }
+          const original = entries.find((entry) => entry && entry.uci === item.uci) || null;
+          if (original) {
+            suggestions.push({
+              ...original,
+              expectedPoints: ep,
+              tag: tag === 'best' ? 'Best' : 'Excellent'
+            });
+          } else {
+            suggestions.push({ uci: item.uci, tag: tag === 'best' ? 'Best' : 'Excellent', expectedPoints: item.ep });
           }
         });
-        scored.sort((a, b) => b.ep - a.ep);
 
         return {
-          EP1: scored.length ? scored[0].ep : null,
-          bestMove: scored.length ? scored[0].uci : null,
-          byMove
+          EP1,
+          best: summaryBest,
+          byMove,
+          suggestions
         };
       }
 
@@ -2641,22 +2694,11 @@
         return `${abs.toFixed(1)}%`;
       }
 
-      function epToMoverWinPercent(epWhite, moverColor) {
-        if (!Number.isFinite(epWhite)) return null;
-        const ep = moverColor === 'b' ? 1 - epWhite : epWhite;
-        return Math.max(0, Math.min(100, ep * 100));
-      }
-
-      function winPercentForEntry(entry, moverColor) {
+      function winPercentForEntry(entry, moverColor, fen = null) {
         if (!entry) return null;
-        const epWhite = expectedPointsFromWdl(entry.wdl, 'w');
-        if (Number.isFinite(epWhite)) {
-          return epToMoverWinPercent(epWhite, moverColor);
-        }
-        const cp = evalStringToCentipawns(entry.eval);
-        if (!Number.isFinite(cp)) return null;
-        const ep = cpToExpectedPoints(cp);
-        return epToMoverWinPercent(ep, moverColor);
+        const epMover = expectedPointsForMover(entry, fen, moverColor);
+        if (!Number.isFinite(epMover)) return null;
+        return Math.max(0, Math.min(100, epMover * 100));
       }
 
       function formatLineSnippet(sanMoves, limit = 6) {
@@ -2974,7 +3016,12 @@
         token,
         ply
       }) {
-        const beforeWinPercent = Number.isFinite(beforeEp) ? beforeEp * 100 : null;
+        const beforeMoverEp = Number.isFinite(beforeEp)
+          ? (moverColor === 'b' ? 1 - beforeEp : beforeEp)
+          : null;
+        const beforeWinPercent = Number.isFinite(beforeMoverEp)
+          ? Math.max(0, Math.min(100, beforeMoverEp * 100))
+          : null;
         const plans = {};
         const baseDepth = Number.isFinite(depth) ? depth : 18;
         const replyDepth = Math.max(6, Math.min(baseDepth - 2, 12));
@@ -2998,7 +3045,7 @@
             moveSan: first.san || entry.san || entry.uci,
             snippet: Array.isArray(entry.pvSan) ? [...entry.pvSan] : [],
             beforeWinPercent,
-            moverWinPercent: winPercentForEntry(entry, moverColor),
+            moverWinPercent: winPercentForEntry(entry, moverColor, fen),
             delta: null,
             isCapture: Boolean(first.captured),
             capturePiece: first.captured ? describePiece(first.captured) : null,
@@ -3020,7 +3067,9 @@
           }
 
           if (plan.reply) {
-            plan.replyWinPercent = plan.moverWinPercent != null ? plan.moverWinPercent : winPercentForEntry(entry, moverColor);
+            plan.replyWinPercent = plan.moverWinPercent != null
+              ? plan.moverWinPercent
+              : winPercentForEntry(entry, moverColor, fen);
           }
 
           const afterFen = first.fen || null;
@@ -3230,13 +3279,19 @@
         previousMoveEntry,
         probeEvaluations = [],
         actualIsSac: actualMoveSacIndicator = null,
-        nonSacBestMoverEp: nonSacBestOverride = null
+        nonSacBestMoverEp: nonSacBestOverride = null,
+        bestMoverEp: bestMoverEpOverride = null,
+        actualMoverEp: actualMoverEpOverride = null,
+        rootFen = null
       }) {
         const moverColor = moveEntry && moveEntry.color === 'b' ? 'b' : 'w';
         const moverIsWhite = moverColor === 'w';
         const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
         const averageRating = getAverageGameRating();
         const moverRating = getPlayerRating(moverColor);
+        const baselineFen = typeof rootFen === 'string'
+          ? rootFen
+          : (moveEntry && moveEntry.preFen) || effectiveInitialFen();
 
         const summaryData = summary && typeof summary === 'object' ? summary : null;
         const summaryByMove = summaryData && summaryData.byMove instanceof Map ? summaryData.byMove : null;
@@ -3247,19 +3302,24 @@
           ? summaryActualInfo.tag.toLowerCase()
           : null;
 
-        const bestWhiteEp = Number.isFinite(bestEp)
-          ? bestEp
-          : (Number.isFinite(bestCp) ? cpToExpectedPoints(bestCp, averageRating) : null);
-        const actualWhiteEp = Number.isFinite(actualEp)
-          ? actualEp
-          : (Number.isFinite(actualCp) ? cpToExpectedPoints(actualCp, averageRating) : null);
-
         let bestMoverEp = Number.isFinite(summaryBestMoverEp)
           ? summaryBestMoverEp
-          : (Number.isFinite(bestWhiteEp) ? (moverIsWhite ? bestWhiteEp : 1 - bestWhiteEp) : null);
+          : (Number.isFinite(bestMoverEpOverride)
+            ? bestMoverEpOverride
+            : expectedPointsForMover(bestEntry, baselineFen, moverColor));
+        if (!Number.isFinite(bestMoverEp) && Number.isFinite(bestCp)) {
+          const epWhite = cpToExpectedPoints(bestCp, averageRating);
+          bestMoverEp = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+        }
         let actualMoverEp = Number.isFinite(summaryActualMoverEp)
           ? summaryActualMoverEp
-          : (Number.isFinite(actualWhiteEp) ? (moverIsWhite ? actualWhiteEp : 1 - actualWhiteEp) : null);
+          : (Number.isFinite(actualMoverEpOverride)
+            ? actualMoverEpOverride
+            : expectedPointsForMover(actualEntry, baselineFen, moverColor));
+        if (!Number.isFinite(actualMoverEp) && Number.isFinite(actualCp)) {
+          const epWhite = cpToExpectedPoints(actualCp, averageRating);
+          actualMoverEp = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+        }
         const beforeWhiteEp = Number.isFinite(beforeEp) ? beforeEp : null;
         const beforeMoverEp = Number.isFinite(beforeWhiteEp)
           ? (moverIsWhite ? beforeWhiteEp : 1 - beforeWhiteEp)
@@ -3389,9 +3449,8 @@
               epMover = entry.expectedPoints;
             }
             if (!Number.isFinite(epMover)) {
-              const cp = evalStringToCentipawns(entry.eval);
-              const epWhite = cpToExpectedPoints(cp, averageRating);
-              epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+              const derived = expectedPointsForMover(entry, baselineFen, moverColor);
+              epMover = Number.isFinite(derived) ? derived : null;
             }
             let entryIsSac = false;
             if (entry && entry.uci && moveEntry && moveEntry.preFen) {
@@ -3682,6 +3741,7 @@
             });
           const moverColor = sideToMoveFromFen(req.config && req.config.fen ? req.config.fen : state.initialFen);
           const shortlist = shortlistPvEntries(entries, {
+            fen: req.config.fen,
             moverColor,
             keepMargin: PV_KEEP_MARGIN,
             onlyOneMargin: PV_ONLY_ONE_MARGIN,
@@ -4046,10 +4106,7 @@
             if (token !== state.analysisToken) return { afterEp: beforeEp };
             const probeEntryResult = probeResult && probeResult.entries && probeResult.entries[0];
             if (!probeEntryResult) continue;
-            const probeCp = evalStringToCentipawns(probeEntryResult.eval);
-            if (!Number.isFinite(probeCp)) continue;
-            const epWhite = cpToExpectedPoints(probeCp);
-            const epMover = moverIsWhite ? epWhite : 1 - epWhite;
+            const epMover = expectedPointsForMover(probeEntryResult, fen, moverColor);
             if (!Number.isFinite(epMover)) continue;
             probeEvaluations.push({ uci, epMover, isSac: false });
             if (nonSacBestMoverEp == null || epMover > nonSacBestMoverEp) {
@@ -4057,7 +4114,7 @@
             }
           }
         }
-        const positionSummary = buildAnalysisSummary({ moverColor, entries: pvEntries, actualEntry });
+        const positionSummary = buildPositionSummary(fen, pvEntries);
         const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
         let bestEp = cpToExpectedPoints(bestCp);
@@ -4066,17 +4123,24 @@
         const actualEpWdl = expectedPointsFromWdl(actualEntry ? actualEntry.wdl : null, 'w');
         if (bestEpWdl != null) bestEp = bestEpWdl;
         if (actualEpWdl != null) actualEp = actualEpWdl;
-        let winPercentBefore = centipawnsToWinPercent(bestCp);
-        const winPercentBeforeWdl = winPercentFromWdl(bestEntry ? bestEntry.wdl : null, 'w');
-        if (winPercentBeforeWdl != null) winPercentBefore = winPercentBeforeWdl;
+        const bestMoverEp = expectedPointsForMover(bestEntry, fen, moverColor);
+        const actualMoverEp = expectedPointsForMover(actualEntry, fen, moverColor);
+        let winPercentBefore = winPercentForEntry(bestEntry, moverColor, fen);
         if (winPercentBefore == null && Number.isFinite(beforeEp)) {
-          winPercentBefore = beforeEp * 100;
+          const beforeMoverEp = moverIsWhite ? beforeEp : 1 - beforeEp;
+          winPercentBefore = Math.max(0, Math.min(100, beforeMoverEp * 100));
         }
-        let winPercentAfter = centipawnsToWinPercent(actualCp);
-        const winPercentAfterWdl = winPercentFromWdl(actualEntry ? actualEntry.wdl : null, 'w');
-        if (winPercentAfterWdl != null) winPercentAfter = winPercentAfterWdl;
+        if (winPercentBefore == null && Number.isFinite(bestEp)) {
+          const ep = moverIsWhite ? bestEp : 1 - bestEp;
+          winPercentBefore = Math.max(0, Math.min(100, ep * 100));
+        }
+        let winPercentAfter = winPercentForEntry(actualEntry, moverColor, fen);
+        if (winPercentAfter == null && Number.isFinite(actualMoverEp)) {
+          winPercentAfter = Math.max(0, Math.min(100, actualMoverEp * 100));
+        }
         if (winPercentAfter == null && Number.isFinite(actualEp)) {
-          winPercentAfter = actualEp * 100;
+          const ep = moverIsWhite ? actualEp : 1 - actualEp;
+          winPercentAfter = Math.max(0, Math.min(100, ep * 100));
         }
         const accuracyPercent = computeMoveAccuracy(winPercentBefore, winPercentAfter);
         const cpLoss = computeCpLoss(bestCp, actualCp, moveEntry.color);
@@ -4102,7 +4166,10 @@
           previousMoveEntry,
           probeEvaluations,
           actualIsSac,
-          nonSacBestMoverEp
+          nonSacBestMoverEp,
+          bestMoverEp,
+          actualMoverEp,
+          rootFen: fen
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
         let planScenarios = null;
@@ -4160,13 +4227,11 @@
           movetime,
           explanation,
           planScenarios,
+          summary: positionSummary || null,
           shortlist: shortlistMeta
         };
         if (state.ply === index + 1) {
           scheduleBoardBadgeUpdate();
-        }
-        if (positionSummary) {
-          moveEntry.analysis.summary = positionSummary;
         }
         state.analysisCache.set(index + 1, moveEntry.analysis);
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
