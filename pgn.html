@@ -4340,9 +4340,16 @@
         const moverWinBefore = beforeMoverEp;
         const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
         const entryEpByUci = new Map();
+        const mateValueByMove = new Map();
         entryData.forEach((item) => {
           if (!item || !item.entry || !item.entry.uci) return;
           entryEpByUci.set(item.entry.uci, Number.isFinite(item.epMover) ? item.epMover : null);
+          if (typeof item.entry.eval === 'string') {
+            const parsed = parseEvalString(item.entry.eval);
+            if (parsed && parsed.type === 'mate') {
+              mateValueByMove.set(item.entry.uci, parsed.value);
+            }
+          }
         });
         const entryOverlayByMove = new Map();
         entryEpByUci.forEach((ep, uci) => {
@@ -4355,6 +4362,30 @@
           const ep = entryEpByUci.has(uci) ? entryEpByUci.get(uci) : null;
           legalMoveEvaluations.push({ uci, ep: Number.isFinite(ep) ? ep : null });
         });
+
+        let onlyMatingMove = false;
+        if (
+          actualId
+          && actualMateForMover
+          && bestMateForMover
+          && haveAllMovesEvaluated
+          && Array.isArray(legalMoveList)
+          && legalMoveList.length > 0
+        ) {
+          let otherMateForMover = false;
+          for (const mv of legalMoveList) {
+            const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
+            if (uci === actualId) continue;
+            const mateVal = mateValueByMove.has(uci) ? mateValueByMove.get(uci) : null;
+            if (mateVal == null) continue;
+            const mateForMover = (moverIsWhite && mateVal > 0) || (!moverIsWhite && mateVal < 0);
+            if (mateForMover) {
+              otherMateForMover = true;
+              break;
+            }
+          }
+          onlyMatingMove = !otherMateForMover;
+        }
 
         const allowsGreatOverlay = suggestionTag === 'best' || suggestionTag === 'excellent';
         let greatOverlay = null;
@@ -4389,11 +4420,24 @@
         const nonSacAlreadyWinning = nonSacBestMoverEp != null && nonSacBestMoverEp >= notAlreadyWinningThreshold;
         const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
 
-        const brilliantCandidate = (baseline === 'best' || baseline === 'excellent')
+        const mateDistanceLimit = 5;
+        const mateDistancesKnown = actualMateDistance != null && bestMateDistance != null;
+        const mateNotSlower = mateDistancesKnown && actualMateDistance <= bestMateDistance;
+        const mateDistancesReasonable = mateDistancesKnown && actualMateDistance <= mateDistanceLimit;
+        const mateSacBrilliant = (baseline === 'best' || baseline === 'excellent')
+          && actualMoveIsSac
+          && nearBestSac
+          && actualMateForMover
+          && bestMateForMover
+          && mateDistancesReasonable
+          && (mateNotSlower || onlyMatingMove);
+
+        const brilliantCandidate = ((baseline === 'best' || baseline === 'excellent')
           && actualMoveIsSac
           && nearBestSac
           && keepsPlayable
-          && !nonSacAlreadyWinning;
+          && !nonSacAlreadyWinning)
+          || mateSacBrilliant;
 
         const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
         const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
