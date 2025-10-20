@@ -301,7 +301,7 @@
 
     #board {
       width: 100%;
-      max-width: 600px;
+      max-width: 640px;
       margin: 0 auto;
     }
 
@@ -563,83 +563,135 @@
     }
 
     .summary-scroll {
-      overflow-x: auto;
+      overflow-x: visible;
       padding-bottom: 4px;
     }
 
     .summary-table {
       display: grid;
-      gap: 10px;
-      min-width: 640px;
+      gap: 18px;
     }
 
-    .summary-row {
+    .summary-player-grid {
       display: grid;
-      align-items: center;
-      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
     }
 
-    .summary-row.summary-header {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      padding: 0 4px;
-    }
-
-    .summary-row[data-color] {
+    .summary-player-card {
       background: rgba(148, 163, 184, 0.12);
-      border-radius: 12px;
-      padding: 10px 12px;
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 130px;
     }
 
-    [data-theme="light"] .summary-row[data-color] {
+    [data-theme="light"] .summary-player-card {
       background: rgba(37, 99, 235, 0.06);
     }
 
-    .summary-cell {
-      text-align: center;
-      font-weight: 600;
-      font-size: 14px;
-    }
-
-    .summary-cell-header {
+    .summary-player-header {
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .summary-icon {
-      width: 20px;
-      height: 20px;
-      object-fit: contain;
-    }
-
-    .summary-player-cell {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+      justify-content: space-between;
+      align-items: baseline;
     }
 
     .summary-player-name {
       font-weight: 600;
-      font-size: 15px;
+      font-size: 16px;
     }
 
-    .summary-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      font-size: 12px;
+    .summary-player-elo {
+      font-size: 13px;
       color: var(--muted);
     }
 
-    .summary-meta strong {
+    .summary-player-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .summary-player-metric {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-metric-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .summary-metric-value {
+      font-size: 22px;
       font-weight: 600;
-      color: var(--text);
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    }
+
+    .summary-category-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .summary-category-row {
+      display: grid;
+      grid-template-columns: minmax(160px, 1.4fr) repeat(2, minmax(0, 1fr));
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .summary-category-row.summary-category-header {
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0 12px;
+    }
+
+    .summary-category-row.summary-category-header .summary-category-value {
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+
+    .summary-category-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .summary-category-value {
+      text-align: center;
+      font-weight: 600;
+      font-size: 16px;
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    }
+
+    .summary-icon {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+    }
+
+    @media (max-width: 720px) {
+      .summary-player-metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-category-row {
+        grid-template-columns: minmax(140px, 1fr) repeat(2, minmax(0, 0.8fr));
+      }
     }
 
     .kv {
@@ -964,14 +1016,6 @@
         <div id="tagOpening">—</div>
       </div>
 
-      <h2 style="margin-top:22px;">Elo estimates</h2>
-      <div class="kv">
-        <div>White</div>
-        <div id="eloWhite">—</div>
-        <div>Black</div>
-        <div id="eloBlack">—</div>
-      </div>
-
       <h2 style="margin-top:22px;">Move summary</h2>
       <div class="summary-scroll">
         <div id="moveSummaryTable" class="summary-table"></div>
@@ -1088,85 +1132,110 @@
         { key: 'miss', label: 'Miss', icon: './move-classifications/miss.png' }
       ];
 
+      function createPlayerMetric(labelText, role) {
+        const metric = document.createElement('div');
+        metric.className = 'summary-player-metric';
+        const label = document.createElement('span');
+        label.className = 'summary-metric-label';
+        label.textContent = labelText;
+        metric.appendChild(label);
+        const value = document.createElement('span');
+        value.className = 'summary-metric-value';
+        value.dataset.role = role;
+        value.textContent = '—';
+        metric.appendChild(value);
+        return metric;
+      }
+
       function initMoveSummary() {
         const table = byId('moveSummaryTable');
         if (!table) return;
         table.innerHTML = '';
-        const columnTemplate = `minmax(150px, 1.3fr) repeat(${moveSummaryCategories.length}, minmax(60px, 1fr))`;
-
-        const headerRow = document.createElement('div');
-        headerRow.className = 'summary-row summary-header';
-        headerRow.style.gridTemplateColumns = columnTemplate;
-        const playerHeader = document.createElement('div');
-        playerHeader.className = 'summary-player-cell';
-        playerHeader.textContent = 'Player';
-        headerRow.appendChild(playerHeader);
-        moveSummaryCategories.forEach((category) => {
-          const cell = document.createElement('div');
-          cell.className = 'summary-cell summary-cell-header';
-          if (category.icon) {
-            const icon = document.createElement('img');
-            icon.src = category.icon;
-            icon.alt = category.label;
-            icon.className = 'summary-icon';
-            cell.appendChild(icon);
-          }
-          const label = document.createElement('span');
-          label.textContent = category.label;
-          cell.appendChild(label);
-          headerRow.appendChild(cell);
-        });
-        table.appendChild(headerRow);
-
+        const playersContainer = document.createElement('div');
+        playersContainer.className = 'summary-player-grid';
         const players = [
           { name: 'White', color: 'w' },
           { name: 'Black', color: 'b' }
         ];
         players.forEach((player) => {
-          const row = document.createElement('div');
-          row.className = 'summary-row';
-          row.dataset.color = player.color;
-          row.style.gridTemplateColumns = columnTemplate;
+          const card = document.createElement('div');
+          card.className = 'summary-player-card';
+          card.dataset.color = player.color;
 
-          const playerCell = document.createElement('div');
-          playerCell.className = 'summary-player-cell';
-          const playerName = document.createElement('div');
+          const header = document.createElement('div');
+          header.className = 'summary-player-header';
+          const playerName = document.createElement('span');
           playerName.className = 'summary-player-name';
           playerName.textContent = player.name;
-          playerCell.appendChild(playerName);
+          header.appendChild(playerName);
 
-          const meta = document.createElement('div');
-          meta.className = 'summary-meta';
+          const eloLabel = document.createElement('span');
+          eloLabel.className = 'summary-player-elo';
+          eloLabel.dataset.role = 'elo';
+          eloLabel.textContent = 'Elo —';
+          header.appendChild(eloLabel);
 
-          const accuracySpan = document.createElement('span');
-          accuracySpan.textContent = 'Accuracy ';
-          const accuracyValue = document.createElement('strong');
-          accuracyValue.dataset.role = 'accuracy';
-          accuracyValue.textContent = '—';
-          accuracySpan.appendChild(accuracyValue);
-          meta.appendChild(accuracySpan);
+          card.appendChild(header);
 
-          const cpLossSpan = document.createElement('span');
-          cpLossSpan.textContent = 'Avg CPL ';
-          const cpLossValue = document.createElement('strong');
-          cpLossValue.dataset.role = 'cpLoss';
-          cpLossValue.textContent = '—';
-          cpLossSpan.appendChild(cpLossValue);
-          meta.appendChild(cpLossSpan);
+          const metrics = document.createElement('div');
+          metrics.className = 'summary-player-metrics';
+          metrics.appendChild(createPlayerMetric('Accuracy', 'accuracy'));
+          metrics.appendChild(createPlayerMetric('Avg CPL', 'cpLoss'));
+          card.appendChild(metrics);
 
-          playerCell.appendChild(meta);
-          row.appendChild(playerCell);
+          playersContainer.appendChild(card);
+        });
+        table.appendChild(playersContainer);
 
-          moveSummaryCategories.forEach((category) => {
-            const cell = document.createElement('div');
-            cell.className = 'summary-cell';
-            cell.dataset.key = category.key;
-            cell.textContent = '—';
-            row.appendChild(cell);
+        const categoryGrid = document.createElement('div');
+        categoryGrid.className = 'summary-category-grid';
+
+        const headerRow = document.createElement('div');
+        headerRow.className = 'summary-category-row summary-category-header';
+        const categoryHeader = document.createElement('div');
+        categoryHeader.className = 'summary-category-label';
+        categoryHeader.textContent = 'Category';
+        headerRow.appendChild(categoryHeader);
+        ['White', 'Black'].forEach((label) => {
+          const headerCell = document.createElement('div');
+          headerCell.className = 'summary-category-value';
+          headerCell.textContent = label;
+          headerRow.appendChild(headerCell);
+        });
+        categoryGrid.appendChild(headerRow);
+
+        moveSummaryCategories.forEach((category) => {
+          const row = document.createElement('div');
+          row.className = 'summary-category-row';
+          row.dataset.key = category.key;
+
+          const labelCell = document.createElement('div');
+          labelCell.className = 'summary-category-label';
+          if (category.icon) {
+            const icon = document.createElement('img');
+            icon.src = category.icon;
+            icon.alt = category.label;
+            icon.className = 'summary-icon';
+            labelCell.appendChild(icon);
+          }
+          const label = document.createElement('span');
+          label.textContent = category.label;
+          labelCell.appendChild(label);
+          row.appendChild(labelCell);
+
+          ['w', 'b'].forEach((color) => {
+            const valueCell = document.createElement('div');
+            valueCell.className = 'summary-category-value';
+            valueCell.dataset.color = color;
+            valueCell.dataset.key = category.key;
+            valueCell.textContent = '—';
+            row.appendChild(valueCell);
           });
 
-          table.appendChild(row);
+          categoryGrid.appendChild(row);
         });
+
+        table.appendChild(categoryGrid);
       }
 
       function createSummaryBucket() {
@@ -1235,21 +1304,12 @@
         if (!table) return;
         const summary = computeMoveSummary();
         ['w', 'b'].forEach((color) => {
-          const row = table.querySelector(`.summary-row[data-color="${color}"]`);
-          if (!row) return;
+          const card = table.querySelector(`.summary-player-card[data-color="${color}"]`);
+          if (!card) return;
           const bucket = summary[color];
           const hasAnalysis = bucket.analyzedMoves > 0;
-          moveSummaryCategories.forEach((category) => {
-            const cell = row.querySelector(`.summary-cell[data-key="${category.key}"]`);
-            if (!cell) return;
-            if (!hasAnalysis) {
-              cell.textContent = '—';
-            } else {
-              cell.textContent = bucket.counts[category.key] || 0;
-            }
-          });
 
-          const accuracyEl = row.querySelector('[data-role="accuracy"]');
+          const accuracyEl = card.querySelector('.summary-metric-value[data-role="accuracy"]');
           if (accuracyEl) {
             if (bucket.accuracyCount > 0) {
               const avgAccuracy = bucket.accuracySum / bucket.accuracyCount;
@@ -1259,7 +1319,7 @@
             }
           }
 
-          const cpLossEl = row.querySelector('[data-role="cpLoss"]');
+          const cpLossEl = card.querySelector('.summary-metric-value[data-role="cpLoss"]');
           if (cpLossEl) {
             if (bucket.cpLossCount > 0) {
               const avgCpLoss = bucket.cpLossSum / bucket.cpLossCount;
@@ -1269,6 +1329,12 @@
               cpLossEl.textContent = '—';
             }
           }
+
+          moveSummaryCategories.forEach((category) => {
+            const cell = table.querySelector(`.summary-category-value[data-color="${color}"][data-key="${category.key}"]`);
+            if (!cell) return;
+            cell.textContent = hasAnalysis ? (bucket.counts[category.key] || 0) : '—';
+          });
         });
         updateEloEstimates(summary);
       }
@@ -1684,7 +1750,8 @@
         cell.appendChild(label);
 
         if (entry && entry.analysis) {
-          const chosenClass = entry.analysis.overlay || entry.analysis.classification;
+          const baseClass = entry.analysis.suggestionTag || entry.analysis.classification;
+          const chosenClass = entry.analysis.overlay || baseClass;
           if (chosenClass) {
             const iconPath = classificationToIcon(chosenClass);
             if (iconPath) {
@@ -2172,13 +2239,28 @@
         const data = summary || computeMoveSummary();
         const scores = parseGameResultScores(state.headers && state.headers.Result);
         const estimates = estimateEloFromSummary(data, scores);
+        const roundedWhite = Number.isFinite(estimates.white) ? Math.round(estimates.white) : null;
+        const roundedBlack = Number.isFinite(estimates.black) ? Math.round(estimates.black) : null;
+
+        const table = byId('moveSummaryTable');
+        if (table) {
+          const whiteCard = table.querySelector('.summary-player-card[data-color="w"] [data-role="elo"]');
+          if (whiteCard) {
+            whiteCard.textContent = roundedWhite != null ? `Elo ${roundedWhite}` : 'Elo —';
+          }
+          const blackCard = table.querySelector('.summary-player-card[data-color="b"] [data-role="elo"]');
+          if (blackCard) {
+            blackCard.textContent = roundedBlack != null ? `Elo ${roundedBlack}` : 'Elo —';
+          }
+        }
+
         const whiteEl = byId('eloWhite');
         const blackEl = byId('eloBlack');
         if (whiteEl) {
-          whiteEl.textContent = Number.isFinite(estimates.white) ? Math.round(estimates.white) : '—';
+          whiteEl.textContent = roundedWhite != null ? roundedWhite : '—';
         }
         if (blackEl) {
-          blackEl.textContent = Number.isFinite(estimates.black) ? Math.round(estimates.black) : '—';
+          blackEl.textContent = roundedBlack != null ? roundedBlack : '—';
         }
       }
 
@@ -2430,9 +2512,10 @@
             ep = expectedPointsForEntry(entry, normalizedColor);
           }
           if (!Number.isFinite(ep)) return;
+          const normalizedTag = typeof entry.tag === 'string' ? entry.tag.toLowerCase() : null;
           const payload = {
             ep,
-            tag: entry.tag || null,
+            tag: normalizedTag,
             eval: entry.eval || null,
             pvSan: Array.isArray(entry.pvSan) ? entry.pvSan.slice() : null
           };
@@ -3160,6 +3243,9 @@
         const summaryBestMoverEp = summaryData && Number.isFinite(summaryData.EP1) ? summaryData.EP1 : null;
         const summaryActualInfo = summaryByMove && actualEntry && actualEntry.uci ? summaryByMove.get(actualEntry.uci) : null;
         const summaryActualMoverEp = summaryActualInfo && Number.isFinite(summaryActualInfo.ep) ? summaryActualInfo.ep : null;
+        const summaryActualTag = summaryActualInfo && typeof summaryActualInfo.tag === 'string'
+          ? summaryActualInfo.tag.toLowerCase()
+          : null;
 
         const bestWhiteEp = Number.isFinite(bestEp)
           ? bestEp
@@ -3187,6 +3273,17 @@
         if (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp)) {
           loss = Math.max(0, bestMoverEp - actualMoverEp);
         }
+        let suggestionTag = null;
+        if (Number.isFinite(loss)) {
+          if (loss <= (PV_BEST_MARGIN + PV_EPSILON)) {
+            suggestionTag = 'best';
+          } else if (loss <= (PV_KEEP_MARGIN + PV_EPSILON)) {
+            suggestionTag = 'excellent';
+          }
+        } else if (summaryActualTag === 'best' || summaryActualTag === 'excellent') {
+          suggestionTag = summaryActualTag;
+        }
+
         const bestLossMargin = PV_BEST_MARGIN;
         const lossIsKnown = Number.isFinite(loss);
         const qualifiesAsBest = sameAsBest || (lossIsKnown && loss <= (bestLossMargin + PV_EPSILON));
@@ -3239,6 +3336,14 @@
             if (classification === 'best') {
               classification = 'excellent';
             }
+          }
+        }
+
+        if (suggestionTag === 'best') {
+          classification = 'best';
+        } else if (suggestionTag === 'excellent') {
+          if (classification === 'best' || classification === 'excellent' || classification === 'good') {
+            classification = 'excellent';
           }
         }
 
@@ -3449,7 +3554,7 @@
           overlay = 'miss';
         }
 
-        return { classification: baseline, overlay, expectedLoss: loss };
+        return { classification: baseline, overlay, expectedLoss: loss, suggestionTag };
       }
 
       const engineController = {
@@ -4044,6 +4149,7 @@
           expectedLoss: classificationData.expectedLoss,
           classification: classificationData.classification,
           overlay: classificationData.overlay,
+          suggestionTag: classificationData.suggestionTag,
           bestCp,
           actualCp,
           cpLoss,
