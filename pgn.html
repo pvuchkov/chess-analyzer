@@ -202,6 +202,43 @@
       color: var(--ok);
     }
 
+    .explanation-panel {
+      margin-top: 14px;
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: rgba(148, 163, 184, 0.08);
+      display: grid;
+      gap: 10px;
+    }
+
+    [data-theme="light"] .explanation-panel {
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .explanation-headline {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .explanation-details {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .explanation-details ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .explanation-details li {
+      list-style: disc;
+    }
+
     .board-area {
       display: flex;
       gap: 18px;
@@ -820,6 +857,12 @@
         <button id="flipBtn" class="secondary">Flip</button>
       </div>
       <div id="navStatus" class="status"></div>
+
+      <h2 style="margin-top:22px;">Engine explanation</h2>
+      <div id="explanationBox" class="explanation-panel">
+        <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
+        <div id="explanationDetails" class="explanation-details"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -919,6 +962,14 @@
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+      const pieceNames = {
+        p: 'pawn',
+        n: 'knight',
+        b: 'bishop',
+        r: 'rook',
+        q: 'queen',
+        k: 'king'
+      };
       const pieceOrder = ['q', 'r', 'b', 'n', 'p'];
       const pieceLabels = { p: 'P', n: 'N', b: 'B', r: 'R', q: 'Q' };
       const inputHints = {
@@ -2013,6 +2064,32 @@
         return Math.max(0, Math.min(100, ep * 100));
       }
 
+      function expectedPointsFromWdl(wdl, color = 'w') {
+        if (!wdl) return null;
+        const w = Number.isFinite(wdl.w) ? Math.max(0, wdl.w) : 0;
+        const d = Number.isFinite(wdl.d) ? Math.max(0, wdl.d) : 0;
+        const l = Number.isFinite(wdl.l) ? Math.max(0, wdl.l) : 0;
+        const total = w + d + l;
+        if (total <= 0) return null;
+        if (color === 'b') {
+          return (l + 0.5 * d) / total;
+        }
+        return (w + 0.5 * d) / total;
+      }
+
+      function winPercentFromWdl(wdl, color = 'w') {
+        if (!wdl) return null;
+        const w = Number.isFinite(wdl.w) ? Math.max(0, wdl.w) : 0;
+        const d = Number.isFinite(wdl.d) ? Math.max(0, wdl.d) : 0;
+        const l = Number.isFinite(wdl.l) ? Math.max(0, wdl.l) : 0;
+        const total = w + d + l;
+        if (total <= 0) return null;
+        if (color === 'b') {
+          return Math.max(0, Math.min(100, (l / total) * 100));
+        }
+        return Math.max(0, Math.min(100, (w / total) * 100));
+      }
+
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
         if (!Number.isFinite(winPercentBefore) || !Number.isFinite(winPercentAfter)) {
           return null;
@@ -2062,6 +2139,257 @@
           console.warn('Failed to evaluate sacrifice', err);
         }
         return false;
+      }
+
+      function convertPvToVerbose(fen, moves, limit = 12) {
+        const out = [];
+        if (!fen || !Array.isArray(moves) || moves.length === 0) {
+          return out;
+        }
+        try {
+          const game = new Chess(fen);
+          for (const raw of moves) {
+            if (typeof raw !== 'string' || raw.length < 4) continue;
+            const move = {
+              from: raw.slice(0, 2),
+              to: raw.slice(2, 4),
+              promotion: raw.length > 4 ? raw.slice(4) : undefined
+            };
+            const played = game.move(move);
+            if (!played) break;
+            out.push({ ...played, uci: raw, fen: game.fen() });
+            if (out.length >= limit) break;
+          }
+        } catch (err) {
+          console.warn('Failed to expand PV line', err);
+        }
+        return out;
+      }
+
+      function describePiece(type) {
+        const lower = String(type || '').toLowerCase();
+        return pieceNames[lower] || 'piece';
+      }
+
+      function formatWinPercentDisplay(value) {
+        if (!Number.isFinite(value)) return null;
+        if (value >= 99) return '99%';
+        if (value <= 1) return '1%';
+        if (value >= 10 && value <= 90) return `${Math.round(value)}%`;
+        if (value > 90) return `${value.toFixed(0)}%`;
+        return `${value.toFixed(1)}%`;
+      }
+
+      function formatWinDeltaDisplay(value) {
+        if (!Number.isFinite(value)) return null;
+        const abs = Math.abs(value);
+        if (abs >= 30) return `${Math.round(abs)}%`;
+        if (abs >= 10) return `${abs.toFixed(0)}%`;
+        if (abs >= 3) return `${abs.toFixed(1)}%`;
+        return `${abs.toFixed(1)}%`;
+      }
+
+      function buildMoveExplanation({
+        moveEntry,
+        bestEntry,
+        actualEntry,
+        bestEval,
+        actualEval,
+        beforeEp,
+        bestEp,
+        actualEp,
+        cpLoss,
+        classification,
+        overlay
+      }) {
+        if (!moveEntry) return null;
+        const moverIsWhite = moveEntry.color !== 'b';
+        const moverColorName = moverIsWhite ? 'White' : 'Black';
+        const opponentColorName = moverIsWhite ? 'Black' : 'White';
+        const labelMap = {
+          brilliant: 'Brilliant move',
+          great: 'Great move',
+          miss: 'Missed win',
+          best: 'Best move',
+          excellent: 'Excellent move',
+          good: 'Good move',
+          inaccuracy: 'Inaccuracy',
+          mistake: 'Mistake',
+          blunder: 'Blunder',
+          book: 'Book move'
+        };
+        const key = overlay || classification;
+        const labelText = labelMap[key] || labelMap[classification] || 'Move review';
+
+        const beforeMoverEp = Number.isFinite(beforeEp)
+          ? beforeEp
+          : (Number.isFinite(bestEp) ? (moverIsWhite ? bestEp : 1 - bestEp) : null);
+        const actualMoverEp = Number.isFinite(actualEp)
+          ? (moverIsWhite ? actualEp : 1 - actualEp)
+          : null;
+        const bestMoverEp = Number.isFinite(bestEp)
+          ? (moverIsWhite ? bestEp : 1 - bestEp)
+          : null;
+
+        const beforePercent = Number.isFinite(beforeMoverEp) ? beforeMoverEp * 100 : null;
+        const afterPercent = Number.isFinite(actualMoverEp) ? actualMoverEp * 100 : null;
+        const bestPercent = Number.isFinite(bestMoverEp) ? bestMoverEp * 100 : null;
+
+        const dropFromBefore = (beforePercent != null && afterPercent != null)
+          ? beforePercent - afterPercent
+          : null;
+        const missFromBest = (bestPercent != null && afterPercent != null)
+          ? bestPercent - afterPercent
+          : null;
+        const improvement = (beforePercent != null && afterPercent != null)
+          ? afterPercent - beforePercent
+          : null;
+
+        let summaryClause = null;
+        if (dropFromBefore != null && dropFromBefore > 0.75) {
+          const approx = formatWinDeltaDisplay(dropFromBefore);
+          summaryClause = `drops about ${approx} win chance`;
+        } else if (missFromBest != null && missFromBest > 0.75) {
+          const approx = formatWinDeltaDisplay(missFromBest);
+          summaryClause = `misses roughly ${approx} win chance`;
+        } else if (improvement != null && improvement > 0.75) {
+          const approx = formatWinDeltaDisplay(improvement);
+          summaryClause = `improves ${moverColorName.toLowerCase()}’s chances by about ${approx}`;
+        } else if (cpLoss != null && cpLoss >= 20) {
+          const pawns = cpLoss / 100;
+          const pawnText = Math.abs(pawns) >= 1 ? pawns.toFixed(1) : pawns.toFixed(2);
+          summaryClause = `drops roughly ${pawnText} pawns`;
+        } else if (afterPercent != null && summaryClause == null) {
+          const approx = formatWinPercentDisplay(afterPercent);
+          if (approx) {
+            summaryClause = `leaves ${moverColorName.toLowerCase()} with about ${approx} win chance`;
+          }
+        }
+
+        const summary = summaryClause ? `${labelText} — ${summaryClause}.` : `${labelText}.`;
+
+        const details = [];
+        const actualLine = actualEntry && Array.isArray(actualEntry.pvVerbose)
+          ? actualEntry.pvVerbose
+          : [];
+        const bestLine = bestEntry && Array.isArray(bestEntry.pvVerbose)
+          ? bestEntry.pvVerbose
+          : [];
+        const actualFirst = actualLine[0];
+        const opponentReply = actualLine[1];
+        const bestFirst = bestLine[0];
+
+        if (actualEval && actualEval.type === 'mate') {
+          const moves = Math.abs(actualEval.value);
+          const mateForMover = (moverIsWhite && actualEval.value > 0) || (!moverIsWhite && actualEval.value < 0);
+          if (mateForMover) {
+            details.push(`${moverColorName} has mate in ${moves} on the board.`);
+          } else {
+            details.push(`${opponentColorName} can force mate in ${moves}.`);
+          }
+        } else if (bestEval && bestEval.type === 'mate') {
+          const moves = Math.abs(bestEval.value);
+          const mateForMover = (moverIsWhite && bestEval.value > 0) || (!moverIsWhite && bestEval.value < 0);
+          if (mateForMover) {
+            const moveLabel = bestEntry ? (bestEntry.san || bestEntry.uci) : 'the best line';
+            details.push(`${moverColorName} had mate in ${moves} starting with ${moveLabel}.`);
+          } else {
+            details.push(`${opponentColorName} was threatening mate in ${moves}; the engine line addresses it.`);
+          }
+        }
+
+        if (opponentReply && opponentReply.captured) {
+          const captured = describePiece(opponentReply.captured);
+          details.push(`${opponentColorName} replies with ${opponentReply.san}, winning your ${captured}.`);
+        }
+
+        if (actualFirst && actualFirst.captured && (!opponentReply || !opponentReply.captured)) {
+          const captured = describePiece(actualFirst.captured);
+          details.push(`${moverColorName} gains a ${captured} with ${actualFirst.san}.`);
+        }
+
+        if (bestFirst) {
+          if (bestFirst.captured && (!actualFirst || bestFirst.uci !== actualFirst.uci)) {
+            const captured = describePiece(bestFirst.captured);
+            details.push(`Engine prefers ${bestFirst.san} to collect the ${captured}.`);
+          } else if (bestFirst.san && bestFirst.san.includes('+') && (!actualFirst || !actualFirst.san || !actualFirst.san.includes('+'))) {
+            details.push(`Engine move ${bestFirst.san} keeps the initiative with check.`);
+          }
+        }
+
+        if (bestEntry && actualEntry && bestEntry.uci !== actualEntry.uci) {
+          if (bestPercent != null && afterPercent != null && bestPercent > afterPercent + 0.75) {
+            const beforeText = formatWinPercentDisplay(bestPercent);
+            const afterText = formatWinPercentDisplay(afterPercent);
+            if (beforeText && afterText) {
+              details.push(`${bestEntry.san || bestEntry.uci} keeps ${moverColorName.toLowerCase()} near ${beforeText} instead of ${afterText}.`);
+            }
+          } else if (bestEntry.eval) {
+            details.push(`Engine evaluation after ${bestEntry.san || bestEntry.uci}: ${bestEntry.eval}.`);
+          }
+        } else if (bestEntry && actualEntry && bestEntry.uci === actualEntry.uci) {
+          details.push('Matches the engine’s first choice.');
+        }
+
+        if (bestEntry && Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
+          const snippet = bestEntry.pvSan.slice(0, 6).join(' ');
+          details.push(`Line: ${snippet}`);
+        }
+
+        return { headline: summary, details };
+      }
+
+      function buildNextMoveExplanation(analysis) {
+        if (!analysis || !analysis.bestEntry) return null;
+        const moverTurn = state.game && typeof state.game.turn === 'function'
+          ? state.game.turn()
+          : ((state.ply % 2) === 0 ? 'w' : 'b');
+        const moverColorName = moverTurn === 'b' ? 'Black' : 'White';
+        const bestEntry = analysis.bestEntry;
+        const actualEntry = analysis.actualEntry || null;
+        const bestMoverEp = Number.isFinite(analysis.bestEp)
+          ? (moverTurn === 'w' ? analysis.bestEp : 1 - analysis.bestEp)
+          : null;
+        const actualMoverEp = Number.isFinite(analysis.actualEp)
+          ? (moverTurn === 'w' ? analysis.actualEp : 1 - analysis.actualEp)
+          : null;
+        const bestPercent = Number.isFinite(bestMoverEp) ? bestMoverEp * 100 : null;
+        const actualPercent = Number.isFinite(actualMoverEp) ? actualMoverEp * 100 : null;
+        const gain = (bestPercent != null && actualPercent != null)
+          ? bestPercent - actualPercent
+          : null;
+        const moveLabel = bestEntry.san || bestEntry.uci;
+
+        let summary = `Try ${moveLabel}`;
+        if (bestPercent != null) {
+          const approx = formatWinPercentDisplay(bestPercent);
+          if (approx) {
+            summary += ` — keeps ${moverColorName.toLowerCase()} around ${approx}.`;
+          } else {
+            summary += '.';
+          }
+        } else if (bestEntry.eval) {
+          summary += ` — evaluation ${bestEntry.eval}.`;
+        } else {
+          summary += '.';
+        }
+
+        const details = [];
+        if (gain != null && gain > 0.75 && actualEntry && actualEntry.uci !== bestEntry.uci) {
+          const approx = formatWinDeltaDisplay(gain);
+          if (approx) {
+            details.push(`${moveLabel} improves the position by about ${approx}.`);
+          }
+        } else if (actualEntry && actualEntry.uci === bestEntry.uci) {
+          details.push('The game move already follows this recommendation.');
+        }
+
+        if (Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
+          const snippet = bestEntry.pvSan.slice(0, 6).join(' ');
+          details.push(`Line: ${snippet}`);
+        }
+
+        return { headline: summary, details };
       }
 
       function createMoveEntryFromUci(preFen, color, uci) {
@@ -2431,11 +2759,11 @@
             }
           }
           const multi = line.match(/\bmultipv (\d+)/);
-          const pv = line.match(/\bpv ((?:[a-h][1-8]){2}[qrbn]?\b.*)/);
+          const pv = line.match(/\bpv ((?:[a-h][1-8])[a-h][1-8][qrbn]?\b.*)/);
           if (!multi || !pv) return;
           const rank = parseInt(multi[1], 10);
           if (!Number.isFinite(rank) || rank < 1) return;
-          const moves = pv[1].trim().split(/\s+/);
+          const moves = pv[1].trim().split(/\s+/).filter((m) => /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m));
           if (!moves.length) return;
           let evalStr = '';
           const sideToMove = sideToMoveFromFen(req.config.fen);
@@ -2454,11 +2782,22 @@
               evalStr = `${adjusted >= 0 ? '+' : ''}${(adjusted / 100).toFixed(2)}`;
             }
           }
+          const wdlMatch = line.match(/\bwdl\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)/);
+          const existing = req.pv.get(rank) || {};
           const entry = {
+            ...existing,
             rank,
             uci: moves[0],
-            eval: evalStr
+            eval: evalStr,
+            pvMoves: moves.slice(0, 20)
           };
+          if (wdlMatch) {
+            entry.wdl = {
+              w: parseInt(wdlMatch[1], 10),
+              d: parseInt(wdlMatch[2], 10),
+              l: parseInt(wdlMatch[3], 10)
+            };
+          }
           entry.san = uciToSan(req.config.fen, entry.uci);
           req.pv.set(rank, entry);
         },
@@ -2467,7 +2806,27 @@
           if (!req) return;
           const entries = Array.from(req.pv.values())
             .sort((a, b) => a.rank - b.rank)
-            .map((item) => ({ ...item }));
+            .map((item) => {
+              const pvMoves = Array.isArray(item.pvMoves) ? item.pvMoves : [];
+              const verbose = convertPvToVerbose(req.config.fen, pvMoves);
+              const sanSeq = verbose.map((mv) => mv.san);
+              let sanMove = item.san;
+              if (!sanMove && verbose[0] && verbose[0].san) {
+                sanMove = verbose[0].san;
+              } else if (!sanMove) {
+                sanMove = uciToSan(req.config.fen, item.uci);
+              }
+              return {
+                rank: item.rank,
+                uci: item.uci,
+                eval: item.eval,
+                san: sanMove,
+                wdl: item.wdl ? { ...item.wdl } : null,
+                pvMoves,
+                pvSan: sanSeq,
+                pvVerbose: verbose
+              };
+            });
           req.resolve({
             entries,
             depth: req.depth,
@@ -2540,6 +2899,7 @@
             if (!state.engineConfigured) {
               state.engine.postMessage('setoption name Threads value 1');
               state.engine.postMessage('setoption name MultiPV value 3');
+              state.engine.postMessage('setoption name UCI_ShowWDL value true');
               state.engineConfigured = true;
             }
             engineController.pump();
@@ -2599,11 +2959,79 @@
         return state.analysisCache.get(state.ply) || null;
       }
 
+      function updateExplanationPanel(analysis) {
+        const summaryEl = byId('explanationSummary');
+        const detailsEl = byId('explanationDetails');
+        if (!summaryEl || !detailsEl) return;
+
+        const defaultMessage = state.suggestionMode === 'next'
+          ? 'Engine suggestion will appear after analysis finishes.'
+          : 'Select a move to see the engine’s commentary.';
+
+        let payload = null;
+        if (analysis) {
+          if (state.suggestionMode === 'next') {
+            payload = buildNextMoveExplanation(analysis);
+          } else {
+            const moveEntry = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
+            if (moveEntry && analysis.explanation) {
+              payload = analysis.explanation;
+            } else if (moveEntry) {
+              payload = buildMoveExplanation({
+                moveEntry,
+                bestEntry: analysis.bestEntry,
+                actualEntry: analysis.actualEntry,
+                bestEval: parseEvalString(analysis.bestEntry ? analysis.bestEntry.eval : null),
+                actualEval: parseEvalString(analysis.actualEntry ? analysis.actualEntry.eval : null),
+                beforeEp: analysis.beforeEp,
+                bestEp: analysis.bestEp,
+                actualEp: analysis.actualEp,
+                cpLoss: analysis.cpLoss,
+                classification: analysis.classification,
+                overlay: analysis.overlay
+              });
+            }
+          }
+        }
+
+        if (!payload) {
+          if (state.suggestionMode === 'next' && state.ply >= state.verboseHistory.length) {
+            summaryEl.textContent = 'Game complete — no next move to suggest.';
+          } else if (state.suggestionMode === 'next' && state.analysisStatus === 'running') {
+            summaryEl.textContent = 'Analyzing next move…';
+          } else if (state.ply === 0 && state.suggestionMode === 'played') {
+            summaryEl.textContent = 'Select a move to see the engine’s commentary.';
+          } else if (!analysis && state.analysisStatus !== 'complete') {
+            summaryEl.textContent = 'Engine explanation will appear when analysis is ready.';
+          } else {
+            summaryEl.textContent = defaultMessage;
+          }
+          detailsEl.innerHTML = '';
+          return;
+        }
+
+        summaryEl.textContent = payload.headline || defaultMessage;
+        detailsEl.innerHTML = '';
+        if (Array.isArray(payload.details) && payload.details.length) {
+          const list = document.createElement('ul');
+          payload.details.forEach((line) => {
+            if (!line) return;
+            const item = document.createElement('li');
+            item.textContent = line;
+            list.appendChild(item);
+          });
+          if (list.childNodes.length) {
+            detailsEl.appendChild(list);
+          }
+        }
+      }
+
       function applyAnalysisForCurrentPly() {
         const analysis = getAnalysisForCurrentView();
         if (analysis) {
           drawArrows(analysis.pvEntries || []);
           updatePVDisplay(analysis.pvEntries || []);
+          updateExplanationPanel(analysis);
           let evalText = null;
           if (state.suggestionMode === 'played') {
             if (analysis.actualEntry && analysis.actualEntry.eval) {
@@ -2621,6 +3049,7 @@
 
         drawArrows([]);
         updatePVDisplay([]);
+        updateExplanationPanel(null);
         if (state.suggestionMode === 'next') {
           updateEvalBar(null);
           if (state.ply >= state.verboseHistory.length) {
@@ -2726,13 +3155,21 @@
         }
         const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
-        const bestEp = cpToExpectedPoints(bestCp);
-        const actualEp = cpToExpectedPoints(actualCp);
+        let bestEp = cpToExpectedPoints(bestCp);
+        let actualEp = cpToExpectedPoints(actualCp);
+        const bestEpWdl = expectedPointsFromWdl(bestEntry ? bestEntry.wdl : null, 'w');
+        const actualEpWdl = expectedPointsFromWdl(actualEntry ? actualEntry.wdl : null, 'w');
+        if (bestEpWdl != null) bestEp = bestEpWdl;
+        if (actualEpWdl != null) actualEp = actualEpWdl;
         let winPercentBefore = centipawnsToWinPercent(bestCp);
+        const winPercentBeforeWdl = winPercentFromWdl(bestEntry ? bestEntry.wdl : null, 'w');
+        if (winPercentBeforeWdl != null) winPercentBefore = winPercentBeforeWdl;
         if (winPercentBefore == null && Number.isFinite(beforeEp)) {
           winPercentBefore = beforeEp * 100;
         }
         let winPercentAfter = centipawnsToWinPercent(actualCp);
+        const winPercentAfterWdl = winPercentFromWdl(actualEntry ? actualEntry.wdl : null, 'w');
+        if (winPercentAfterWdl != null) winPercentAfter = winPercentAfterWdl;
         if (winPercentAfter == null && Number.isFinite(actualEp)) {
           winPercentAfter = actualEp * 100;
         }
@@ -2762,6 +3199,20 @@
           nonSacBestMoverEp
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
+        const explanation = buildMoveExplanation({
+          moveEntry,
+          bestEntry,
+          actualEntry,
+          bestEval: bestEvalParsed,
+          actualEval: actualEvalParsed,
+          beforeEp,
+          bestEp,
+          actualEp,
+          cpLoss,
+          classification: classificationData.classification,
+          overlay: classificationData.overlay
+        });
+
         moveEntry.analysis = {
           pvEntries,
           bestEntry,
@@ -2779,7 +3230,8 @@
           winPercentAfter,
           accuracy: accuracyPercent,
           depth: multiResult.depth || depth || 0,
-          movetime
+          movetime,
+          explanation
         };
         if (state.ply === index + 1) {
           scheduleBoardBadgeUpdate();
