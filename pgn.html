@@ -237,9 +237,9 @@
 
     .board-move-badge {
       position: absolute;
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
       display: none;
       align-items: center;
       justify-content: center;
@@ -250,8 +250,8 @@
     }
 
     .board-move-badge-icon {
-      width: 14px;
-      height: 14px;
+      width: 18px;
+      height: 18px;
       object-fit: contain;
       filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.45));
     }
@@ -1241,8 +1241,8 @@
 
         const boardRect = boardEl.getBoundingClientRect();
         const squareRect = squareEl.getBoundingClientRect();
-        const badgeSize = 22;
-        const margin = 6;
+        const badgeSize = 26;
+        const margin = 0;
         const left = Math.max(0, squareRect.left - boardRect.left + squareRect.width - badgeSize - margin);
         const top = Math.max(0, squareRect.top - boardRect.top + margin);
 
