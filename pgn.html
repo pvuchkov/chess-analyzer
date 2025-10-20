@@ -239,6 +239,55 @@
       list-style: disc;
     }
 
+    .explanation-cards {
+      display: grid;
+      gap: 12px;
+    }
+
+    .explanation-cards:empty {
+      display: none;
+    }
+
+    .explanation-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: rgba(148, 163, 184, 0.12);
+      display: grid;
+      gap: 6px;
+    }
+
+    [data-theme="light"] .explanation-card {
+      background: rgba(37, 99, 235, 0.09);
+    }
+
+    .explanation-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .explanation-card-headline {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .explanation-card-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .explanation-card-list li {
+      list-style: disc;
+    }
+
     .board-area {
       display: flex;
       gap: 18px;
@@ -861,6 +910,7 @@
       <h2 style="margin-top:22px;">Engine explanation</h2>
       <div id="explanationBox" class="explanation-panel">
         <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
+        <div id="explanationCards" class="explanation-cards"></div>
         <div id="explanationDetails" class="explanation-details"></div>
       </div>
     </div>
@@ -2189,6 +2239,31 @@
         return `${abs.toFixed(1)}%`;
       }
 
+      function epToMoverWinPercent(epWhite, moverColor) {
+        if (!Number.isFinite(epWhite)) return null;
+        const ep = moverColor === 'b' ? 1 - epWhite : epWhite;
+        return Math.max(0, Math.min(100, ep * 100));
+      }
+
+      function winPercentForEntry(entry, moverColor) {
+        if (!entry) return null;
+        const epWhite = expectedPointsFromWdl(entry.wdl, 'w');
+        if (Number.isFinite(epWhite)) {
+          return epToMoverWinPercent(epWhite, moverColor);
+        }
+        const cp = evalStringToCentipawns(entry.eval);
+        if (!Number.isFinite(cp)) return null;
+        const ep = cpToExpectedPoints(cp);
+        return epToMoverWinPercent(ep, moverColor);
+      }
+
+      function formatLineSnippet(sanMoves, limit = 6) {
+        if (!Array.isArray(sanMoves) || !sanMoves.length) return null;
+        const clipped = sanMoves.slice(0, limit).filter(Boolean);
+        if (!clipped.length) return null;
+        return clipped.join(' ');
+      }
+
       function buildMoveExplanation({
         moveEntry,
         bestEntry,
@@ -2200,7 +2275,8 @@
         actualEp,
         cpLoss,
         classification,
-        overlay
+        overlay,
+        planScenarios
       }) {
         if (!moveEntry) return null;
         const moverIsWhite = moveEntry.color !== 'b';
@@ -2331,12 +2407,324 @@
           details.push('Matches the engine’s first choice.');
         }
 
-        if (bestEntry && Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
+        if (!planScenarios && bestEntry && Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
           const snippet = bestEntry.pvSan.slice(0, 6).join(' ');
           details.push(`Line: ${snippet}`);
         }
 
-        return { headline: summary, details };
+        const cards = [];
+        const planActual = planScenarios && planScenarios.actual ? planScenarios.actual : null;
+        const planBest = planScenarios && planScenarios.best ? planScenarios.best : null;
+        const ideaPlan = planActual || planBest;
+
+        function makePlanHeadline(plan) {
+          if (!plan) return null;
+          const moveLabel = plan.moveSan || plan.moveUci || 'the move';
+          const parts = [`Play ${moveLabel}`];
+          if (plan.moverWinPercent != null) {
+            const approx = formatWinPercentDisplay(plan.moverWinPercent);
+            if (approx) {
+              parts.push(`keeps ${moverColorName.toLowerCase()} near ${approx}`);
+            }
+          } else if (plan.delta != null) {
+            const approx = formatWinDeltaDisplay(Math.abs(plan.delta));
+            if (approx) {
+              if (plan.delta >= 0) {
+                parts.push(`improves chances by about ${approx}`);
+              } else {
+                parts.push(`costs roughly ${approx}`);
+              }
+            }
+          }
+          return parts.join(' — ');
+        }
+
+        function buildPlanBullets(plan, opts = {}) {
+          const bullets = [];
+          if (!plan) return bullets;
+          if (plan.delta != null && plan.moverWinPercent != null && plan.beforeWinPercent != null && Math.abs(plan.delta) >= 0.75) {
+            const approx = formatWinDeltaDisplay(plan.delta);
+            if (approx) {
+              bullets.push(`${plan.delta >= 0 ? 'Improves' : 'Drops'} the position by about ${approx}.`);
+            }
+          }
+          if (plan.isMate) {
+            bullets.push('Forces mate immediately.');
+          } else if (plan.isCheck) {
+            bullets.push('Delivers check to keep the initiative.');
+          }
+          if (plan.isCapture && plan.capturePiece) {
+            bullets.push(`Wins a ${plan.capturePiece}.`);
+          }
+          if (plan.replySan && opts.showReply && plan.replyWinPercent != null) {
+            const after = formatWinPercentDisplay(plan.replyWinPercent);
+            if (after) {
+              bullets.push(`${opponentColorName} can answer with ${plan.replySan}, leaving ${moverColorName.toLowerCase()} around ${after}.`);
+            } else {
+              bullets.push(`${opponentColorName} can answer with ${plan.replySan}.`);
+            }
+          } else if (plan.replySan && opts.showReply) {
+            bullets.push(`${opponentColorName} can answer with ${plan.replySan}.`);
+          }
+          if (plan.replyCaptures) {
+            bullets.push(`${plan.replySan} targets your ${plan.replyCaptures}.`);
+          }
+          if (plan.ignoreWinPercent != null && plan.replyWinPercent != null && Math.abs(plan.ignoreWinPercent - plan.replyWinPercent) >= 1.5) {
+            const ignore = formatWinPercentDisplay(plan.ignoreWinPercent);
+            const after = formatWinPercentDisplay(plan.replyWinPercent);
+            if (ignore && after) {
+              bullets.push(`If ${opponentColorName.toLowerCase()} ignores it, you stay near ${ignore} instead of ${after}.`);
+            }
+          }
+          const snippet = formatLineSnippet(plan.snippet);
+          if (snippet) {
+            bullets.push(`Line: ${snippet}`);
+          }
+          return bullets;
+        }
+
+        if (ideaPlan) {
+          const ideaHeadline = makePlanHeadline(ideaPlan);
+          const bullets = buildPlanBullets(ideaPlan, { showReply: Boolean(planActual && planActual === ideaPlan) });
+          cards.push({
+            key: 'idea',
+            title: 'Idea',
+            headline: ideaHeadline,
+            bullets
+          });
+        }
+
+        if (planActual && planActual.replySan) {
+          const headline = `${opponentColorName} can meet it with ${planActual.replySan}`;
+          const bullets = [];
+          const after = formatWinPercentDisplay(planActual.replyWinPercent);
+          if (after) {
+            bullets.push(`Your chances drop to about ${after}.`);
+          }
+          if (planActual.replyCaptures) {
+            bullets.push(`That move wins your ${planActual.replyCaptures}.`);
+          }
+          if (planActual.ignoreWinPercent != null && planActual.replyWinPercent != null && Math.abs(planActual.ignoreWinPercent - planActual.replyWinPercent) >= 1.5) {
+            const ignore = formatWinPercentDisplay(planActual.ignoreWinPercent);
+            const afterText = formatWinPercentDisplay(planActual.replyWinPercent);
+            if (ignore && afterText) {
+              bullets.push(`If ${opponentColorName.toLowerCase()} plays another move, you keep about ${ignore}.`);
+            }
+          }
+          const snippet = planActual.replySnippet ? formatLineSnippet(planActual.replySnippet) : null;
+          if (snippet) {
+            bullets.push(`Continuation: ${snippet}`);
+          }
+          cards.push({
+            key: 'problem',
+            title: 'Problem',
+            headline,
+            bullets
+          });
+        }
+
+        if (planBest && (!planActual || planBest.moveUci !== planActual.moveUci)) {
+          const headline = `Solution — start with ${planBest.moveSan || planBest.moveUci}`;
+          const bullets = [];
+          if (planBest.moverWinPercent != null) {
+            const approx = formatWinPercentDisplay(planBest.moverWinPercent);
+            if (approx) {
+              bullets.push(`Keeps ${moverColorName.toLowerCase()} around ${approx}.`);
+            }
+          }
+          if (planActual && planActual.moverWinPercent != null && planBest.moverWinPercent != null) {
+            const delta = planBest.moverWinPercent - planActual.moverWinPercent;
+            if (Math.abs(delta) >= 1.5) {
+              const approx = formatWinDeltaDisplay(delta);
+              if (approx) {
+                bullets.push(`Improves the plan by roughly ${approx}.`);
+              }
+            }
+          }
+          if (planActual && planActual.replyUci && planBest.legalReplyUcis && !planBest.legalReplyUcis.has(planActual.replyUci)) {
+            bullets.push(`${planActual.replySan || 'The refutation'} is no longer available.`);
+          } else if (planBest.replySan && planActual && planActual.replySan && planBest.replySan !== planActual.replySan) {
+            bullets.push(`After ${planBest.moveSan || planBest.moveUci}, the best reply becomes ${planBest.replySan}.`);
+          }
+          const snippet = formatLineSnippet(planBest.snippet);
+          if (snippet) {
+            bullets.push(`Line: ${snippet}`);
+          }
+          cards.push({
+            key: 'solution',
+            title: 'Solution',
+            headline,
+            bullets
+          });
+        }
+
+        return { headline: summary, details, cards };
+      }
+
+      async function computePlanScenarios({
+        fen,
+        moverColor,
+        actualEntry,
+        bestEntry,
+        beforeEp,
+        depth,
+        movetime,
+        token,
+        ply
+      }) {
+        const beforeWinPercent = Number.isFinite(beforeEp) ? beforeEp * 100 : null;
+        const plans = {};
+        const baseDepth = Number.isFinite(depth) ? depth : 18;
+        const replyDepth = Math.max(6, Math.min(baseDepth - 2, 12));
+        const replyMovetime = Math.min(550, Math.max(140, Number.isFinite(movetime) ? Math.floor(movetime / 2) : 220));
+
+        async function evaluateEntry(entry, tag) {
+          if (!entry || !entry.uci) return null;
+          const verbose = Array.isArray(entry.pvVerbose) ? entry.pvVerbose : [];
+          let first = verbose[0];
+          if (!first) {
+            const fallback = createMoveEntryFromUci(fen, moverColor, entry.uci);
+            if (fallback) {
+              first = { ...fallback, san: entry.san || uciToSan(fen, entry.uci), uci: entry.uci };
+            }
+          }
+          if (!first) return null;
+
+          const plan = {
+            type: tag,
+            moveUci: entry.uci,
+            moveSan: first.san || entry.san || entry.uci,
+            snippet: Array.isArray(entry.pvSan) ? [...entry.pvSan] : [],
+            beforeWinPercent,
+            moverWinPercent: winPercentForEntry(entry, moverColor),
+            delta: null,
+            isCapture: Boolean(first.captured),
+            capturePiece: first.captured ? describePiece(first.captured) : null,
+            isCheck: Boolean(first.san && first.san.includes('+')),
+            isMate: Boolean(first.san && first.san.includes('#')),
+            reply: verbose[1] || null,
+            replySan: verbose[1] && verbose[1].san ? verbose[1].san : null,
+            replyUci: verbose[1] ? `${verbose[1].from}${verbose[1].to}${verbose[1].promotion || ''}` : null,
+            replyCaptures: verbose[1] && verbose[1].captured ? describePiece(verbose[1].captured) : null,
+            replyWinPercent: null,
+            replySnippet: null,
+            ignoreWinPercent: null,
+            ignoreSnippet: null,
+            legalReplyUcis: null
+          };
+
+          if (plan.moverWinPercent != null && beforeWinPercent != null) {
+            plan.delta = plan.moverWinPercent - beforeWinPercent;
+          }
+
+          if (plan.reply) {
+            plan.replyWinPercent = plan.moverWinPercent != null ? plan.moverWinPercent : winPercentForEntry(entry, moverColor);
+          }
+
+          const afterFen = first.fen || null;
+          if (afterFen && (plan.reply || plan.replyUci)) {
+            let legal = [];
+            try {
+              const game = new Chess(afterFen);
+              legal = game.moves({ verbose: true });
+            } catch (err) {
+              legal = [];
+            }
+            if (legal.length) {
+              const legalSet = new Set();
+              const altMoves = [];
+              legal.forEach((mv) => {
+                const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
+                legalSet.add(uci);
+                if (!plan.replyUci || uci !== plan.replyUci) {
+                  altMoves.push(uci);
+                }
+              });
+              plan.legalReplyUcis = legalSet;
+
+              if (plan.reply && (!plan.replySnippet || plan.replySnippet.length === 0)) {
+                const replySanSeq = [];
+                for (let i = 1; i < verbose.length && replySanSeq.length < 5; i++) {
+                  if (verbose[i] && verbose[i].san) {
+                    replySanSeq.push(verbose[i].san);
+                  }
+                }
+                if (replySanSeq.length) {
+                  plan.replySnippet = replySanSeq;
+                }
+              }
+
+              if (altMoves.length) {
+                let ignoreResult = null;
+                try {
+                  ignoreResult = await engineController.run({
+                    fen: afterFen,
+                    depth: replyDepth,
+                    movetime: replyMovetime,
+                    searchMoves: altMoves,
+                    ply: ply + 1
+                  });
+                } catch (err) {
+                  ignoreResult = null;
+                }
+                if (token !== state.analysisToken) {
+                  throw new Error('cancelled');
+                }
+                const ignoreEntry = ignoreResult && ignoreResult.entries && ignoreResult.entries[0];
+                if (ignoreEntry) {
+                  const ignorePercent = winPercentForEntry(ignoreEntry, moverColor);
+                  if (ignorePercent != null) {
+                    plan.ignoreWinPercent = ignorePercent;
+                  }
+                  if (Array.isArray(ignoreEntry.pvSan) && ignoreEntry.pvSan.length) {
+                    plan.ignoreSnippet = ignoreEntry.pvSan.slice(0, 5);
+                  }
+                }
+              }
+            }
+          }
+
+          if (!plan.replySnippet && Array.isArray(entry.pvSan) && entry.pvSan.length > 1) {
+            plan.replySnippet = entry.pvSan.slice(1, Math.min(entry.pvSan.length, 6));
+          }
+
+          return plan;
+        }
+
+        let actualPlan = null;
+        try {
+          actualPlan = await evaluateEntry(actualEntry, 'actual');
+        } catch (err) {
+          if (err && err.message === 'cancelled') throw err;
+          console.warn('Failed to build actual plan explanation', err);
+        }
+        if (token !== state.analysisToken) {
+          throw new Error('cancelled');
+        }
+        if (actualPlan) {
+          plans.actual = actualPlan;
+        }
+
+        if (bestEntry) {
+          if (actualPlan && actualEntry && bestEntry.uci === actualEntry.uci) {
+            plans.best = actualPlan;
+          } else {
+            try {
+              const bestPlan = await evaluateEntry(bestEntry, 'best');
+              if (token !== state.analysisToken) {
+                throw new Error('cancelled');
+              }
+              if (bestPlan) {
+                plans.best = bestPlan;
+              }
+            } catch (err) {
+              if (err && err.message === 'cancelled') throw err;
+              console.warn('Failed to build best plan explanation', err);
+            }
+          }
+        }
+
+        return plans;
       }
 
       function buildNextMoveExplanation(analysis) {
@@ -2962,6 +3350,7 @@
       function updateExplanationPanel(analysis) {
         const summaryEl = byId('explanationSummary');
         const detailsEl = byId('explanationDetails');
+        const cardsEl = byId('explanationCards');
         if (!summaryEl || !detailsEl) return;
 
         const defaultMessage = state.suggestionMode === 'next'
@@ -3006,11 +3395,46 @@
           } else {
             summaryEl.textContent = defaultMessage;
           }
+          if (cardsEl) cardsEl.innerHTML = '';
           detailsEl.innerHTML = '';
           return;
         }
 
         summaryEl.textContent = payload.headline || defaultMessage;
+        if (cardsEl) cardsEl.innerHTML = '';
+        if (cardsEl && Array.isArray(payload.cards) && payload.cards.length) {
+          payload.cards.forEach((card) => {
+            if (!card || (!card.headline && (!Array.isArray(card.bullets) || !card.bullets.length))) return;
+            const cardEl = document.createElement('div');
+            cardEl.className = 'explanation-card';
+            if (card.title) {
+              const titleEl = document.createElement('div');
+              titleEl.className = 'explanation-card-title';
+              titleEl.textContent = card.title;
+              cardEl.appendChild(titleEl);
+            }
+            if (card.headline) {
+              const headEl = document.createElement('div');
+              headEl.className = 'explanation-card-headline';
+              headEl.textContent = card.headline;
+              cardEl.appendChild(headEl);
+            }
+            if (Array.isArray(card.bullets) && card.bullets.length) {
+              const listEl = document.createElement('ul');
+              listEl.className = 'explanation-card-list';
+              card.bullets.forEach((text) => {
+                if (!text) return;
+                const li = document.createElement('li');
+                li.textContent = text;
+                listEl.appendChild(li);
+              });
+              if (listEl.childNodes.length) {
+                cardEl.appendChild(listEl);
+              }
+            }
+            cardsEl.appendChild(cardEl);
+          });
+        }
         detailsEl.innerHTML = '';
         if (Array.isArray(payload.details) && payload.details.length) {
           const list = document.createElement('ul');
@@ -3199,6 +3623,25 @@
           nonSacBestMoverEp
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
+        let planScenarios = null;
+        try {
+          planScenarios = await computePlanScenarios({
+            fen,
+            moverColor,
+            actualEntry,
+            bestEntry,
+            beforeEp,
+            depth,
+            movetime,
+            token,
+            ply: index + 1
+          });
+        } catch (err) {
+          if (err && err.message === 'cancelled') {
+            return { afterEp: beforeEp };
+          }
+          planScenarios = null;
+        }
         const explanation = buildMoveExplanation({
           moveEntry,
           bestEntry,
@@ -3210,7 +3653,8 @@
           actualEp,
           cpLoss,
           classification: classificationData.classification,
-          overlay: classificationData.overlay
+          overlay: classificationData.overlay,
+          planScenarios
         });
 
         moveEntry.analysis = {
@@ -3231,7 +3675,8 @@
           accuracy: accuracyPercent,
           depth: multiResult.depth || depth || 0,
           movetime,
-          explanation
+          explanation,
+          planScenarios
         };
         if (state.ply === index + 1) {
           scheduleBoardBadgeUpdate();
