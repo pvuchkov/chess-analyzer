@@ -237,15 +237,14 @@
 
     .board-move-badge {
       position: absolute;
-      width: 40px;
-      height: 40px;
-      border-radius: 999px;
+      width: 32px;
+      height: 32px;
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      box-shadow: 0 6px 14px rgba(8, 15, 35, 0.35);
+      background: transparent;
+      border: none;
+      box-shadow: none;
       pointer-events: none;
     }
 
@@ -260,30 +259,10 @@
       display: none;
     }
 
-    .board-move-badge[data-classification="best"],
-    .board-move-badge[data-classification="excellent"],
-    .board-move-badge[data-classification="good"],
-    .board-move-badge[data-classification="brilliant"],
-    .board-move-badge[data-classification="great"] {
-      border-color: var(--ok);
-      background: rgba(34, 197, 94, 0.2);
-    }
-
-    .board-move-badge[data-classification="book"] {
-      border-color: var(--accent);
-      background: rgba(56, 189, 248, 0.22);
-    }
-
-    .board-move-badge[data-classification="inaccuracy"],
-    .board-move-badge[data-classification="miss"] {
-      border-color: var(--warn);
-      background: rgba(250, 204, 21, 0.24);
-    }
-
-    .board-move-badge[data-classification="mistake"],
-    .board-move-badge[data-classification="blunder"] {
-      border-color: var(--danger);
-      background: rgba(248, 113, 113, 0.25);
+    .board-move-badge[data-classification] {
+      background: transparent;
+      border: none;
+      box-shadow: none;
     }
 
     .eval-column {
@@ -2085,6 +2064,37 @@
         return false;
       }
 
+      function createMoveEntryFromUci(preFen, color, uci) {
+        if (!preFen || !uci) return null;
+        try {
+          const game = new Chess(preFen);
+          const from = uci.slice(0, 2);
+          const to = uci.slice(2, 4);
+          const promotion = uci.length > 4 ? uci.slice(4) : undefined;
+          const moveResult = game.move({ from, to, promotion });
+          if (!moveResult) {
+            return null;
+          }
+          return {
+            color,
+            from,
+            to,
+            promotion,
+            preFen,
+            fen: game.fen()
+          };
+        } catch (err) {
+          console.warn('Failed to build move entry from UCI', err);
+          return null;
+        }
+      }
+
+      function createMoveEntryFromVerbose(preFen, color, move) {
+        if (!move) return null;
+        const uci = `${move.from}${move.to}${move.promotion || ''}`;
+        return createMoveEntryFromUci(preFen, color, uci);
+      }
+
       function classifyMoveContext({
         bestEp,
         actualEp,
@@ -2098,7 +2108,10 @@
         bestEval,
         actualEval,
         legalMoves,
-        previousMoveEntry
+        previousMoveEntry,
+        probeEvaluations = [],
+        actualIsSac: actualMoveSacIndicator = null,
+        nonSacBestMoverEp: nonSacBestOverride = null
       }) {
         const moverColor = moveEntry && moveEntry.color === 'b' ? 'b' : 'w';
         const moverIsWhite = moverColor === 'w';
@@ -2203,17 +2216,50 @@
         );
 
         const entryData = [];
+        const actualMoveIsSac = actualMoveSacIndicator != null
+          ? Boolean(actualMoveSacIndicator)
+          : detectSacrifice(moveEntry);
         if (Array.isArray(pvEntries)) {
           pvEntries.forEach((entry) => {
             const cp = evalStringToCentipawns(entry.eval);
             const epWhite = cpToExpectedPoints(cp, averageRating);
             const epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
-            entryData.push({ entry, epMover });
+            let entryIsSac = false;
+            if (entry && entry.uci && moveEntry && moveEntry.preFen) {
+              const hypo = createMoveEntryFromUci(moveEntry.preFen, moverColor, entry.uci);
+              if (hypo) {
+                entryIsSac = detectSacrifice(hypo);
+              }
+            }
+            entryData.push({ entry, epMover, isSac: entryIsSac });
           });
         }
         const actualId = actualEntry && actualEntry.uci ? actualEntry.uci : null;
         if (actualId && !entryData.some((item) => item.entry && item.entry.uci === actualId)) {
-          entryData.push({ entry: actualEntry, epMover: Number.isFinite(actualMoverEp) ? actualMoverEp : null });
+          entryData.push({
+            entry: actualEntry,
+            epMover: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
+            isSac: actualMoveIsSac
+          });
+        }
+
+        const existingUcis = new Set();
+        entryData.forEach((item) => {
+          if (item.entry && item.entry.uci) {
+            existingUcis.add(item.entry.uci);
+          }
+        });
+        if (Array.isArray(probeEvaluations)) {
+          probeEvaluations.forEach((probe) => {
+            if (!probe || !probe.uci || existingUcis.has(probe.uci)) return;
+            const epMover = Number.isFinite(probe.epMover) ? probe.epMover : null;
+            entryData.push({
+              entry: { uci: probe.uci },
+              epMover,
+              isSac: Boolean(probe.isSac)
+            });
+            existingUcis.add(probe.uci);
+          });
         }
 
         let alternativeBestMoverEp = null;
@@ -2286,16 +2332,24 @@
         const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
         const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
         const nearBestSac = loss == null ? sameAsBest : loss <= 0.02 + 1e-6;
-        const notAlreadyWinning = !(moverWinBefore != null && moverWinBefore >= notAlreadyWinningThreshold);
+        let nonSacBestMoverEp = Number.isFinite(nonSacBestOverride) ? nonSacBestOverride : null;
+        if (nonSacBestMoverEp == null) {
+          entryData.forEach((item) => {
+            if (item.isSac) return;
+            if (!Number.isFinite(item.epMover)) return;
+            if (nonSacBestMoverEp == null || item.epMover > nonSacBestMoverEp) {
+              nonSacBestMoverEp = item.epMover;
+            }
+          });
+        }
+        const nonSacAlreadyWinning = nonSacBestMoverEp != null && nonSacBestMoverEp >= notAlreadyWinningThreshold;
         const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
-        const alternativeWinning = alternativeBestMoverEp != null && alternativeBestMoverEp >= notAlreadyWinningThreshold;
 
         const brilliantCandidate = (baseline === 'best' || baseline === 'excellent')
-          && detectSacrifice(moveEntry)
+          && actualMoveIsSac
           && nearBestSac
           && keepsPlayable
-          && notAlreadyWinning
-          && !alternativeWinning;
+          && !nonSacAlreadyWinning;
 
         const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
         const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
@@ -2599,6 +2653,8 @@
         if (!moveEntry) return { afterEp: beforeEp };
         const fen = moveEntry.preFen || effectiveInitialFen();
         const actualUci = `${moveEntry.from}${moveEntry.to}${moveEntry.promotion || ''}`;
+        const moverColor = moveEntry.color === 'b' ? 'b' : 'w';
+        const moverIsWhite = moverColor === 'w';
         const baseConfig = { fen, depth, movetime, ply: index + 1 };
         let legalMoves = [];
         try {
@@ -2628,6 +2684,45 @@
           if (token !== state.analysisToken) return { afterEp: beforeEp };
           const forcedEntries = forcedResult ? forcedResult.entries.map((entry) => ({ ...entry })) : [];
           actualEntry = forcedEntries.find((entry) => entry.uci === actualUci) || forcedEntries[0] || null;
+        }
+        const actualIsSac = detectSacrifice(moveEntry);
+        let probeEvaluations = [];
+        let nonSacBestMoverEp = null;
+        if (actualIsSac && Array.isArray(legalMoves) && legalMoves.length > 0) {
+          const probeDepth = Math.max(8, Math.min(12, Number.isFinite(depth) ? depth : 10));
+          const probeMovetime = Math.min(300, Number.isFinite(movetime) ? Math.max(120, Math.floor(movetime / 4)) : 180);
+          for (const mv of legalMoves) {
+            const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
+            if (uci === actualUci) continue;
+            const hypoEntry = createMoveEntryFromVerbose(fen, moverColor, mv);
+            if (!hypoEntry) continue;
+            const isSac = detectSacrifice(hypoEntry);
+            if (isSac) continue;
+            let probeResult;
+            try {
+              probeResult = await engineController.run({
+                fen,
+                depth: probeDepth,
+                movetime: probeMovetime,
+                searchMoves: [uci],
+                ply: index + 1
+              });
+            } catch (err) {
+              probeResult = null;
+            }
+            if (token !== state.analysisToken) return { afterEp: beforeEp };
+            const probeEntryResult = probeResult && probeResult.entries && probeResult.entries[0];
+            if (!probeEntryResult) continue;
+            const probeCp = evalStringToCentipawns(probeEntryResult.eval);
+            if (!Number.isFinite(probeCp)) continue;
+            const epWhite = cpToExpectedPoints(probeCp);
+            const epMover = moverIsWhite ? epWhite : 1 - epWhite;
+            if (!Number.isFinite(epMover)) continue;
+            probeEvaluations.push({ uci, epMover, isSac: false });
+            if (nonSacBestMoverEp == null || epMover > nonSacBestMoverEp) {
+              nonSacBestMoverEp = epMover;
+            }
+          }
         }
         const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
@@ -2661,7 +2756,10 @@
           bestEval: bestEvalParsed,
           actualEval: actualEvalParsed,
           legalMoves,
-          previousMoveEntry
+          previousMoveEntry,
+          probeEvaluations,
+          actualIsSac,
+          nonSacBestMoverEp
         });
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
         moveEntry.analysis = {
