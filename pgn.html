@@ -2419,6 +2419,46 @@
         };
       }
 
+      function buildAnalysisSummary({ moverColor = 'w', entries = [], actualEntry = null } = {}) {
+        const normalizedColor = moverColor === 'b' ? 'b' : 'w';
+        const byMove = new Map();
+
+        const rememberEntry = (entry) => {
+          if (!entry || !entry.uci) return;
+          let ep = Number.isFinite(entry.expectedPoints) ? entry.expectedPoints : null;
+          if (!Number.isFinite(ep)) {
+            ep = expectedPointsForEntry(entry, normalizedColor);
+          }
+          if (!Number.isFinite(ep)) return;
+          const payload = {
+            ep,
+            tag: entry.tag || null,
+            eval: entry.eval || null,
+            pvSan: Array.isArray(entry.pvSan) ? entry.pvSan.slice() : null
+          };
+          byMove.set(entry.uci, payload);
+        };
+
+        if (Array.isArray(entries)) {
+          entries.forEach((entry) => rememberEntry(entry));
+        }
+        rememberEntry(actualEntry);
+
+        const scored = [];
+        byMove.forEach((info, uci) => {
+          if (Number.isFinite(info.ep)) {
+            scored.push({ uci, ep: info.ep });
+          }
+        });
+        scored.sort((a, b) => b.ep - a.ep);
+
+        return {
+          EP1: scored.length ? scored[0].ep : null,
+          bestMove: scored.length ? scored[0].uci : null,
+          byMove
+        };
+      }
+
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
         if (!Number.isFinite(winPercentBefore) || !Number.isFinite(winPercentAfter)) {
           return null;
@@ -2577,7 +2617,7 @@
         const labelText = labelMap[key] || labelMap[classification] || 'Move review';
 
         const beforeMoverEp = Number.isFinite(beforeEp)
-          ? beforeEp
+          ? (moverIsWhite ? beforeEp : 1 - beforeEp)
           : (Number.isFinite(bestEp) ? (moverIsWhite ? bestEp : 1 - bestEp) : null);
         const actualMoverEp = Number.isFinite(actualEp)
           ? (moverIsWhite ? actualEp : 1 - actualEp)
@@ -3098,6 +3138,7 @@
         bestEntry,
         actualEntry,
         pvEntries,
+        summary,
         bestCp,
         actualCp,
         bestEval,
@@ -3114,12 +3155,29 @@
         const averageRating = getAverageGameRating();
         const moverRating = getPlayerRating(moverColor);
 
-        const bestWhiteEp = Number.isFinite(bestEp) ? bestEp : (Number.isFinite(bestCp) ? cpToExpectedPoints(bestCp, averageRating) : null);
-        const actualWhiteEp = Number.isFinite(actualEp) ? actualEp : (Number.isFinite(actualCp) ? cpToExpectedPoints(actualCp, averageRating) : null);
+        const summaryData = summary && typeof summary === 'object' ? summary : null;
+        const summaryByMove = summaryData && summaryData.byMove instanceof Map ? summaryData.byMove : null;
+        const summaryBestMoverEp = summaryData && Number.isFinite(summaryData.EP1) ? summaryData.EP1 : null;
+        const summaryActualInfo = summaryByMove && actualEntry && actualEntry.uci ? summaryByMove.get(actualEntry.uci) : null;
+        const summaryActualMoverEp = summaryActualInfo && Number.isFinite(summaryActualInfo.ep) ? summaryActualInfo.ep : null;
 
-        const bestMoverEp = Number.isFinite(bestWhiteEp) ? (moverIsWhite ? bestWhiteEp : 1 - bestWhiteEp) : null;
-        const actualMoverEp = Number.isFinite(actualWhiteEp) ? (moverIsWhite ? actualWhiteEp : 1 - actualWhiteEp) : null;
-        const beforeMoverEp = Number.isFinite(beforeEp) ? beforeEp : null;
+        const bestWhiteEp = Number.isFinite(bestEp)
+          ? bestEp
+          : (Number.isFinite(bestCp) ? cpToExpectedPoints(bestCp, averageRating) : null);
+        const actualWhiteEp = Number.isFinite(actualEp)
+          ? actualEp
+          : (Number.isFinite(actualCp) ? cpToExpectedPoints(actualCp, averageRating) : null);
+
+        let bestMoverEp = Number.isFinite(summaryBestMoverEp)
+          ? summaryBestMoverEp
+          : (Number.isFinite(bestWhiteEp) ? (moverIsWhite ? bestWhiteEp : 1 - bestWhiteEp) : null);
+        let actualMoverEp = Number.isFinite(summaryActualMoverEp)
+          ? summaryActualMoverEp
+          : (Number.isFinite(actualWhiteEp) ? (moverIsWhite ? actualWhiteEp : 1 - actualWhiteEp) : null);
+        const beforeWhiteEp = Number.isFinite(beforeEp) ? beforeEp : null;
+        const beforeMoverEp = Number.isFinite(beforeWhiteEp)
+          ? (moverIsWhite ? beforeWhiteEp : 1 - beforeWhiteEp)
+          : null;
 
         const cpGap = Number.isFinite(bestCp) && Number.isFinite(actualCp)
           ? Math.abs(bestCp - actualCp)
@@ -3129,7 +3187,7 @@
         if (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp)) {
           loss = Math.max(0, bestMoverEp - actualMoverEp);
         }
-        const bestLossMargin = 0.01;
+        const bestLossMargin = PV_BEST_MARGIN;
         const lossIsKnown = Number.isFinite(loss);
         const qualifiesAsBest = sameAsBest || (lossIsKnown && loss <= (bestLossMargin + PV_EPSILON));
 
@@ -3159,13 +3217,13 @@
             classification = qualifiesAsBest ? 'best' : 'good';
           } else if (qualifiesAsBest) {
             classification = 'best';
-          } else if (loss <= 0.02) {
+          } else if (loss <= (PV_KEEP_MARGIN + PV_EPSILON)) {
             classification = 'excellent';
-          } else if (loss <= 0.05) {
+          } else if (loss <= (0.10 + PV_EPSILON)) {
             classification = 'good';
-          } else if (loss <= 0.10) {
+          } else if (loss <= (0.20 + PV_EPSILON)) {
             classification = 'inaccuracy';
-          } else if (loss <= 0.20) {
+          } else if (loss <= (0.35 + PV_EPSILON)) {
             classification = 'mistake';
           } else {
             classification = 'blunder';
@@ -3215,9 +3273,21 @@
           : detectSacrifice(moveEntry);
         if (Array.isArray(pvEntries)) {
           pvEntries.forEach((entry) => {
-            const cp = evalStringToCentipawns(entry.eval);
-            const epWhite = cpToExpectedPoints(cp, averageRating);
-            const epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+            let epMover = null;
+            if (summaryByMove && entry && entry.uci) {
+              const info = summaryByMove.get(entry.uci);
+              if (info && Number.isFinite(info.ep)) {
+                epMover = info.ep;
+              }
+            }
+            if (!Number.isFinite(epMover) && Number.isFinite(entry.expectedPoints)) {
+              epMover = entry.expectedPoints;
+            }
+            if (!Number.isFinite(epMover)) {
+              const cp = evalStringToCentipawns(entry.eval);
+              const epWhite = cpToExpectedPoints(cp, averageRating);
+              epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+            }
             let entryIsSac = false;
             if (entry && entry.uci && moveEntry && moveEntry.preFen) {
               const hypo = createMoveEntryFromUci(moveEntry.preFen, moverColor, entry.uci);
@@ -3337,7 +3407,7 @@
 
         const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
         const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
-        const nearBestSac = loss == null ? sameAsBest : loss <= 0.02 + 1e-6;
+        const nearBestSac = loss == null ? sameAsBest : loss <= (PV_KEEP_MARGIN + PV_EPSILON);
         let nonSacBestMoverEp = Number.isFinite(nonSacBestOverride) ? nonSacBestOverride : null;
         if (nonSacBestMoverEp == null) {
           entryData.forEach((item) => {
@@ -3882,6 +3952,7 @@
             }
           }
         }
+        const positionSummary = buildAnalysisSummary({ moverColor, entries: pvEntries, actualEntry });
         const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
         let bestEp = cpToExpectedPoints(bestCp);
@@ -3916,6 +3987,7 @@
           winPercentBefore,
           winPercentAfter,
           pvEntries,
+          summary: positionSummary,
           cpLoss,
           bestCp,
           actualCp,
@@ -3986,6 +4058,9 @@
         };
         if (state.ply === index + 1) {
           scheduleBoardBadgeUpdate();
+        }
+        if (positionSummary) {
+          moveEntry.analysis.summary = positionSummary;
         }
         state.analysisCache.set(index + 1, moveEntry.analysis);
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
