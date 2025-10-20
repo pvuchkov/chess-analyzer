@@ -254,7 +254,48 @@
       width: 14px;
       height: 14px;
       object-fit: contain;
-      filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.45));
+      filter: drop-shadow(0 1px 4px rgba(8, 15, 35, 0.45));
+    }
+
+    .board-move-badge-overlay {
+      position: absolute;
+      bottom: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      display: none;
+      filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.55));
+    }
+
+    .board-move-badge[data-overlay] .board-move-badge-overlay {
+      display: block;
+    }
+
+    .board-move-badge[data-classification="best"],
+    .board-move-badge[data-classification="excellent"],
+    .board-move-badge[data-classification="good"],
+    .board-move-badge[data-classification="brilliant"],
+    .board-move-badge[data-classification="great"] {
+      border-color: var(--ok);
+      background: rgba(34, 197, 94, 0.2);
+    }
+
+    .board-move-badge[data-classification="book"] {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.22);
+    }
+
+    .board-move-badge[data-classification="inaccuracy"],
+    .board-move-badge[data-classification="miss"] {
+      border-color: var(--warn);
+      background: rgba(250, 204, 21, 0.24);
+    }
+
+    .board-move-badge[data-classification="mistake"],
+    .board-move-badge[data-classification="blunder"] {
+      border-color: var(--danger);
+      background: rgba(248, 113, 113, 0.25);
     }
 
     .eval-column {
@@ -632,6 +673,12 @@
       filter: drop-shadow(0 0 2px rgba(15, 23, 42, 0.5));
     }
 
+    .classification-icon.overlay {
+      width: 16px;
+      height: 16px;
+      opacity: 0.95;
+    }
+
     .pv-list {
       display: grid;
       gap: 8px;
@@ -786,6 +833,7 @@
           <div class="board-badge-layer">
             <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
               <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+              <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
             </div>
           </div>
         </div>
@@ -1172,13 +1220,18 @@
       function updateBoardClassificationBadge() {
         const badge = byId('boardMoveBadge');
         const icon = byId('boardMoveBadgeIcon');
+        const overlayIcon = byId('boardMoveBadgeOverlay');
         const boardEl = byId('board');
-        if (!badge || !icon || !boardEl) return;
+        if (!badge || !icon || !overlayIcon || !boardEl) return;
 
         badge.style.display = 'none';
         badge.removeAttribute('data-classification');
+        badge.removeAttribute('data-overlay');
         icon.removeAttribute('src');
         icon.alt = '';
+        overlayIcon.removeAttribute('src');
+        overlayIcon.alt = '';
+        overlayIcon.style.display = 'none';
 
         if (state.ply === 0) {
           return;
@@ -1211,7 +1264,18 @@
         badge.style.top = `${top}px`;
         badge.setAttribute('data-classification', normalizedClass);
         icon.src = iconPath;
-        icon.alt = chosenClass;
+        icon.alt = entry.analysis.classification;
+        const overlayClass = entry.analysis.overlay;
+        if (overlayClass) {
+          const normalizedOverlay = overlayClass.toLowerCase().replace(/\s+/g, '-');
+          const overlayPath = classificationToIcon(overlayClass);
+          if (overlayPath) {
+            overlayIcon.src = overlayPath;
+            overlayIcon.alt = `${overlayClass.charAt(0).toUpperCase()}${overlayClass.slice(1)}`;
+            overlayIcon.style.display = 'block';
+            badge.setAttribute('data-overlay', normalizedOverlay);
+          }
+        }
         badge.style.display = 'flex';
       }
 
@@ -1527,14 +1591,27 @@
         cell.appendChild(label);
 
         if (entry && entry.analysis) {
-          const cls = entry.analysis.overlay || entry.analysis.classification;
-          const iconPath = classificationToIcon(cls);
-          if (iconPath) {
-            const icon = document.createElement('img');
-            icon.src = iconPath;
-            icon.alt = cls;
-            icon.className = 'classification-icon';
-            cell.appendChild(icon);
+          const baseClass = entry.analysis.classification;
+          if (baseClass) {
+            const iconPath = classificationToIcon(baseClass);
+            if (iconPath) {
+              const icon = document.createElement('img');
+              icon.src = iconPath;
+              icon.alt = baseClass;
+              icon.className = 'classification-icon';
+              cell.appendChild(icon);
+            }
+          }
+          const overlayClass = entry.analysis.overlay;
+          if (overlayClass) {
+            const overlayPath = classificationToIcon(overlayClass);
+            if (overlayPath) {
+              const overlayIcon = document.createElement('img');
+              overlayIcon.src = overlayPath;
+              overlayIcon.alt = `${overlayClass.charAt(0).toUpperCase()}${overlayClass.slice(1)}`;
+              overlayIcon.className = 'classification-icon overlay';
+              cell.appendChild(overlayIcon);
+            }
           }
         }
 
@@ -2030,8 +2107,7 @@
 
         const bestMoverEp = Number.isFinite(bestWhiteEp) ? (moverIsWhite ? bestWhiteEp : 1 - bestWhiteEp) : null;
         const actualMoverEp = Number.isFinite(actualWhiteEp) ? (moverIsWhite ? actualWhiteEp : 1 - actualWhiteEp) : null;
-        const beforeWhiteEp = Number.isFinite(beforeEp) ? beforeEp : null;
-        const beforeMoverEp = Number.isFinite(beforeWhiteEp) ? (moverIsWhite ? beforeWhiteEp : 1 - beforeWhiteEp) : null;
+        const beforeMoverEp = Number.isFinite(beforeEp) ? beforeEp : null;
 
         const cpGap = Number.isFinite(bestCp) && Number.isFinite(actualCp)
           ? Math.abs(bestCp - actualCp)
@@ -2100,61 +2176,48 @@
         const baseline = classification;
 
         const entryData = [];
-        if (moverEpMap && typeof moverEpMap.forEach === 'function') {
-          moverEpMap.forEach((epMover, uci) => {
-            entryData.push({ uci, epMover: Number.isFinite(epMover) ? epMover : null });
-          });
-        } else if (Array.isArray(pvEntries)) {
+        if (Array.isArray(pvEntries)) {
           pvEntries.forEach((entry) => {
-            if (!entry || !entry.uci) return;
             const cp = evalStringToCentipawns(entry.eval);
             const epWhite = cpToExpectedPoints(cp, averageRating);
             const epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
-            entryData.push({ uci: entry.uci, epMover });
+            entryData.push({ entry, epMover });
           });
         }
         const actualId = actualEntry && actualEntry.uci ? actualEntry.uci : null;
-        if (actualId && !entryData.some((item) => item.uci === actualId)) {
-          entryData.push({ uci: actualId, epMover: Number.isFinite(actualMoverEp) ? actualMoverEp : null });
+        if (actualId && !entryData.some((item) => item.entry && item.entry.uci === actualId)) {
+          entryData.push({ entry: actualEntry, epMover: Number.isFinite(actualMoverEp) ? actualMoverEp : null });
         }
 
-        const bestId = bestEntry && bestEntry.uci ? bestEntry.uci : null;
         let alternativeBestMoverEp = null;
         entryData.forEach((item) => {
-          if (!item || !Number.isFinite(item.epMover)) return;
-          if (bestId && item.uci === bestId) return;
+          if (!item.entry) return;
+          if (actualId && item.entry.uci === actualId) return;
+          if (!Number.isFinite(item.epMover)) return;
           if (alternativeBestMoverEp == null || item.epMover > alternativeBestMoverEp) {
             alternativeBestMoverEp = item.epMover;
           }
         });
 
-        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.014, 0.01);
-        const nearBestMoves = [];
+        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.022, 0.016);
         let nearBestCount = 0;
         if (Number.isFinite(bestMoverEp)) {
           entryData.forEach((item) => {
-            if (!item || !Number.isFinite(item.epMover)) return;
+            if (!Number.isFinite(item.epMover)) return;
             if (bestMoverEp - item.epMover <= nearBestMargin + 1e-6) {
               nearBestCount += 1;
-              nearBestMoves.push(item.uci);
             }
           });
         }
-
-        const coverageComplete = Number.isFinite(legalMoveCount)
-          && legalMoveCount > 0
-          && moverEpMap
-          && typeof moverEpMap.size === 'number'
-          && moverEpMap.size >= legalMoveCount;
 
         const moverWinBefore = beforeMoverEp;
         const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
         const moverWinDelta = moverWinBefore != null && moverWinAfter != null ? moverWinAfter - moverWinBefore : null;
 
-        const losingThreshold = ratingLerp(moverRating, 1000, 2000, 0.36, 0.32);
-        const winningThreshold = ratingLerp(moverRating, 1000, 2000, 0.64, 0.72);
-        const swingDelta = ratingLerp(moverRating, 1000, 2000, 0.1, 0.12);
-        const crossDelta = ratingLerp(moverRating, 1000, 2000, 0.1, 0.12);
+        const losingThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.35);
+        const winningThreshold = ratingLerp(moverRating, 1000, 2000, 0.62, 0.70);
+        const swingDelta = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
+        const crossDelta = ratingLerp(moverRating, 1000, 2000, 0.07, 0.1);
 
         const swingImprovement = moverWinBefore != null && moverWinAfter != null
           && (
@@ -2162,48 +2225,16 @@
             || (moverWinBefore < 0.5 && moverWinAfter >= 0.5 && moverWinDelta >= crossDelta)
           );
 
-        const onlyMoveSeed = sameAsBest && Number.isFinite(bestMoverEp) && nearBestCount === 1;
-        const needsFullScan = onlyMoveSeed && !coverageComplete;
-        const requiresVerification = onlyMoveSeed && coverageComplete && !onlyMoveVerified;
-        const onlyMove = onlyMoveSeed && coverageComplete && !requiresVerification;
+        const onlyMove = sameAsBest && Number.isFinite(bestMoverEp) && nearBestCount === 1;
         const bigSaveMargin = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
         const bigSave = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
           && bestMoverEp - alternativeBestMoverEp >= bigSaveMargin;
 
-        const greatMinimumEp = ratingLerp(moverRating, 1000, 2000, 0.36, 0.42);
-        const forcedReply = Boolean(inCheckBefore && legalMoveCount === 1);
-        const stillLosing = moverWinAfter != null && moverWinAfter < greatMinimumEp;
-
         let greatCandidate = false;
-        let greatReason = null;
-        if ((baseline === 'best' || baseline === 'excellent') && moverWinAfter != null && moverWinAfter >= greatMinimumEp) {
-          if (swingImprovement) {
+        if ((baseline === 'best' || baseline === 'excellent' || baseline === 'good') && moverWinAfter != null) {
+          if (swingImprovement || onlyMove || bigSave) {
             greatCandidate = true;
-            greatReason = 'swing';
-          } else if (onlyMove) {
-            greatCandidate = true;
-            greatReason = 'only';
-          } else if (bigSave) {
-            greatCandidate = true;
-            greatReason = 'save';
           }
-        }
-
-        if (greatCandidate) {
-          if (forcedReply || isTrivialRecapture || stillLosing || actualMateForOpponent) {
-            greatCandidate = false;
-            greatReason = null;
-          }
-        }
-        if (greatCandidate && requiresVerification) {
-          greatCandidate = false;
-        }
-        if (needsFullScan) {
-          greatCandidate = false;
-        }
-        if (greatCandidate && nearBestMoves.length === 0 && swingImprovement === false && bigSave === false) {
-          greatCandidate = false;
-          greatReason = null;
         }
 
         const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
@@ -2214,7 +2245,7 @@
         const alternativeWinning = alternativeBestMoverEp != null && alternativeBestMoverEp >= notAlreadyWinningThreshold;
 
         const brilliantCandidate = (baseline === 'best' || baseline === 'excellent')
-          && sacrificeDetected
+          && detectSacrifice(moveEntry)
           && nearBestSac
           && keepsPlayable
           && notAlreadyWinning
@@ -2242,98 +2273,7 @@
           overlay = 'miss';
         }
 
-        return {
-          classification: baseline,
-          overlay,
-          expectedLoss: loss,
-          meta: {
-            coverageComplete,
-            nearBestMoves,
-            nearBestMargin,
-            bestMoverEp,
-            nearBestCount,
-            needsFullScan,
-            requiresOnlyMoveVerification: requiresVerification,
-            pendingGreatReason: onlyMoveSeed ? 'only' : null,
-            greatReason
-          }
-        };
-      }
-
-      async function detectPieceSacrificeAfterReply(moveEntry, {
-        token,
-        depth,
-        movetime
-      } = {}) {
-        if (!moveEntry || !moveEntry.preFen) return false;
-        if (!moveEntry.piece || moveEntry.piece === 'p') return false;
-        try {
-          const beforeGame = new Chess(moveEntry.preFen);
-          const mover = moveEntry.color === 'b' ? 'b' : 'w';
-          const beforeCounts = countPiecesOnBoard(beforeGame.board());
-          const beforeMaterial = sumMaterial(beforeCounts[mover]);
-
-          const applied = new Chess(moveEntry.preFen);
-          const moveObj = {
-            from: moveEntry.from,
-            to: moveEntry.to,
-            promotion: moveEntry.promotion || undefined
-          };
-          const played = applied.move(moveObj);
-          if (!played) {
-            return false;
-          }
-
-          const afterCounts = countPiecesOnBoard(applied.board());
-          const afterMaterial = sumMaterial(afterCounts[mover]);
-          if (beforeMaterial - afterMaterial >= 3) {
-            return true;
-          }
-
-          if (token != null && token !== state.analysisToken) {
-            return false;
-          }
-
-          let replyUci = null;
-          try {
-            const probe = await engineController.run({
-              fen: applied.fen(),
-              depth: Math.max(10, Math.min(18, (depth || 18))),
-              movetime: Math.min(500, (movetime || 0) + 250)
-            });
-            if (token != null && token !== state.analysisToken) {
-              return false;
-            }
-            if (probe) {
-              replyUci = probe.bestmove || (Array.isArray(probe.entries) && probe.entries[0] && probe.entries[0].uci) || null;
-            }
-          } catch (err) {
-            if (token != null && token !== state.analysisToken) {
-              return false;
-            }
-          }
-
-          if (!replyUci) {
-            return beforeMaterial - afterMaterial >= 3;
-          }
-
-          const opponentGame = new Chess(applied.fen());
-          const reply = opponentGame.move({
-            from: replyUci.slice(0, 2),
-            to: replyUci.slice(2, 4),
-            promotion: replyUci.length > 4 ? replyUci[4] : undefined
-          });
-          if (!reply) {
-            return beforeMaterial - afterMaterial >= 3;
-          }
-
-          const finalCounts = countPiecesOnBoard(opponentGame.board());
-          const finalMaterial = sumMaterial(finalCounts[mover]);
-          return beforeMaterial - finalMaterial >= 3;
-        } catch (err) {
-          console.warn('Failed to evaluate sacrifice candidate', err);
-          return false;
-        }
+        return { classification: baseline, overlay, expectedLoss: loss };
       }
 
       const engineController = {
