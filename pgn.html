@@ -735,7 +735,7 @@
 
     .pv {
       display: grid;
-      grid-template-columns: 26px auto auto;
+      grid-template-columns: 26px minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
       padding: 8px 10px;
@@ -766,6 +766,36 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .pv-meta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .pv-tag {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: rgba(148, 163, 184, 0.16);
+      color: var(--text);
+    }
+
+    .pv-tag-best {
+      background: rgba(34, 197, 94, 0.18);
+      border-color: rgba(34, 197, 94, 0.35);
+      color: var(--ok);
+    }
+
+    .pv-tag-excellent {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: rgba(56, 189, 248, 0.35);
+      color: var(--accent);
     }
 
     .pv .eval {
@@ -1032,8 +1062,9 @@
           title: 'Switch to played-move review'
         }
       };
-      const MULTIPV_MAX_CANDIDATES = 10;
-      const PV_KEEP_MARGIN = 0.01;
+      const MULTIPV_MAX_CANDIDATES = 5;
+      const PV_BEST_MARGIN = 0.02;
+      const PV_KEEP_MARGIN = 0.06;
       const PV_ONLY_ONE_MARGIN = 0.10;
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 1e-6;
@@ -1950,6 +1981,17 @@
           moveEl.textContent = entry && (entry.san || entry.uci) ? (entry.san || entry.uci) : '—';
           item.appendChild(moveEl);
 
+          const metaEl = document.createElement('span');
+          metaEl.className = 'pv-meta';
+
+          if (entry && entry.tag) {
+            const tagEl = document.createElement('span');
+            const normalizedTag = String(entry.tag);
+            tagEl.className = `pv-tag pv-tag-${normalizedTag.toLowerCase()}`;
+            tagEl.textContent = normalizedTag;
+            metaEl.appendChild(tagEl);
+          }
+
           const evalEl = document.createElement('span');
           evalEl.className = 'eval';
           let evalText = entry && entry.eval ? entry.eval : '';
@@ -1976,7 +2018,8 @@
             evalText = evalText ? `${evalText} (${annotation})` : annotation;
           }
           evalEl.textContent = evalText;
-          item.appendChild(evalEl);
+          metaEl.appendChild(evalEl);
+          item.appendChild(metaEl);
 
           listEl.appendChild(item);
         });
@@ -2201,83 +2244,142 @@
         const moverColor = options.moverColor === 'b' ? 'b' : 'w';
         const keepMargin = Number.isFinite(options.keepMargin) ? options.keepMargin : PV_KEEP_MARGIN;
         const onlyOneMargin = Number.isFinite(options.onlyOneMargin) ? options.onlyOneMargin : PV_ONLY_ONE_MARGIN;
+        const bestMargin = Number.isFinite(options.bestMargin) ? options.bestMargin : PV_BEST_MARGIN;
         const maxEntries = Number.isFinite(options.maxEntries) ? options.maxEntries : MULTIPV_MAX_CANDIDATES;
         const mateSlack = Number.isFinite(options.mateSlack) ? options.mateSlack : PV_MATE_SLACK;
+        const emptyMeta = {
+          moverColor,
+          keepMargin,
+          onlyOneMargin,
+          bestMargin,
+          mateSlack,
+          keptCount: 0,
+          totalCandidates: 0,
+          bestExpectedPoints: null,
+          secondExpectedPoints: null,
+          dropPercent: null,
+          dropPercentDisplay: null,
+          reason: null,
+          message: null,
+          mateDistance: null
+        };
         if (!Array.isArray(entries) || entries.length === 0) {
-          return {
-            entries: [],
-            meta: {
-              moverColor,
-              keepMargin,
-              onlyOneMargin,
-              mateSlack,
-              keptCount: 0,
-              totalCandidates: 0,
-              bestExpectedPoints: null,
-              secondExpectedPoints: null,
-              dropPercent: null,
-              dropPercentDisplay: null,
-              reason: null,
-              message: null,
-              mateDistance: null
-            }
-          };
+          return { entries: [], meta: emptyMeta };
         }
 
-        const sorted = [...entries].sort((a, b) => a.rank - b.rank);
-        const best = sorted[0];
+        const annotated = entries.map((entry) => {
+          const parsedEval = parseEvalString(entry.eval);
+          const mateValue = parsedEval && parsedEval.type === 'mate' ? parsedEval.value : null;
+          let ep = expectedPointsForEntry(entry, moverColor);
+          if (!Number.isFinite(ep) && mateValue != null) {
+            const mateForMover = (moverColor === 'w' && mateValue > 0) || (moverColor === 'b' && mateValue < 0);
+            const mateForOpponent = (moverColor === 'w' && mateValue < 0) || (moverColor === 'b' && mateValue > 0);
+            if (mateForMover) {
+              ep = 1;
+            } else if (mateForOpponent) {
+              ep = 0;
+            }
+          }
+          const normalizedEp = Number.isFinite(ep) ? ep : null;
+          return {
+            original: entry,
+            ep: normalizedEp,
+            parsedEval,
+            mateValue: Number.isFinite(mateValue) ? mateValue : null,
+            mateDistance: Number.isFinite(mateValue) ? Math.abs(mateValue) : null
+          };
+        });
+
+        const hasEp = annotated.some((item) => Number.isFinite(item.ep));
+        const sorted = annotated.slice().sort((a, b) => {
+          if (hasEp) {
+            const epA = Number.isFinite(a.ep) ? a.ep : -Infinity;
+            const epB = Number.isFinite(b.ep) ? b.ep : -Infinity;
+            if (epA !== epB) {
+              return epB - epA;
+            }
+            if (
+              a.mateDistance != null
+              && b.mateDistance != null
+              && a.mateValue != null
+              && b.mateValue != null
+              && Math.sign(a.mateValue) === Math.sign(b.mateValue)
+            ) {
+              return a.mateDistance - b.mateDistance;
+            }
+          }
+          const rankA = Number.isFinite(a.original.rank) ? a.original.rank : Infinity;
+          const rankB = Number.isFinite(b.original.rank) ? b.original.rank : Infinity;
+          return rankA - rankB;
+        });
+
+        const bestInfo = sorted[0];
         const originalCount = sorted.length;
-        const bestEp = expectedPointsForEntry(best, moverColor);
-        const second = sorted.find((entry) => entry !== best) || null;
-        const secondEp = second ? expectedPointsForEntry(second, moverColor) : null;
-        const rawDrop = Number.isFinite(bestEp) && Number.isFinite(secondEp) ? bestEp - secondEp : null;
+        const bestEp = bestInfo && Number.isFinite(bestInfo.ep) ? bestInfo.ep : null;
+        const secondInfo = sorted.length > 1 ? sorted[1] : null;
+        const secondEp = secondInfo && Number.isFinite(secondInfo.ep) ? secondInfo.ep : null;
+        const rawDrop = bestEp != null && secondEp != null ? bestEp - secondEp : null;
         const dropPercent = rawDrop != null ? Math.max(0, rawDrop * 100) : null;
         const dropPercentDisplay = dropPercent != null ? formatWinDeltaDisplay(dropPercent) : null;
-        let kept = [];
+        let keptInfos = [];
         let reason = 'margin';
-        const bestEvalParsed = parseEvalString(best.eval);
+        const bestEvalParsed = bestInfo ? bestInfo.parsedEval : null;
 
-        if (bestEvalParsed && bestEvalParsed.type === 'mate' && bestEvalParsed.value !== 0) {
+        if (bestInfo && bestEvalParsed && bestEvalParsed.type === 'mate' && bestEvalParsed.value !== 0) {
           reason = 'mate';
           const bestSign = Math.sign(bestEvalParsed.value) || 1;
           const maxDistance = Math.abs(bestEvalParsed.value) + mateSlack;
-          kept = sorted.filter((entry) => {
-            const parsed = parseEvalString(entry.eval);
+          keptInfos = sorted.filter((info) => {
+            const parsed = info.parsedEval;
             if (!parsed || parsed.type !== 'mate') return false;
-            if (Math.sign(parsed.value || 0) !== bestSign) return false;
-            return Math.abs(parsed.value) <= maxDistance;
+            if ((Math.sign(parsed.value || 0) || 0) !== bestSign) return false;
+            const distance = Math.abs(parsed.value || 0);
+            return Number.isFinite(distance) && distance <= maxDistance;
           });
-          if (!kept.length) {
-            kept = [best];
+          if (!keptInfos.length) {
+            keptInfos = [bestInfo];
           }
         } else if (rawDrop != null && rawDrop >= (onlyOneMargin - PV_EPSILON)) {
           reason = 'gap';
-          kept = [best];
+          keptInfos = bestInfo ? [bestInfo] : [];
         } else {
-          kept = [];
-          for (const entry of sorted) {
-            if (kept.length >= maxEntries) break;
-            if (entry === best) {
-              kept.push(entry);
+          keptInfos = [];
+          for (const info of sorted) {
+            if (keptInfos.length >= maxEntries) break;
+            if (info === bestInfo) {
+              keptInfos.push(info);
               continue;
             }
-            const entryEp = expectedPointsForEntry(entry, moverColor);
-            if (!Number.isFinite(bestEp) || !Number.isFinite(entryEp) || (bestEp - entryEp) <= (keepMargin + PV_EPSILON)) {
-              kept.push(entry);
+            if (bestEp == null) {
+              keptInfos.push(info);
+              continue;
+            }
+            if (Number.isFinite(info.ep) && (bestEp - info.ep) <= (keepMargin + PV_EPSILON)) {
+              keptInfos.push(info);
             }
           }
-          if (!kept.length) {
-            kept = [best];
+          if (!keptInfos.length && bestInfo) {
+            keptInfos = [bestInfo];
           }
         }
 
-        const normalized = kept.slice(0, maxEntries).map((entry, idx) => {
-          const ep = expectedPointsForEntry(entry, moverColor);
-          return {
-            ...entry,
+        const normalized = keptInfos.slice(0, maxEntries).map((info, idx) => {
+          const ep = Number.isFinite(info.ep) ? info.ep : null;
+          const base = {
+            ...info.original,
             rank: idx + 1,
-            expectedPoints: Number.isFinite(ep) ? ep : null
+            expectedPoints: ep
           };
+          if (reason === 'mate') {
+            return { ...base, tag: 'Best' };
+          }
+          if (idx === 0) {
+            return { ...base, tag: 'Best' };
+          }
+          if (bestEp != null && ep != null && (bestEp - ep) <= (bestMargin + PV_EPSILON)) {
+            return { ...base, tag: 'Best' };
+          }
+          return { ...base, tag: 'Excellent' };
         });
 
         let message = null;
@@ -2303,19 +2405,16 @@
         return {
           entries: normalized,
           meta: {
-            moverColor,
-            keepMargin,
-            onlyOneMargin,
-            mateSlack,
+            ...emptyMeta,
             keptCount: normalized.length,
             totalCandidates: originalCount,
-            bestExpectedPoints: Number.isFinite(bestEp) ? bestEp : null,
-            secondExpectedPoints: Number.isFinite(secondEp) ? secondEp : null,
+            bestExpectedPoints: bestEp,
+            secondExpectedPoints: secondEp,
             dropPercent: dropPercent != null ? dropPercent : null,
             dropPercentDisplay: dropPercentDisplay || null,
             reason,
             message,
-            mateDistance: reason === 'mate' && bestEvalParsed ? Math.abs(bestEvalParsed.value) : null
+            mateDistance: reason === 'mate' && bestInfo ? bestInfo.mateDistance : null
           }
         };
       }
