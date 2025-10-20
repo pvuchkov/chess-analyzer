@@ -2312,8 +2312,9 @@
 
       function expectedPointsForMover(entry, fen, fallbackColor = 'w') {
         if (!entry) return null;
-        const moverColor = typeof fallbackColor === 'string' && fallbackColor.toLowerCase() === 'b' ? 'b' : 'w';
-        const epWdl = epFromWdlForMover(entry.wdl, fen, moverColor);
+        const stm = typeof fen === 'string' ? sideToMoveFromFen(fen) : null;
+        const mover = stm === 'b' ? 'b' : (stm === 'w' ? 'w' : (fallbackColor === 'b' ? 'b' : 'w'));
+        const epWdl = epFromWdlForMover(entry.wdl, fen, mover);
         if (Number.isFinite(epWdl)) {
           return epWdl;
         }
@@ -2322,7 +2323,7 @@
           return null;
         }
         const epWhite = cpToExpectedPoints(cp);
-        return moverColor === 'w' ? epWhite : 1 - epWhite;
+        return mover === 'w' ? epWhite : 1 - epWhite;
       }
 
       function winPercentFromWdl(wdl, color = 'w') {
@@ -3599,7 +3600,7 @@
           legalMoveEvaluations.push({ uci, ep: Number.isFinite(ep) ? ep : null });
         });
 
-        const allowsGreatOverlay = baseline === 'best' || baseline === 'excellent' || baseline === 'good';
+        const allowsGreatOverlay = suggestionTag === 'best' || suggestionTag === 'excellent';
         let greatOverlay = null;
         if (allowsGreatOverlay && !forcedMove && !trivialRecapture && actualId) {
           const overlaySource = summaryByMove instanceof Map ? summaryByMove : entryOverlayByMove;
@@ -3657,6 +3658,33 @@
           overlay = 'great';
         } else if (missCandidate && baseline !== 'blunder') {
           overlay = 'miss';
+        }
+
+        const overlayCandidate = overlay;
+
+        if (overlay === 'great' && !(baseline === 'best' || baseline === 'excellent')) {
+          overlay = null;
+        }
+
+        if (typeof console !== 'undefined' && console && typeof console.table === 'function') {
+          try {
+            console.table({
+              ply: moveEntry && Number.isFinite(moveEntry.ply) ? moveEntry.ply : null,
+              move: actualEntry && (actualEntry.san || actualEntry.uci) ? (actualEntry.san || actualEntry.uci) : null,
+              EP1_bestMoverEp: Number.isFinite(bestMoverEp) ? bestMoverEp.toFixed(3) : null,
+              EP_played: Number.isFinite(actualMoverEp) ? actualMoverEp.toFixed(3) : null,
+              gap: (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp))
+                ? (bestMoverEp - actualMoverEp).toFixed(3)
+                : null,
+              epBeforeMover: Number.isFinite(beforeMoverEp) ? beforeMoverEp.toFixed(3) : null,
+              suggestionTag,
+              baseline,
+              overlayCandidate,
+              overlayFinal: overlay
+            });
+          } catch (err) {
+            // ignore logging errors
+          }
         }
 
         return { classification: baseline, overlay, expectedLoss: loss, suggestionTag };
