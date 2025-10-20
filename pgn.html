@@ -975,23 +975,29 @@
   </div>
   <div class="layout">
     <div class="card">
-      <h2>Load game</h2>
-      <div class="row input-controls">
-        <select id="inputMode">
-          <option value="pgn">PGN</option>
-          <option value="lichess">Lichess URL / ID</option>
-          <option value="fen">FEN</option>
-        </select>
-        <button id="loadBtn">Load</button>
-      </div>
-      <div class="row">
-        <textarea id="gameInput" rows="8" placeholder="Paste PGN text" autocomplete="off" spellcheck="false"
-          class="mono"></textarea>
-      </div>
-      <div class="row">
-        <label id="inputHint" class="hint">Paste the full PGN for the game you want to analyze.</label>
-      </div>
-      <div id="loadStatus" class="status"></div>
+      <details id="loadPanel" class="collapsible">
+        <summary>
+          <span class="collapsible-title">Load game</span>
+        </summary>
+        <div class="collapsible-body">
+          <div class="row input-controls">
+            <select id="inputMode">
+              <option value="pgn">PGN</option>
+              <option value="lichess">Lichess URL / ID</option>
+              <option value="fen">FEN</option>
+            </select>
+            <button id="loadBtn">Load</button>
+          </div>
+          <div class="row">
+            <textarea id="gameInput" rows="8" placeholder="Paste PGN text" autocomplete="off" spellcheck="false"
+              class="mono"></textarea>
+          </div>
+          <div class="row">
+            <label id="inputHint" class="hint">Paste the full PGN for the game you want to analyze.</label>
+          </div>
+          <div id="loadStatus" class="status"></div>
+        </div>
+      </details>
 
       <h2>Board</h2>
       <div class="board-area">
@@ -1034,6 +1040,7 @@
         <button id="lastBtn">Last ⏭</button>
         <button id="flipBtn" class="secondary">Flip</button>
         <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
+        <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
         <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
       </div>
       <div id="navStatus" class="status"></div>
@@ -1068,10 +1075,16 @@
         <div id="tagOpening">—</div>
       </div>
 
-      <h2 style="margin-top:22px;">Move summary</h2>
-      <div class="summary-scroll">
-        <div id="moveSummaryTable" class="summary-table"></div>
-      </div>
+      <details id="moveSummaryPanel" class="collapsible">
+        <summary>
+          <span class="collapsible-title">Move summary</span>
+        </summary>
+        <div class="collapsible-body">
+          <div class="summary-scroll">
+            <div id="moveSummaryTable" class="summary-table"></div>
+          </div>
+        </div>
+      </details>
 
       <details id="engineSuggestions" class="collapsible">
         <summary>
@@ -1121,6 +1134,8 @@
         source: 'pgn',
         rawInput: '',
         analysisCache: new Map(),
+        analysisByFen: new Map(),
+        analysisPromises: new Map(),
         analysisStatus: 'idle',
         engineQueue: [],
         currentRequest: null,
@@ -1291,6 +1306,8 @@
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 0.005;
       const GREAT_PHASE_DELTA = 0.15;
+      const DEFAULT_ANALYSIS_DEPTH = 20;
+      const DEFAULT_ANALYSIS_MOVETIME = 2000;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
@@ -1761,6 +1778,29 @@
         }
       }
 
+      function persistPanelState(id, open) {
+        if (typeof localStorage === 'undefined') return;
+        try {
+          localStorage.setItem(`panel:${id}`, open ? 'open' : 'closed');
+        } catch (err) {
+          // ignore storage failures
+        }
+      }
+
+      function restorePanelState(id, defaultOpen = false) {
+        if (typeof localStorage === 'undefined') {
+          return !!defaultOpen;
+        }
+        try {
+          const value = localStorage.getItem(`panel:${id}`);
+          if (value === 'open') return true;
+          if (value === 'closed') return false;
+        } catch (err) {
+          // ignore read failures
+        }
+        return !!defaultOpen;
+      }
+
       function getSavedSuggestionMode() {
         if (typeof localStorage === 'undefined') {
           return 'played';
@@ -1841,7 +1881,7 @@
             }
             const result = game.move(moveConfig);
             if (!result) return 'snapback';
-            handleUserBranchMove({ move: result, fen: game.fen(), previousFen: fen });
+            void handleUserBranchMove({ move: result, fen: game.fen(), previousFen: fen });
             return 'snapback';
           }
         });
@@ -1866,6 +1906,7 @@
       function updateExploreControls() {
         const toggle = byId('exploreToggle');
         const rejoin = byId('rejoinBtn');
+        const reset = byId('exploreResetBtn');
         if (toggle) {
           toggle.textContent = state.exploreMode ? 'Disable explore' : 'Enable explore';
           toggle.setAttribute('aria-pressed', state.exploreMode ? 'true' : 'false');
@@ -1873,6 +1914,10 @@
         if (rejoin) {
           rejoin.hidden = isOnMainLine();
           rejoin.disabled = isOnMainLine();
+        }
+        if (reset) {
+          reset.hidden = !state.exploreMode;
+          reset.disabled = !state.exploreMode;
         }
       }
 
@@ -1885,7 +1930,7 @@
         setExploreMode(!state.exploreMode);
       }
 
-      function handleUserBranchMove({ move, fen, previousFen }) {
+      async function handleUserBranchMove({ move, fen, previousFen }) {
         const parent = state.ply === 0 ? getRootNode() : getNode(state.verboseHistory[state.ply - 1].id);
         if (!parent) return;
         if (!Array.isArray(parent.children)) {
@@ -1949,8 +1994,39 @@
         const index = getNodeIndexInActiveLine(nodeId);
         goToPly(index + 1);
         renderMoves();
-        state.analysisStatus = 'queued';
-        precomputeFullAnalysis();
+
+        const parentAnalysis = parent.analysis || state.analysisCache.get(parent.id) || null;
+        const beforeEp = parentAnalysis && Number.isFinite(parentAnalysis.actualEp) ? parentAnalysis.actualEp : null;
+        let legalMoves = [];
+        try {
+          const legalGame = new Chess(previousFen);
+          legalMoves = legalGame.moves({ verbose: true });
+        } catch (err) {
+          legalMoves = [];
+        }
+
+        const token = nextAnalysisToken();
+        state.analysisStatus = 'position';
+        try {
+          const result = await analyzeMoveEntry(newNode, {
+            beforeEp,
+            token,
+            legalMoves,
+            previousMoveEntry: parent,
+            ensurePostAnalysis: true,
+            computePlans: false
+          });
+          if (result && result.cancelled) {
+            return;
+          }
+        } catch (err) {
+          console.error('Failed to analyze explore move', err);
+        } finally {
+          state.analysisStatus = 'idle';
+        }
+
+        applyAnalysisForCurrentPly();
+        renderMoves();
       }
 
       function syncArrowLayer() {
@@ -4066,6 +4142,294 @@
         return { headline: summary, details };
       }
 
+      function classifyPlayedMove({
+        preFen,
+        playedUci,
+        preAnalysis,
+        postAnalysis = null,
+        moveEntry = null,
+        beforeEpOverride = null,
+        legalMoves = null,
+        previousMoveEntry = null
+      }) {
+        if (!preFen || !preAnalysis || !playedUci) return null;
+        const moverColor = moveEntry && moveEntry.color ? moveEntry.color : sideToMoveFromFen(preFen);
+        let actualEntry = null;
+        if (preAnalysis.entriesByUci && preAnalysis.entriesByUci.has(playedUci)) {
+          actualEntry = preAnalysis.entriesByUci.get(playedUci);
+        } else if (Array.isArray(preAnalysis.pvEntries)) {
+          actualEntry = preAnalysis.pvEntries.find((entry) => entry && entry.uci === playedUci) || null;
+        }
+        const bestEntry = preAnalysis.bestEntry || (Array.isArray(preAnalysis.pvEntries) ? preAnalysis.pvEntries[0] : null) || null;
+        const pvEntries = Array.isArray(preAnalysis.pvEntries) ? preAnalysis.pvEntries.slice() : [];
+        if (actualEntry && !pvEntries.some((entry) => entry && entry.uci === actualEntry.uci)) {
+          pvEntries.push(actualEntry);
+        }
+
+        let summary = preAnalysis.summary || null;
+        if (summary && summary.byMove instanceof Map) {
+          summary = {
+            ...summary,
+            byMove: new Map(summary.byMove)
+          };
+        } else {
+          summary = {
+            EP1: null,
+            best: null,
+            byMove: new Map(),
+            suggestions: []
+          };
+        }
+
+        const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
+        const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
+        const bestMoverEp = expectedPointsForMover(bestEntry, preFen, moverColor);
+        const actualMoverEp = expectedPointsForMover(actualEntry, preFen, moverColor);
+
+        if (actualEntry && actualEntry.uci && !summary.byMove.has(actualEntry.uci)) {
+          summary.byMove.set(actualEntry.uci, {
+            ep: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
+            tag: null,
+            eval: actualEntry.eval || null,
+            pvSan: Array.isArray(actualEntry.pvSan) ? actualEntry.pvSan.slice() : null
+          });
+        }
+
+        let beforeEp = Number.isFinite(beforeEpOverride) ? beforeEpOverride : null;
+        if (!Number.isFinite(beforeEp)) {
+          const summaryEp = Number.isFinite(summary.EP1) ? summary.EP1 : null;
+          if (Number.isFinite(summaryEp)) {
+            beforeEp = moverColor === 'w' ? summaryEp : (1 - summaryEp);
+          } else if (Number.isFinite(bestMoverEp)) {
+            beforeEp = moverColor === 'w' ? bestMoverEp : (1 - bestMoverEp);
+          }
+        }
+        if (!Number.isFinite(beforeEp)) {
+          beforeEp = 0.5;
+        }
+
+        const bestEp = Number.isFinite(bestMoverEp)
+          ? (moverColor === 'w' ? bestMoverEp : 1 - bestMoverEp)
+          : cpToExpectedPoints(bestCp);
+        const actualEp = Number.isFinite(actualMoverEp)
+          ? (moverColor === 'w' ? actualMoverEp : 1 - actualMoverEp)
+          : cpToExpectedPoints(actualCp);
+
+        let winPercentBefore = winPercentForEntry(bestEntry, moverColor, preFen);
+        if (winPercentBefore == null && Number.isFinite(beforeEp)) {
+          const beforeMoverEp = moverColor === 'w' ? beforeEp : 1 - beforeEp;
+          winPercentBefore = Math.max(0, Math.min(100, beforeMoverEp * 100));
+        }
+        if (winPercentBefore == null && Number.isFinite(bestEp)) {
+          const ep = moverColor === 'w' ? bestEp : 1 - bestEp;
+          winPercentBefore = Math.max(0, Math.min(100, ep * 100));
+        }
+
+        let winPercentAfter = winPercentForEntry(actualEntry, moverColor, preFen);
+        if (winPercentAfter == null && Number.isFinite(actualMoverEp)) {
+          winPercentAfter = Math.max(0, Math.min(100, actualMoverEp * 100));
+        }
+        if (winPercentAfter == null && Number.isFinite(actualEp)) {
+          const ep = moverColor === 'w' ? actualEp : 1 - actualEp;
+          winPercentAfter = Math.max(0, Math.min(100, ep * 100));
+        }
+
+        const accuracyPercent = computeMoveAccuracy(winPercentBefore, winPercentAfter);
+        const cpLoss = computeCpLoss(bestCp, actualCp, moverColor);
+
+        if (!Array.isArray(legalMoves)) {
+          try {
+            const legalGame = new Chess(preFen);
+            legalMoves = legalGame.moves({ verbose: true });
+          } catch (err) {
+            legalMoves = [];
+          }
+        }
+
+        const bestEvalParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
+        const actualEvalParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
+        const actualIsSac = moveEntry ? detectSacrifice(moveEntry) : null;
+
+        const classificationData = classifyMoveContext({
+          bestEp,
+          actualEp,
+          beforeEp,
+          moveEntry,
+          bestEntry,
+          actualEntry,
+          pvEntries,
+          summary,
+          cpLoss,
+          bestCp,
+          actualCp,
+          bestEval: bestEvalParsed,
+          actualEval: actualEvalParsed,
+          legalMoves,
+          previousMoveEntry,
+          probeEvaluations: [],
+          actualIsSac,
+          nonSacBestMoverEp: null,
+          bestMoverEp,
+          actualMoverEp,
+          rootFen: preFen
+        }) || { classification: null, overlay: null, expectedLoss: null, suggestionTag: null };
+
+        const evalText = actualEntry && actualEntry.eval
+          ? actualEntry.eval
+          : (bestEntry && bestEntry.eval ? bestEntry.eval : null);
+
+        const result = {
+          pvEntries,
+          bestEntry,
+          actualEntry,
+          bestEp,
+          actualEp,
+          beforeEp,
+          expectedLoss: classificationData.expectedLoss,
+          classification: classificationData.classification,
+          overlay: classificationData.overlay,
+          suggestionTag: classificationData.suggestionTag,
+          bestCp,
+          actualCp,
+          cpLoss,
+          winPercentBefore,
+          winPercentAfter,
+          accuracy: accuracyPercent,
+          summary,
+          shortlist: preAnalysis.shortlistMeta || null,
+          depth: preAnalysis.depth || DEFAULT_ANALYSIS_DEPTH,
+          movetime: preAnalysis.movetime || DEFAULT_ANALYSIS_MOVETIME,
+          eval: evalText,
+          moverColor,
+          actualMoverEp,
+          bestMoverEp,
+          postAnalysis: postAnalysis || null
+        };
+
+        if (preAnalysis.classifications && typeof preAnalysis.classifications.set === 'function') {
+          preAnalysis.classifications.set(playedUci, result);
+        }
+
+        return result;
+      }
+
+      async function analyzeMoveEntry(moveEntry, options = {}) {
+        if (!moveEntry) {
+          return { afterEp: options.beforeEp ?? null };
+        }
+        const actualUci = moveEntry.uci || `${moveEntry.from}${moveEntry.to}${moveEntry.promotion || ''}`;
+        const preFen = moveEntry.preFen || effectiveInitialFen();
+        const beforeEp = Number.isFinite(options.beforeEp) ? options.beforeEp : null;
+        const token = options.token != null ? options.token : state.analysisToken;
+        const previousMoveEntry = options.previousMoveEntry || null;
+        const includeMoveOptions = {
+          token,
+          ply: Number.isFinite(moveEntry.ply) ? moveEntry.ply : state.ply,
+          includeMoveUci: actualUci
+        };
+
+        let preAnalysis;
+        try {
+          preAnalysis = await ensureAnalysisForFen(preFen, includeMoveOptions);
+        } catch (err) {
+          if (err && err.message === 'cancelled') {
+            return { cancelled: true };
+          }
+          throw err;
+        }
+
+        let classification = classifyPlayedMove({
+          preFen,
+          playedUci: actualUci,
+          preAnalysis,
+          moveEntry,
+          beforeEpOverride: beforeEp,
+          legalMoves: options.legalMoves || null,
+          previousMoveEntry
+        });
+
+        if (!classification) {
+          return { afterEp: beforeEp, preAnalysis };
+        }
+
+        let postAnalysis = null;
+        if (options.ensurePostAnalysis) {
+          try {
+            postAnalysis = await ensureAnalysisForFen(moveEntry.fen, {
+              token,
+              ply: Number.isFinite(moveEntry.ply) ? moveEntry.ply + 1 : state.ply + 1
+            });
+          } catch (err) {
+            if (err && err.message === 'cancelled') {
+              return { cancelled: true };
+            }
+            postAnalysis = null;
+          }
+          if (postAnalysis) {
+            classification.postAnalysis = postAnalysis;
+          }
+        }
+
+        let planScenarios = null;
+        if (options.computePlans !== false) {
+          try {
+            planScenarios = await computePlanScenarios({
+              fen: preFen,
+              moverColor: classification.moverColor || (moveEntry.color || sideToMoveFromFen(preFen)),
+              actualEntry: classification.actualEntry,
+              bestEntry: classification.bestEntry,
+              beforeEp: classification.beforeEp,
+              depth: preAnalysis.depth || DEFAULT_ANALYSIS_DEPTH,
+              movetime: preAnalysis.movetime || DEFAULT_ANALYSIS_MOVETIME,
+              token,
+              ply: Number.isFinite(moveEntry.ply) ? moveEntry.ply : state.ply
+            });
+          } catch (err) {
+            if (err && err.message === 'cancelled') {
+              return { cancelled: true };
+            }
+            planScenarios = null;
+          }
+        }
+
+        const explanation = buildMoveExplanation({
+          moveEntry,
+          bestEntry: classification.bestEntry,
+          actualEntry: classification.actualEntry,
+          bestEval: parseEvalString(classification.bestEntry ? classification.bestEntry.eval : null),
+          actualEval: parseEvalString(classification.actualEntry ? classification.actualEntry.eval : null),
+          beforeEp: classification.beforeEp,
+          bestEp: classification.bestEp,
+          actualEp: classification.actualEp,
+          cpLoss: classification.cpLoss,
+          classification: classification.classification,
+          overlay: classification.overlay,
+          planScenarios
+        });
+
+        const moveAnalysis = {
+          ...classification,
+          planScenarios,
+          explanation
+        };
+
+        moveEntry.analysis = moveAnalysis;
+        moveEntry.eval = classification.eval || null;
+        if (moveEntry.id) {
+          state.analysisCache.set(moveEntry.id, moveAnalysis);
+        }
+        if (Number.isFinite(moveEntry.ply) && state.ply === moveEntry.ply) {
+          scheduleBoardBadgeUpdate();
+        }
+
+        return {
+          afterEp: Number.isFinite(classification.actualEp) ? classification.actualEp : beforeEp,
+          preAnalysis,
+          postAnalysis,
+          moveAnalysis
+        };
+      }
+
       function createMoveEntryFromUci(preFen, color, uci) {
         if (!preFen || !uci) return null;
         try {
@@ -4745,21 +5109,203 @@
       function resetAnalysisState() {
         nextAnalysisToken();
         state.analysisCache = new Map();
+        state.analysisByFen = new Map();
+        state.analysisPromises = new Map();
         state.analysisStatus = 'idle';
         engineController.reset();
         clearLineOverlay();
       }
 
+      function engineSignature() {
+        const version = state.engineVersion || 'unknown';
+        return `depth=${DEFAULT_ANALYSIS_DEPTH}|multipv=${MULTIPV_MAX_CANDIDATES}|wdl=1|movetime=${DEFAULT_ANALYSIS_MOVETIME}|engine=${version}`;
+      }
+
+      function getAnalysisCacheKey(fen) {
+        return `${fen}|${engineSignature()}`;
+      }
+
+      function cloneEngineEntry(entry) {
+        if (!entry) return null;
+        return {
+          ...entry,
+          pvMoves: Array.isArray(entry.pvMoves) ? entry.pvMoves.slice() : [],
+          pvSan: Array.isArray(entry.pvSan) ? entry.pvSan.slice() : [],
+          pvVerbose: Array.isArray(entry.pvVerbose) ? entry.pvVerbose.map((mv) => ({ ...mv })) : []
+        };
+      }
+
+      function getCachedPositionAnalysis(fen) {
+        if (!fen) return null;
+        const key = getAnalysisCacheKey(fen);
+        return state.analysisByFen.get(key) || null;
+      }
+
+      function setCachedPositionAnalysis(fen, analysis) {
+        if (!fen || !analysis) return;
+        const key = getAnalysisCacheKey(fen);
+        state.analysisByFen.set(key, analysis);
+      }
+
+      async function ensureAnalysisHasMove(analysis, fen, uci, options = {}) {
+        if (!analysis || !uci) return null;
+        if (!analysis.entriesByUci) {
+          analysis.entriesByUci = new Map();
+        }
+        if (analysis.entriesByUci.has(uci)) {
+          return analysis.entriesByUci.get(uci) || null;
+        }
+        ensureEngine();
+        await waitForEngineReady();
+        if (options.token != null && options.token !== state.analysisToken) {
+          throw new Error('cancelled');
+        }
+        let forcedResult = null;
+        try {
+          forcedResult = await engineController.run({
+            fen,
+            depth: DEFAULT_ANALYSIS_DEPTH,
+            movetime: DEFAULT_ANALYSIS_MOVETIME,
+            searchMoves: [uci],
+            ply: Number.isFinite(options.ply) ? options.ply : 0
+          });
+        } catch (err) {
+          forcedResult = null;
+        }
+        if (options.token != null && options.token !== state.analysisToken) {
+          throw new Error('cancelled');
+        }
+        const forcedEntry = forcedResult && Array.isArray(forcedResult.entries)
+          ? forcedResult.entries.find((entry) => entry && entry.uci === uci) || forcedResult.entries[0] || null
+          : null;
+        if (!forcedEntry) {
+          return null;
+        }
+        const cloned = cloneEngineEntry(forcedEntry);
+        if (cloned && cloned.uci) {
+          analysis.entriesByUci.set(cloned.uci, cloned);
+        }
+        return cloned;
+      }
+
+      async function ensureAnalysisForFen(fen, options = {}) {
+        if (!fen) return null;
+        const key = getAnalysisCacheKey(fen);
+        if (state.analysisByFen.has(key)) {
+          const cached = state.analysisByFen.get(key);
+          if (options.includeMoveUci) {
+            await ensureAnalysisHasMove(cached, fen, options.includeMoveUci, options);
+          }
+          return cached;
+        }
+        if (state.analysisPromises.has(key)) {
+          const existing = await state.analysisPromises.get(key);
+          if (options.includeMoveUci) {
+            await ensureAnalysisHasMove(existing, fen, options.includeMoveUci, options);
+          }
+          return existing;
+        }
+
+        const promise = (async () => {
+          ensureEngine();
+          await waitForEngineReady();
+          if (options.token != null && options.token !== state.analysisToken) {
+            throw new Error('cancelled');
+          }
+          const result = await engineController.run({
+            fen,
+            depth: DEFAULT_ANALYSIS_DEPTH,
+            movetime: DEFAULT_ANALYSIS_MOVETIME,
+            ply: Number.isFinite(options.ply) ? options.ply : 0
+          });
+          if (options.token != null && options.token !== state.analysisToken) {
+            throw new Error('cancelled');
+          }
+          const entries = Array.isArray(result.entries) ? result.entries.map((entry) => cloneEngineEntry(entry)) : [];
+          const bestEntry = entries.find((entry) => entry && entry.rank === 1) || entries[0] || null;
+          const summary = buildPositionSummary(fen, entries);
+          const analysis = {
+            key,
+            fen,
+            depth: result && Number.isFinite(result.depth) ? result.depth : DEFAULT_ANALYSIS_DEPTH,
+            movetime: DEFAULT_ANALYSIS_MOVETIME,
+            pvEntries: entries,
+            bestEntry,
+            shortlistMeta: result && result.shortlist ? { ...result.shortlist } : null,
+            summary,
+            entriesByUci: new Map(),
+            classifications: new Map()
+          };
+          entries.forEach((entry) => {
+            if (entry && entry.uci) {
+              analysis.entriesByUci.set(entry.uci, entry);
+            }
+          });
+          setCachedPositionAnalysis(fen, analysis);
+          return analysis;
+        })();
+
+        state.analysisPromises.set(key, promise);
+        try {
+          const analysis = await promise;
+          if (options.includeMoveUci) {
+            await ensureAnalysisHasMove(analysis, fen, options.includeMoveUci, options);
+          }
+          return analysis;
+        } finally {
+          state.analysisPromises.delete(key);
+        }
+      }
+
+      function formatPositionAnalysis(cached) {
+        if (!cached) return null;
+        return {
+          pvEntries: Array.isArray(cached.pvEntries) ? cached.pvEntries : [],
+          bestEntry: cached.bestEntry || null,
+          shortlist: cached.shortlistMeta || null,
+          depth: cached.depth || 0,
+          movetime: cached.movetime || null,
+          summary: cached.summary || null,
+          classification: null,
+          overlay: null,
+          suggestionTag: null,
+          actualEntry: null,
+          beforeEp: null,
+          bestEp: null,
+          actualEp: null,
+          bestCp: null,
+          actualCp: null,
+          cpLoss: null,
+          winPercentBefore: null,
+          winPercentAfter: null,
+          accuracy: null,
+          explanation: null,
+          planScenarios: null,
+          postAnalysis: cached
+        };
+      }
+
       function getAnalysisForCurrentView() {
         if (state.suggestionMode === 'next') {
           if (state.ply >= state.verboseHistory.length) {
-            return null;
+            const currentNode = state.ply > 0 ? state.verboseHistory[state.ply - 1] : getRootNode();
+            const fen = currentNode && currentNode.fen ? currentNode.fen : effectiveInitialFen();
+            const cached = getCachedPositionAnalysis(fen);
+            return formatPositionAnalysis(cached);
           }
           const nextNode = state.verboseHistory[state.ply];
-          if (!nextNode) return null;
+          if (!nextNode) {
+            const currentNode = state.ply > 0 ? state.verboseHistory[state.ply - 1] : getRootNode();
+            const fen = currentNode && currentNode.fen ? currentNode.fen : effectiveInitialFen();
+            const cached = getCachedPositionAnalysis(fen);
+            return formatPositionAnalysis(cached);
+          }
           return nextNode.analysis || state.analysisCache.get(nextNode.id) || null;
         }
-        if (state.ply === 0) return null;
+        if (state.ply === 0) {
+          const cached = getCachedPositionAnalysis(effectiveInitialFen());
+          return formatPositionAnalysis(cached);
+        }
         const currentNode = state.verboseHistory[state.ply - 1];
         if (!currentNode) return null;
         return currentNode.analysis || state.analysisCache.get(currentNode.id) || null;
@@ -4915,6 +5461,8 @@
             setStatus('engStatus', 'Game complete. No next move to analyze.');
           } else if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
             setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
+          } else if (state.analysisStatus === 'position') {
+            setStatus('engStatus', 'Analyzing position…');
           } else {
             setStatus('engStatus', 'Next-move suggestion not available yet.');
           }
@@ -4923,6 +5471,8 @@
 
         if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
           setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
+        } else if (state.analysisStatus === 'position') {
+          setStatus('engStatus', 'Analyzing position…');
         }
         if (state.ply === 0) {
           updateEvalBar(null);
@@ -4935,211 +5485,25 @@
           updateEvalBar(evalText);
         }
       }
-
-      async function analyzeMoveAtIndex(index, beforeEp, token, depth, movetime) {
+      async function analyzeMoveAtIndex(index, beforeEp, token) {
         const moveEntry = state.verboseHistory[index];
         if (!moveEntry) return { afterEp: beforeEp };
-        const fen = moveEntry.preFen || effectiveInitialFen();
-        const actualUci = `${moveEntry.from}${moveEntry.to}${moveEntry.promotion || ''}`;
-        const moverColor = moveEntry.color === 'b' ? 'b' : 'w';
-        const moverIsWhite = moverColor === 'w';
-        const baseConfig = { fen, depth, movetime, ply: index + 1 };
-        let legalMoves = [];
-        try {
-          const legalGame = new Chess(fen);
-          legalMoves = legalGame.moves({ verbose: true });
-        } catch (err) {
-          legalMoves = [];
-        }
-        const previousMoveEntry = index > 0 ? state.verboseHistory[index - 1] : null;
-        let multiResult;
-        try {
-          multiResult = await engineController.run(baseConfig);
-        } catch (err) {
+        const result = await analyzeMoveEntry(moveEntry, {
+          beforeEp,
+          token,
+          previousMoveEntry: index > 0 ? state.verboseHistory[index - 1] : null,
+          ensurePostAnalysis: true
+        });
+        if (result && result.cancelled) {
           return { afterEp: beforeEp };
-        }
-        if (token !== state.analysisToken) return { afterEp: beforeEp };
-        const shortlistMeta = multiResult && multiResult.shortlist ? { ...multiResult.shortlist } : null;
-        const pvEntries = multiResult.entries.map((entry) => ({ ...entry }));
-        const bestEntry = pvEntries.find((entry) => entry.rank === 1) || pvEntries[0] || null;
-        let actualEntry = pvEntries.find((entry) => entry.uci === actualUci);
-        if (!actualEntry) {
-          let forcedResult;
-          try {
-            forcedResult = await engineController.run({ ...baseConfig, searchMoves: [actualUci] });
-          } catch (err) {
-            forcedResult = null;
-          }
-          if (token !== state.analysisToken) return { afterEp: beforeEp };
-          const forcedEntries = forcedResult ? forcedResult.entries.map((entry) => ({ ...entry })) : [];
-          actualEntry = forcedEntries.find((entry) => entry.uci === actualUci) || forcedEntries[0] || null;
-        }
-        const actualIsSac = detectSacrifice(moveEntry);
-        let probeEvaluations = [];
-        let nonSacBestMoverEp = null;
-        if (actualIsSac && Array.isArray(legalMoves) && legalMoves.length > 0) {
-          const probeDepth = Math.max(8, Math.min(12, Number.isFinite(depth) ? depth : 10));
-          const probeMovetime = Math.min(300, Number.isFinite(movetime) ? Math.max(120, Math.floor(movetime / 4)) : 180);
-          for (const mv of legalMoves) {
-            const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
-            if (uci === actualUci) continue;
-            const hypoEntry = createMoveEntryFromVerbose(fen, moverColor, mv);
-            if (!hypoEntry) continue;
-            const isSac = detectSacrifice(hypoEntry);
-            if (isSac) continue;
-            let probeResult;
-            try {
-              probeResult = await engineController.run({
-                fen,
-                depth: probeDepth,
-                movetime: probeMovetime,
-                searchMoves: [uci],
-                ply: index + 1
-              });
-            } catch (err) {
-              probeResult = null;
-            }
-            if (token !== state.analysisToken) return { afterEp: beforeEp };
-            const probeEntryResult = probeResult && probeResult.entries && probeResult.entries[0];
-            if (!probeEntryResult) continue;
-            const epMover = expectedPointsForMover(probeEntryResult, fen, moverColor);
-            if (!Number.isFinite(epMover)) continue;
-            probeEvaluations.push({ uci, epMover, isSac: false });
-            if (nonSacBestMoverEp == null || epMover > nonSacBestMoverEp) {
-              nonSacBestMoverEp = epMover;
-            }
-          }
-        }
-        const positionSummary = buildPositionSummary(fen, pvEntries);
-        const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
-        const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
-        const bestMoverEp = expectedPointsForMover(bestEntry, fen, moverColor);
-        const actualMoverEp = expectedPointsForMover(actualEntry, fen, moverColor);
-        let bestEp = Number.isFinite(bestMoverEp)
-          ? (moverIsWhite ? bestMoverEp : (1 - bestMoverEp))
-          : cpToExpectedPoints(bestCp);
-        let actualEp = Number.isFinite(actualMoverEp)
-          ? (moverIsWhite ? actualMoverEp : (1 - actualMoverEp))
-          : cpToExpectedPoints(actualCp);
-        let winPercentBefore = winPercentForEntry(bestEntry, moverColor, fen);
-        if (winPercentBefore == null && Number.isFinite(beforeEp)) {
-          const beforeMoverEp = moverIsWhite ? beforeEp : 1 - beforeEp;
-          winPercentBefore = Math.max(0, Math.min(100, beforeMoverEp * 100));
-        }
-        if (winPercentBefore == null && Number.isFinite(bestEp)) {
-          const ep = moverIsWhite ? bestEp : 1 - bestEp;
-          winPercentBefore = Math.max(0, Math.min(100, ep * 100));
-        }
-        let winPercentAfter = winPercentForEntry(actualEntry, moverColor, fen);
-        if (winPercentAfter == null && Number.isFinite(actualMoverEp)) {
-          winPercentAfter = Math.max(0, Math.min(100, actualMoverEp * 100));
-        }
-        if (winPercentAfter == null && Number.isFinite(actualEp)) {
-          const ep = moverIsWhite ? actualEp : 1 - actualEp;
-          winPercentAfter = Math.max(0, Math.min(100, ep * 100));
-        }
-        const accuracyPercent = computeMoveAccuracy(winPercentBefore, winPercentAfter);
-        const cpLoss = computeCpLoss(bestCp, actualCp, moveEntry.color);
-        const bestEvalParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
-        const actualEvalParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
-        const classificationData = classifyMoveContext({
-          bestEp,
-          actualEp,
-          beforeEp,
-          moveEntry,
-          bestEntry,
-          actualEntry,
-          winPercentBefore,
-          winPercentAfter,
-          pvEntries,
-          summary: positionSummary,
-          cpLoss,
-          bestCp,
-          actualCp,
-          bestEval: bestEvalParsed,
-          actualEval: actualEvalParsed,
-          legalMoves,
-          previousMoveEntry,
-          probeEvaluations,
-          actualIsSac,
-          nonSacBestMoverEp,
-          bestMoverEp,
-          actualMoverEp,
-          rootFen: fen
-        });
-        moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
-        let planScenarios = null;
-        try {
-          planScenarios = await computePlanScenarios({
-            fen,
-            moverColor,
-            actualEntry,
-            bestEntry,
-            beforeEp,
-            depth,
-            movetime,
-            token,
-            ply: index + 1
-          });
-        } catch (err) {
-          if (err && err.message === 'cancelled') {
-            return { afterEp: beforeEp };
-          }
-          planScenarios = null;
-        }
-        const explanation = buildMoveExplanation({
-          moveEntry,
-          bestEntry,
-          actualEntry,
-          bestEval: bestEvalParsed,
-          actualEval: actualEvalParsed,
-          beforeEp,
-          bestEp,
-          actualEp,
-          cpLoss,
-          classification: classificationData.classification,
-          overlay: classificationData.overlay,
-          planScenarios
-        });
-
-        moveEntry.analysis = {
-          pvEntries,
-          bestEntry,
-          actualEntry,
-          bestEp,
-          actualEp,
-          beforeEp,
-          expectedLoss: classificationData.expectedLoss,
-          classification: classificationData.classification,
-          overlay: classificationData.overlay,
-          suggestionTag: classificationData.suggestionTag,
-          bestCp,
-          actualCp,
-          cpLoss,
-          winPercentBefore,
-          winPercentAfter,
-          accuracy: accuracyPercent,
-          depth: multiResult.depth || depth || 0,
-          movetime,
-          explanation,
-          planScenarios,
-          summary: positionSummary || null,
-          shortlist: shortlistMeta
-        };
-        if (state.ply === index + 1) {
-          scheduleBoardBadgeUpdate();
-        }
-        if (moveEntry && moveEntry.id) {
-          state.analysisCache.set(moveEntry.id, moveEntry.analysis);
         }
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
           applyAnalysisForCurrentPly();
         }
         renderMoves();
         updateEloEstimates();
-        return { afterEp: actualEp };
+        return { afterEp: result && Number.isFinite(result.afterEp) ? result.afterEp : beforeEp };
       }
-
       async function precomputeFullAnalysis() {
         const token = nextAnalysisToken();
         state.analysisCache = new Map();
@@ -5159,12 +5523,10 @@
         if (state.engine) {
           state.engine.postMessage('ucinewgame');
         }
-        const fixedDepth = 20;
-        const fixedMovetime = 2000;
         let beforeEp = 0.5;
         for (let i = 0; i < state.verboseHistory.length; i++) {
           if (token !== state.analysisToken) return;
-          const result = await analyzeMoveAtIndex(i, beforeEp, token, fixedDepth, fixedMovetime);
+          const result = await analyzeMoveAtIndex(i, beforeEp, token);
           if (token !== state.analysisToken) return;
           // Carry White's expected points forward unchanged so the next
           // iteration receives the same reference frame. Inverting the value
@@ -5203,6 +5565,11 @@
         state.analysisStatus = 'queued';
         precomputeFullAnalysis();
         setStatus('loadStatus', 'Game ready.', 'ok');
+        const loadPanel = byId('loadPanel');
+        if (loadPanel) {
+          loadPanel.open = false;
+          persistPanelState('loadPanel', false);
+        }
         updateUrlState();
       }
 
@@ -5333,6 +5700,12 @@
             rejoinMainLine();
           });
         }
+        const resetExplore = byId('exploreResetBtn');
+        if (resetExplore) {
+          resetExplore.addEventListener('click', () => {
+            rejoinMainLine();
+          });
+        }
         byId('themeToggle').addEventListener('click', () => {
           const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
           const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -5354,6 +5727,23 @@
         }
         updateLineOverlayButton();
         updateExploreControls();
+      }
+
+      function initCollapsiblePanels() {
+        const loadPanel = byId('loadPanel');
+        if (loadPanel) {
+          loadPanel.open = restorePanelState('loadPanel', false);
+          loadPanel.addEventListener('toggle', () => {
+            persistPanelState('loadPanel', loadPanel.open);
+          });
+        }
+        const summaryPanel = byId('moveSummaryPanel');
+        if (summaryPanel) {
+          summaryPanel.open = restorePanelState('moveSummaryPanel', false);
+          summaryPanel.addEventListener('toggle', () => {
+            persistPanelState('moveSummaryPanel', summaryPanel.open);
+          });
+        }
       }
 
       function getSystemTheme() {
@@ -5450,6 +5840,7 @@
         updateMoveSummary();
         setInputMode('pgn');
         bindUi();
+        initCollapsiblePanels();
         initSuggestionMode();
         initializePieceCounts();
         state.game = createBaseGame();
