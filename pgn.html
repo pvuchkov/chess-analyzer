@@ -1107,20 +1107,15 @@
         }
       };
       const MULTIPV_MAX_CANDIDATES = 5;
-      const PV_BEST_MARGIN = 0.02;
-      const PV_KEEP_MARGIN = 0.06;
+      const PV_BEST_MARGIN = 0;
+      const PV_KEEP_MARGIN = 0.02;
       const PV_ONLY_ONE_MARGIN = 0.10;
       const EP_GAP_BEST_MAX = PV_BEST_MARGIN;
       const EP_GAP_EXCELLENT_MAX = PV_KEEP_MARGIN;
       const EP_GAP_ONLY_ONE = PV_ONLY_ONE_MARGIN;
-      const ONLY_MOVE_TOL = 0.05;
       const PV_MATE_SLACK = 1;
-      const PV_EPSILON = 1e-6;
+      const PV_EPSILON = 0.005;
       const GREAT_PHASE_DELTA = 0.15;
-      const GREAT_LOSING_BAND = 0.35;
-      const GREAT_EQUAL_BAND = 0.45;
-      const GREAT_EQUAL_BAND_UPPER = 0.55;
-      const GREAT_WINNING_BAND = 0.65;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
@@ -2601,7 +2596,8 @@
         byMove,
         legalMovesEp = [],
         epPlayedOverride = null,
-        onlyMoveSampleComplete = false
+        onlyMoveSampleComplete = false,
+        moverRating = null
       }) {
         if (!playedUci || !Number.isFinite(EP1)) {
           return null;
@@ -2626,6 +2622,7 @@
 
         let goodCount = 0;
         let playedCounted = false;
+        let closestAlternativeGap = null;
         if (onlyMoveSampleComplete && Array.isArray(legalMovesEp)) {
           legalMovesEp.forEach((item) => {
             if (!item) return;
@@ -2633,10 +2630,14 @@
             const ep = Number.isFinite(item.ep) ? item.ep : null;
             if (!Number.isFinite(ep)) return;
             const moveGap = EP1 - ep;
-            if (moveGap <= (ONLY_MOVE_TOL + PV_EPSILON)) {
+            if (moveGap <= (EP_GAP_EXCELLENT_MAX + PV_EPSILON)) {
               goodCount += 1;
               if (uci === playedUci) {
                 playedCounted = true;
+              }
+            } else if (uci !== playedUci) {
+              if (closestAlternativeGap == null || moveGap < closestAlternativeGap) {
+                closestAlternativeGap = moveGap;
               }
             }
           });
@@ -2645,16 +2646,22 @@
         const onlyMove = onlyMoveSampleComplete
           && playedCounted
           && goodCount === 1
-          && gap <= (ONLY_MOVE_TOL + PV_EPSILON);
+          && gap <= (EP_GAP_EXCELLENT_MAX + PV_EPSILON)
+          && (closestAlternativeGap == null || closestAlternativeGap >= (EP_GAP_ONLY_ONE - PV_EPSILON));
 
         let phaseFlip = false;
         if (Number.isFinite(epBefore)) {
           const delta = epPlayed - epBefore;
           if (delta >= (GREAT_PHASE_DELTA - PV_EPSILON)) {
-            const crossesLosingToEqual = epBefore < GREAT_LOSING_BAND && epPlayed >= GREAT_EQUAL_BAND;
-            const crossesEqualToWinning = epBefore >= GREAT_EQUAL_BAND
-              && epBefore <= GREAT_EQUAL_BAND_UPPER
-              && epPlayed >= GREAT_WINNING_BAND;
+            const ratingContext = Number.isFinite(moverRating) ? moverRating : getAverageGameRating();
+            const losingBand = ratingLerp(ratingContext, 800, 2200, 0.32, 0.40);
+            const equalBandLower = ratingLerp(ratingContext, 800, 2200, 0.42, 0.50);
+            const equalBandUpper = ratingLerp(ratingContext, 800, 2200, 0.50, 0.58);
+            const winningBand = ratingLerp(ratingContext, 800, 2200, 0.62, 0.70);
+            const crossesLosingToEqual = epBefore < losingBand && epPlayed >= equalBandLower;
+            const crossesEqualToWinning = epBefore >= equalBandLower
+              && epBefore <= equalBandUpper
+              && epPlayed >= winningBand;
             if (crossesLosingToEqual || crossesEqualToWinning) {
               phaseFlip = true;
             }
@@ -2673,9 +2680,11 @@
         return Math.max(0, Math.min(100, raw));
       }
 
-      // Consider a move a "sacrifice" only if, after an immediate recapture
-      // on the landing square, the net material balance (mover minus opponent)
-      // worsens by at least three points compared to before the move.
+      // Consider a move a "sacrifice" only if, after an immediate capture
+      // and recapture sequence on the landing square, the net material balance
+      // (mover minus opponent) worsens by at least three points compared to
+      // before the move. We evaluate the opponent capture, then the mover's
+      // best recapture on that same square.
       function detectSacrifice(moveEntry) {
         if (!moveEntry || !moveEntry.preFen || !moveEntry.fen) return false;
         try {
@@ -2701,12 +2710,37 @@
             if (!reply || !reply.flags || !reply.flags.includes('c')) continue;
             if (reply.to !== targetSquare) continue;
             const replyGame = new Chess(moveEntry.fen);
-            replyGame.move({ from: reply.from, to: reply.to, promotion: reply.promotion });
+            const executedReply = replyGame.move({ from: reply.from, to: reply.to, promotion: reply.promotion });
+            if (!executedReply) continue;
             const replyCounts = countPiecesOnBoard(replyGame.board());
-            const diffAfter = sumMaterial(replyCounts[mover]) - sumMaterial(replyCounts[opponent]);
-            const netSwing = diffAfter - diffBefore;
-            if (netSwing <= -3) {
-              return true;
+            const diffAfterCapture = sumMaterial(replyCounts[mover]) - sumMaterial(replyCounts[opponent]);
+
+            const replyFen = replyGame.fen();
+            const recaptures = replyGame.moves({ verbose: true });
+            let hasRecapture = false;
+            let bestRecaptureDiff = null;
+            recaptures.forEach((recap) => {
+              if (!recap || !recap.flags || !recap.flags.includes('c')) return;
+              if (recap.to !== targetSquare) return;
+              hasRecapture = true;
+              const recapGame = new Chess(replyFen);
+              const executedRecap = recapGame.move({ from: recap.from, to: recap.to, promotion: recap.promotion });
+              if (!executedRecap) return;
+              const recapCounts = countPiecesOnBoard(recapGame.board());
+              const diffAfterRecap = sumMaterial(recapCounts[mover]) - sumMaterial(recapCounts[opponent]);
+              if (bestRecaptureDiff == null || diffAfterRecap > bestRecaptureDiff) {
+                bestRecaptureDiff = diffAfterRecap;
+              }
+            });
+
+            if (hasRecapture) {
+              if ((bestRecaptureDiff - diffBefore) <= -3) {
+                return true;
+              }
+            } else {
+              if ((diffAfterCapture - diffBefore) <= -3) {
+                return true;
+              }
             }
           }
         } catch (err) {
@@ -3445,11 +3479,11 @@
             classification = 'best';
           } else if (loss <= (PV_KEEP_MARGIN + PV_EPSILON)) {
             classification = 'excellent';
-          } else if (loss <= (0.10 + PV_EPSILON)) {
+          } else if (loss <= (0.05 + PV_EPSILON)) {
             classification = 'good';
-          } else if (loss <= (0.20 + PV_EPSILON)) {
+          } else if (loss <= (0.10 + PV_EPSILON)) {
             classification = 'inaccuracy';
-          } else if (loss <= (0.35 + PV_EPSILON)) {
+          } else if (loss <= (0.20 + PV_EPSILON)) {
             classification = 'mistake';
           } else {
             classification = 'blunder';
@@ -3465,14 +3499,6 @@
             if (classification === 'best') {
               classification = 'excellent';
             }
-          }
-        }
-
-        if (suggestionTag === 'best') {
-          classification = 'best';
-        } else if (suggestionTag === 'excellent') {
-          if (classification === 'best' || classification === 'excellent' || classification === 'good') {
-            classification = 'excellent';
           }
         }
 
@@ -3610,7 +3636,8 @@
             byMove: overlaySource,
             legalMovesEp: legalMoveEvaluations,
             epPlayedOverride: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
-            onlyMoveSampleComplete: haveAllMovesEvaluated && !forcedMove
+            onlyMoveSampleComplete: haveAllMovesEvaluated && !forcedMove,
+            moverRating
           });
         }
 
