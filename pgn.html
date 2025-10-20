@@ -1044,6 +1044,13 @@
       const PV_ONLY_ONE_MARGIN = 0.10;
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 1e-6;
+      const GREAT_ONLY_MOVE_MARGIN = 0.05;
+      const GREAT_PHASE_DELTA = 0.15;
+      const GREAT_LOSING_BAND = 0.35;
+      const GREAT_EQUAL_BAND = 0.45;
+      const GREAT_EQUAL_BAND_UPPER = 0.55;
+      const GREAT_WINNING_BAND = 0.65;
+      const GREAT_CRITICAL_DEFENSE_MARGIN = 0.20;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
@@ -3160,51 +3167,63 @@
         const haveAllMovesEvaluated = legalMoveCount > 0
           && legalMoveList.every((mv) => evaluatedUcis.has(`${mv.from}${mv.to}${mv.promotion || ''}`));
 
-        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.014, 0.01);
-        let nearBestCount = 0;
-        if (Number.isFinite(bestMoverEp)) {
-          entryData.forEach((item) => {
-            if (!Number.isFinite(item.epMover)) return;
-            if (bestMoverEp - item.epMover <= nearBestMargin + 1e-6) {
-              nearBestCount += 1;
+        const moverWinBefore = beforeMoverEp;
+        const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
+        const moverWinDelta = moverWinBefore != null && moverWinAfter != null ? moverWinAfter - moverWinBefore : null;
+        const entryEpByUci = new Map();
+        entryData.forEach((item) => {
+          if (!item || !item.entry || !item.entry.uci) return;
+          entryEpByUci.set(item.entry.uci, Number.isFinite(item.epMover) ? item.epMover : null);
+        });
+
+        const safeMargin = GREAT_ONLY_MOVE_MARGIN + PV_EPSILON;
+        let safeMoveCount = 0;
+        let nonLosingMoveCount = 0;
+        let actualIsSafeMove = false;
+        let actualPreservesNonLosing = false;
+        if (haveAllMovesEvaluated && actualId) {
+          legalMoveList.forEach((mv) => {
+            const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
+            if (!entryEpByUci.has(uci)) return;
+            const ep = entryEpByUci.get(uci);
+            if (Number.isFinite(bestMoverEp) && Number.isFinite(ep) && (bestMoverEp - ep) <= safeMargin) {
+              safeMoveCount += 1;
+              if (uci === actualId) {
+                actualIsSafeMove = true;
+              }
+            }
+            if (Number.isFinite(ep) && ep >= (GREAT_EQUAL_BAND - PV_EPSILON)) {
+              nonLosingMoveCount += 1;
+              if (uci === actualId) {
+                actualPreservesNonLosing = true;
+              }
             }
           });
         }
 
-        const moverWinBefore = beforeMoverEp;
-        const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
-        const moverWinDelta = moverWinBefore != null && moverWinAfter != null ? moverWinAfter - moverWinBefore : null;
+        const actualKeepsMargin = loss == null ? sameAsBest : loss <= (GREAT_ONLY_MOVE_MARGIN + PV_EPSILON);
+        const onlyMoveKeepsMargin = haveAllMovesEvaluated && !forcedMove && actualKeepsMargin && actualIsSafeMove && safeMoveCount === 1;
+        const onlyMovePreservesNonLosing = haveAllMovesEvaluated && !forcedMove && actualPreservesNonLosing && nonLosingMoveCount === 1;
 
-        const losingThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.35);
-        const winningThreshold = ratingLerp(moverRating, 1000, 2000, 0.62, 0.70);
-        const swingDelta = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
-        const crossDelta = ratingLerp(moverRating, 1000, 2000, 0.07, 0.1);
+        const crossesLosingToEqual = moverWinBefore != null && moverWinAfter != null
+          && moverWinBefore < GREAT_LOSING_BAND && moverWinAfter >= GREAT_EQUAL_BAND;
+        const crossesEqualToWinning = moverWinBefore != null && moverWinAfter != null
+          && moverWinBefore >= GREAT_EQUAL_BAND && moverWinBefore <= GREAT_EQUAL_BAND_UPPER
+          && moverWinAfter >= GREAT_WINNING_BAND;
+        const phaseFlip = moverWinDelta != null
+          && moverWinDelta >= (GREAT_PHASE_DELTA - PV_EPSILON)
+          && (crossesLosingToEqual || crossesEqualToWinning);
 
-        const swingImprovement = moverWinBefore != null && moverWinAfter != null
-          && (
-            (moverWinBefore <= losingThreshold && moverWinAfter >= winningThreshold && moverWinDelta >= swingDelta)
-            || (moverWinBefore < 0.5 && moverWinAfter >= 0.5 && moverWinDelta >= crossDelta)
-          );
+        const criticalDefense = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
+          && (bestMoverEp - alternativeBestMoverEp) >= (GREAT_CRITICAL_DEFENSE_MARGIN - PV_EPSILON)
+          && actualKeepsMargin;
 
-        const onlyMove = sameAsBest
-          && Number.isFinite(bestMoverEp)
-          && nearBestCount === 1
-          && haveAllMovesEvaluated
-          && !forcedMove;
-        const bigSaveMargin = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
-        const bigSave = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
-          && bestMoverEp - alternativeBestMoverEp >= bigSaveMargin
-          && !forcedMove;
+        const allowsGreatOverlay = baseline === 'best' || baseline === 'excellent' || baseline === 'good';
+        let greatCandidate = allowsGreatOverlay && !forcedMove && !trivialRecapture
+          && (onlyMoveKeepsMargin || onlyMovePreservesNonLosing || phaseFlip || criticalDefense);
 
-        let greatCandidate = false;
-        if ((baseline === 'best' || baseline === 'excellent')
-          && moverWinAfter != null
-          && moverWinAfter >= losingThreshold
-          && !forcedMove
-          && !trivialRecapture) {
-          if (swingImprovement || onlyMove || bigSave) {
-            greatCandidate = true;
-          }
+        if (greatCandidate && baseline === 'good' && !(onlyMoveKeepsMargin || onlyMovePreservesNonLosing)) {
+          greatCandidate = false;
         }
 
         const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
