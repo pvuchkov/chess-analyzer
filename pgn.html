@@ -237,49 +237,24 @@
 
     .board-move-badge {
       position: absolute;
-      width: 46px;
-      height: 46px;
-      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(15, 23, 42, 0.82);
-      border: 2px solid transparent;
-      box-shadow: 0 12px 30px rgba(8, 15, 35, 0.45);
-      transform: translate(-50%, -50%);
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 6px 14px rgba(8, 15, 35, 0.35);
+      transform: none;
+      pointer-events: none;
     }
 
     .board-move-badge-icon {
-      width: 26px;
-      height: 26px;
+      width: 14px;
+      height: 14px;
       object-fit: contain;
-      filter: drop-shadow(0 1px 4px rgba(8, 15, 35, 0.45));
-    }
-
-    .board-move-badge[data-classification="best"],
-    .board-move-badge[data-classification="excellent"],
-    .board-move-badge[data-classification="good"],
-    .board-move-badge[data-classification="brilliant"],
-    .board-move-badge[data-classification="great"] {
-      border-color: var(--ok);
-      background: rgba(34, 197, 94, 0.2);
-    }
-
-    .board-move-badge[data-classification="book"] {
-      border-color: var(--accent);
-      background: rgba(56, 189, 248, 0.22);
-    }
-
-    .board-move-badge[data-classification="inaccuracy"],
-    .board-move-badge[data-classification="miss"] {
-      border-color: var(--warn);
-      background: rgba(250, 204, 21, 0.24);
-    }
-
-    .board-move-badge[data-classification="mistake"],
-    .board-move-badge[data-classification="blunder"] {
-      border-color: var(--danger);
-      background: rgba(248, 113, 113, 0.25);
+      filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.45));
     }
 
     .eval-column {
@@ -1091,6 +1066,10 @@
           if (classification && Object.prototype.hasOwnProperty.call(bucket.counts, classification)) {
             bucket.counts[classification] += 1;
           }
+          const overlay = entry.analysis.overlay;
+          if (overlay && Object.prototype.hasOwnProperty.call(bucket.counts, overlay)) {
+            bucket.counts[overlay] += 1;
+          }
           const moveAccuracy = entry.analysis.accuracy;
           if (Number.isFinite(moveAccuracy)) {
             bucket.accuracySum += moveAccuracy;
@@ -1210,11 +1189,6 @@
           return;
         }
 
-        const iconPath = classificationToIcon(entry.analysis.classification);
-        if (!iconPath) {
-          return;
-        }
-
         const squareEl = boardEl.querySelector(`[data-square="${entry.to}"]`);
         if (!squareEl) {
           return;
@@ -1222,15 +1196,22 @@
 
         const boardRect = boardEl.getBoundingClientRect();
         const squareRect = squareEl.getBoundingClientRect();
-        const left = squareRect.left - boardRect.left + squareRect.width / 2;
-        const top = squareRect.top - boardRect.top + squareRect.height / 2;
+        const overlayClass = entry.analysis.overlay;
+        const chosenClass = overlayClass || entry.analysis.classification;
+        const iconPath = classificationToIcon(chosenClass);
+        if (!iconPath) {
+          return;
+        }
 
-        const normalizedClass = entry.analysis.classification.toLowerCase().replace(/\s+/g, '-');
+        const left = squareRect.left - boardRect.left + squareRect.width - 6;
+        const top = squareRect.top - boardRect.top + 6;
+
+        const normalizedClass = chosenClass.toLowerCase().replace(/\s+/g, '-');
         badge.style.left = `${left}px`;
         badge.style.top = `${top}px`;
         badge.setAttribute('data-classification', normalizedClass);
         icon.src = iconPath;
-        icon.alt = entry.analysis.classification;
+        icon.alt = chosenClass;
         badge.style.display = 'flex';
       }
 
@@ -1545,12 +1526,13 @@
         label.textContent = entry ? entry.san : '';
         cell.appendChild(label);
 
-        if (entry && entry.analysis && entry.analysis.classification) {
-          const iconPath = classificationToIcon(entry.analysis.classification);
+        if (entry && entry.analysis) {
+          const cls = entry.analysis.overlay || entry.analysis.classification;
+          const iconPath = classificationToIcon(cls);
           if (iconPath) {
             const icon = document.createElement('img');
             icon.src = iconPath;
-            icon.alt = entry.analysis.classification;
+            icon.alt = cls;
             icon.className = 'classification-icon';
             cell.appendChild(icon);
           }
@@ -1877,6 +1859,66 @@
         return clampRating(rating);
       }
 
+      function parseRatingValue(raw) {
+        if (raw == null) return null;
+        const str = String(raw).trim();
+        if (!str || str === '?' || str === '—') return null;
+        const match = str.match(/-?\d+/);
+        if (!match) return null;
+        const value = parseInt(match[0], 10);
+        return Number.isFinite(value) ? value : null;
+      }
+
+      function getHeaderRating(color) {
+        if (!state.headers) return null;
+        const prefix = color === 'b' ? 'Black' : 'White';
+        const keys = [`${prefix}Elo`, `${prefix}Rating`, `${prefix}USCF`, `${prefix}Fide`, `${prefix}FIDE`];
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(state.headers, key)) {
+            const parsed = parseRatingValue(state.headers[key]);
+            if (Number.isFinite(parsed)) {
+              return clampRating(parsed);
+            }
+          }
+        }
+        return null;
+      }
+
+      function getPlayerRating(color) {
+        const fromHeader = getHeaderRating(color);
+        if (Number.isFinite(fromHeader)) {
+          return fromHeader;
+        }
+        return 1500;
+      }
+
+      function getAverageGameRating() {
+        const white = getPlayerRating('w');
+        const black = getPlayerRating('b');
+        if (Number.isFinite(white) && Number.isFinite(black)) {
+          return (white + black) / 2;
+        }
+        if (Number.isFinite(white)) return white;
+        if (Number.isFinite(black)) return black;
+        return 1500;
+      }
+
+      function ratingLerp(rating, lowRating, highRating, lowValue, highValue) {
+        const clamped = clampRating(Number.isFinite(rating) ? rating : (lowRating + highRating) / 2);
+        if (clamped <= lowRating) return lowValue;
+        if (clamped >= highRating) return highValue;
+        const ratio = (clamped - lowRating) / (highRating - lowRating);
+        return lowValue + (highValue - lowValue) * ratio;
+      }
+
+      function slopeForRating(rating) {
+        const clamped = clampRating(Number.isFinite(rating) ? rating : 1500);
+        const minSlope = 0.0032;
+        const maxSlope = 0.006;
+        const ratio = Math.max(0, Math.min(1, (clamped - 400) / (2600 - 400)));
+        return minSlope + (maxSlope - minSlope) * ratio;
+      }
+
       function parseGameResultScores(resultTag) {
         const normalized = typeof resultTag === 'string' ? resultTag.trim() : '';
         switch (normalized) {
@@ -1932,17 +1974,21 @@
         }
       }
 
-      function centipawnsToWinPercent(cp) {
-        if (cp == null || Number.isNaN(cp)) return null;
+      function cpToExpectedPoints(cp, ratingOverride) {
+        if (cp == null || Number.isNaN(cp)) return 0.5;
+        if (cp >= 10000) return 1;
+        if (cp <= -10000) return 0;
+        const rating = Number.isFinite(ratingOverride) ? ratingOverride : getAverageGameRating();
+        const slope = slopeForRating(rating);
         const capped = Math.max(-2000, Math.min(2000, cp));
-        const winChance = 1 / (1 + Math.exp(-0.004 * capped));
-        return Math.max(0, Math.min(100, winChance * 100));
+        const winChance = 1 / (1 + Math.exp(-slope * capped));
+        return Math.max(0, Math.min(1, winChance));
       }
 
-      function cpToExpectedPoints(cp) {
-        const winPercent = centipawnsToWinPercent(cp);
-        if (winPercent == null) return 0.5;
-        return winPercent / 100;
+      function centipawnsToWinPercent(cp, ratingOverride) {
+        if (cp == null || Number.isNaN(cp)) return null;
+        const ep = cpToExpectedPoints(cp, ratingOverride);
+        return Math.max(0, Math.min(100, ep * 100));
       }
 
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
@@ -1954,28 +2000,6 @@
         return Math.max(0, Math.min(100, raw));
       }
 
-      function detectSacrifice(moveEntry) {
-        if (!moveEntry || !moveEntry.preFen || !moveEntry.fen) return false;
-        try {
-          const beforeGame = new Chess(moveEntry.preFen);
-          const afterGame = new Chess(moveEntry.fen);
-          const beforeCounts = countPiecesOnBoard(beforeGame.board());
-          const afterCounts = countPiecesOnBoard(afterGame.board());
-          const mover = moveEntry.color;
-          const opponent = mover === 'w' ? 'b' : 'w';
-          const beforeMaterial = sumMaterial(beforeCounts[mover]);
-          const afterMaterial = sumMaterial(afterCounts[mover]);
-          const beforeOpponent = sumMaterial(beforeCounts[opponent]);
-          const afterOpponent = sumMaterial(afterCounts[opponent]);
-          const materialLost = beforeMaterial - afterMaterial;
-          const materialTaken = beforeOpponent - afterOpponent;
-          return materialLost >= 3 && materialTaken <= 1;
-        } catch (err) {
-          console.warn('Failed to evaluate sacrifice', err);
-          return false;
-        }
-      }
-
       function classifyMoveContext({
         bestEp,
         actualEp,
@@ -1983,28 +2007,44 @@
         moveEntry,
         bestEntry,
         actualEntry,
-        winPercentBefore,
-        winPercentAfter,
         pvEntries,
-        cpLoss,
         bestCp,
         actualCp,
         bestEval,
-        actualEval
+        actualEval,
+        moverEpMap,
+        legalMoveCount,
+        inCheckBefore,
+        isTrivialRecapture,
+        sacrificeDetected,
+        onlyMoveVerified
       }) {
-        const safeBefore = Number.isFinite(beforeEp) ? beforeEp : null;
+        const moverColor = moveEntry && moveEntry.color === 'b' ? 'b' : 'w';
+        const moverIsWhite = moverColor === 'w';
         const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
-        const moverIsWhite = !moveEntry || moveEntry.color !== 'b';
-        let loss = null;
-        if (Number.isFinite(bestEp) && Number.isFinite(actualEp)) {
-          const oriented = moverIsWhite ? bestEp - actualEp : actualEp - bestEp;
-          loss = Math.max(0, oriented);
-        }
+        const averageRating = getAverageGameRating();
+        const moverRating = getPlayerRating(moverColor);
 
-        const cpLossValue = Number.isFinite(cpLoss) ? Math.max(0, cpLoss) : null;
+        const bestWhiteEp = Number.isFinite(bestEp) ? bestEp : (Number.isFinite(bestCp) ? cpToExpectedPoints(bestCp, averageRating) : null);
+        const actualWhiteEp = Number.isFinite(actualEp) ? actualEp : (Number.isFinite(actualCp) ? cpToExpectedPoints(actualCp, averageRating) : null);
+
+        const bestMoverEp = Number.isFinite(bestWhiteEp) ? (moverIsWhite ? bestWhiteEp : 1 - bestWhiteEp) : null;
+        const actualMoverEp = Number.isFinite(actualWhiteEp) ? (moverIsWhite ? actualWhiteEp : 1 - actualWhiteEp) : null;
+        const beforeWhiteEp = Number.isFinite(beforeEp) ? beforeEp : null;
+        const beforeMoverEp = Number.isFinite(beforeWhiteEp) ? (moverIsWhite ? beforeWhiteEp : 1 - beforeWhiteEp) : null;
+
         const cpGap = Number.isFinite(bestCp) && Number.isFinite(actualCp)
           ? Math.abs(bestCp - actualCp)
           : null;
+
+        let loss = null;
+        if (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp)) {
+          loss = Math.max(0, bestMoverEp - actualMoverEp);
+          if (cpGap != null && cpGap <= 15) {
+            loss = 0;
+          }
+        }
+        const zeroLossThreshold = 0.0025;
 
         const bestMateVal = bestEval && bestEval.type === 'mate' ? bestEval.value : null;
         const actualMateVal = actualEval && actualEval.type === 'mate' ? actualEval.value : null;
@@ -2023,31 +2063,22 @@
         let classification;
         if (actualMateForOpponent) {
           if (bestMateForOpponent && actualMateDistance != null && bestMateDistance != null) {
-            if (actualMateDistance < bestMateDistance) {
-              classification = 'blunder';
-            } else {
-              classification = 'best';
-            }
+            classification = actualMateDistance <= bestMateDistance ? 'best' : 'blunder';
           } else {
             classification = 'blunder';
           }
         } else {
-          const withinTolerance = (cpLossValue != null && cpLossValue <= 10)
-            || (cpGap != null && cpGap <= 15)
-            || sameAsBest;
-          if (withinTolerance) {
+          if (loss == null) {
+            classification = (sameAsBest || (cpGap != null && cpGap <= 15)) ? 'best' : 'good';
+          } else if (sameAsBest || loss <= zeroLossThreshold || (cpGap != null && cpGap <= 15)) {
             classification = 'best';
-          } else if (cpLossValue == null) {
-            classification = sameAsBest ? 'best' : 'good';
-          } else if (cpLossValue <= 30) {
+          } else if (loss <= 0.02) {
             classification = 'excellent';
-          } else if (cpLossValue <= 60) {
-            classification = 'great';
-          } else if (cpLossValue <= 90) {
+          } else if (loss <= 0.05) {
             classification = 'good';
-          } else if (cpLossValue <= 120) {
+          } else if (loss <= 0.10) {
             classification = 'inaccuracy';
-          } else if (cpLossValue <= 250) {
+          } else if (loss <= 0.20) {
             classification = 'mistake';
           } else {
             classification = 'blunder';
@@ -2067,54 +2098,242 @@
         }
 
         const baseline = classification;
-        const winBefore = Number.isFinite(winPercentBefore) ? winPercentBefore : null;
-        const winAfter = Number.isFinite(winPercentAfter) ? winPercentAfter : null;
-        const winDelta = winBefore != null && winAfter != null ? winAfter - winBefore : null;
 
-        let secondBestWin = null;
-        if (pvEntries && pvEntries.length) {
-          const secondEntry = pvEntries.find((entry) => entry.rank === 2);
-          if (secondEntry) {
-            const secondCp = evalStringToCentipawns(secondEntry.eval);
-            const win = centipawnsToWinPercent(secondCp);
-            if (Number.isFinite(win)) {
-              secondBestWin = win;
-            }
-          }
+        const entryData = [];
+        if (moverEpMap && typeof moverEpMap.forEach === 'function') {
+          moverEpMap.forEach((epMover, uci) => {
+            entryData.push({ uci, epMover: Number.isFinite(epMover) ? epMover : null });
+          });
+        } else if (Array.isArray(pvEntries)) {
+          pvEntries.forEach((entry) => {
+            if (!entry || !entry.uci) return;
+            const cp = evalStringToCentipawns(entry.eval);
+            const epWhite = cpToExpectedPoints(cp, averageRating);
+            const epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+            entryData.push({ uci: entry.uci, epMover });
+          });
         }
+        const actualId = actualEntry && actualEntry.uci ? actualEntry.uci : null;
+        if (actualId && !entryData.some((item) => item.uci === actualId)) {
+          entryData.push({ uci: actualId, epMover: Number.isFinite(actualMoverEp) ? actualMoverEp : null });
+        }
+
+        const bestId = bestEntry && bestEntry.uci ? bestEntry.uci : null;
+        let alternativeBestMoverEp = null;
+        entryData.forEach((item) => {
+          if (!item || !Number.isFinite(item.epMover)) return;
+          if (bestId && item.uci === bestId) return;
+          if (alternativeBestMoverEp == null || item.epMover > alternativeBestMoverEp) {
+            alternativeBestMoverEp = item.epMover;
+          }
+        });
+
+        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.014, 0.01);
+        const nearBestMoves = [];
+        let nearBestCount = 0;
+        if (Number.isFinite(bestMoverEp)) {
+          entryData.forEach((item) => {
+            if (!item || !Number.isFinite(item.epMover)) return;
+            if (bestMoverEp - item.epMover <= nearBestMargin + 1e-6) {
+              nearBestCount += 1;
+              nearBestMoves.push(item.uci);
+            }
+          });
+        }
+
+        const coverageComplete = Number.isFinite(legalMoveCount)
+          && legalMoveCount > 0
+          && moverEpMap
+          && typeof moverEpMap.size === 'number'
+          && moverEpMap.size >= legalMoveCount;
+
+        const moverWinBefore = beforeMoverEp;
+        const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
+        const moverWinDelta = moverWinBefore != null && moverWinAfter != null ? moverWinAfter - moverWinBefore : null;
+
+        const losingThreshold = ratingLerp(moverRating, 1000, 2000, 0.36, 0.32);
+        const winningThreshold = ratingLerp(moverRating, 1000, 2000, 0.64, 0.72);
+        const swingDelta = ratingLerp(moverRating, 1000, 2000, 0.1, 0.12);
+        const crossDelta = ratingLerp(moverRating, 1000, 2000, 0.1, 0.12);
+
+        const swingImprovement = moverWinBefore != null && moverWinAfter != null
+          && (
+            (moverWinBefore <= losingThreshold && moverWinAfter >= winningThreshold && moverWinDelta >= swingDelta)
+            || (moverWinBefore < 0.5 && moverWinAfter >= 0.5 && moverWinDelta >= crossDelta)
+          );
+
+        const onlyMoveSeed = sameAsBest && Number.isFinite(bestMoverEp) && nearBestCount === 1;
+        const needsFullScan = onlyMoveSeed && !coverageComplete;
+        const requiresVerification = onlyMoveSeed && coverageComplete && !onlyMoveVerified;
+        const onlyMove = onlyMoveSeed && coverageComplete && !requiresVerification;
+        const bigSaveMargin = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
+        const bigSave = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
+          && bestMoverEp - alternativeBestMoverEp >= bigSaveMargin;
+
+        const greatMinimumEp = ratingLerp(moverRating, 1000, 2000, 0.36, 0.42);
+        const forcedReply = Boolean(inCheckBefore && legalMoveCount === 1);
+        const stillLosing = moverWinAfter != null && moverWinAfter < greatMinimumEp;
 
         let greatCandidate = false;
-        if ((baseline === 'best' || baseline === 'excellent' || baseline === 'good') && winBefore != null && winAfter != null) {
-          const savedFromLosing = winBefore < 35 && winAfter >= 45 && winDelta >= 10;
-          const convertedToWin = winBefore >= 35 && winBefore <= 60 && winAfter >= 65 && winDelta >= 10;
-          const onlyMove = sameAsBest && secondBestWin != null && winAfter - secondBestWin >= 12;
-          if (savedFromLosing || convertedToWin || onlyMove) {
+        let greatReason = null;
+        if ((baseline === 'best' || baseline === 'excellent') && moverWinAfter != null && moverWinAfter >= greatMinimumEp) {
+          if (swingImprovement) {
             greatCandidate = true;
+            greatReason = 'swing';
+          } else if (onlyMove) {
+            greatCandidate = true;
+            greatReason = 'only';
+          } else if (bigSave) {
+            greatCandidate = true;
+            greatReason = 'save';
           }
         }
 
-        let brilliantCandidate = false;
-        if ((baseline === 'best' || baseline === 'excellent') && detectSacrifice(moveEntry) && winAfter != null) {
-          const notAlreadyWinning = !(winBefore != null && winBefore >= 80);
-          const keepsPositionPlayable = winAfter >= 40;
-          const maintainsStrength = winBefore == null || winAfter >= winBefore - 5;
-          if (notAlreadyWinning && keepsPositionPlayable && maintainsStrength) {
-            brilliantCandidate = true;
+        if (greatCandidate) {
+          if (forcedReply || isTrivialRecapture || stillLosing || actualMateForOpponent) {
+            greatCandidate = false;
+            greatReason = null;
           }
         }
+        if (greatCandidate && requiresVerification) {
+          greatCandidate = false;
+        }
+        if (needsFullScan) {
+          greatCandidate = false;
+        }
+        if (greatCandidate && nearBestMoves.length === 0 && swingImprovement === false && bigSave === false) {
+          greatCandidate = false;
+          greatReason = null;
+        }
 
-        let finalClassification = classification;
+        const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
+        const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
+        const nearBestSac = loss == null ? sameAsBest : loss <= 0.02 + 1e-6;
+        const notAlreadyWinning = !(moverWinBefore != null && moverWinBefore >= notAlreadyWinningThreshold);
+        const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
+        const alternativeWinning = alternativeBestMoverEp != null && alternativeBestMoverEp >= notAlreadyWinningThreshold;
+
+        const brilliantCandidate = (baseline === 'best' || baseline === 'excellent')
+          && sacrificeDetected
+          && nearBestSac
+          && keepsPlayable
+          && notAlreadyWinning
+          && !alternativeWinning;
+
+        const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
+        const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
+        const missDropThreshold = ratingLerp(moverRating, 1000, 2000, 0.58, 0.68);
+        const missGapThreshold = ratingLerp(moverRating, 1000, 2000, 0.14, 0.2);
+
+        const missCandidate = moverWinBefore != null
+          && moverWinAfter != null
+          && Number.isFinite(bestMoverEp)
+          && moverWinBefore >= missOpportunityThreshold
+          && bestMoverEp >= missConversionThreshold
+          && moverWinAfter <= missDropThreshold
+          && (bestMoverEp - moverWinAfter) >= missGapThreshold;
+
+        let overlay = null;
         if (brilliantCandidate) {
-          finalClassification = 'brilliant';
+          overlay = 'brilliant';
         } else if (greatCandidate) {
-          finalClassification = 'great';
+          overlay = 'great';
+        } else if (missCandidate && baseline !== 'blunder') {
+          overlay = 'miss';
         }
 
-        if (safeBefore != null && safeBefore >= 0.65 && bestEp >= 0.85 && actualEp <= 0.55) {
-          finalClassification = 'miss';
-        }
+        return {
+          classification: baseline,
+          overlay,
+          expectedLoss: loss,
+          meta: {
+            coverageComplete,
+            nearBestMoves,
+            nearBestMargin,
+            bestMoverEp,
+            nearBestCount,
+            needsFullScan,
+            requiresOnlyMoveVerification: requiresVerification,
+            pendingGreatReason: onlyMoveSeed ? 'only' : null,
+            greatReason
+          }
+        };
+      }
 
-        return { classification: finalClassification, expectedLoss: loss };
+      async function detectPieceSacrificeAfterReply(moveEntry, {
+        token,
+        depth,
+        movetime
+      } = {}) {
+        if (!moveEntry || !moveEntry.preFen) return false;
+        if (!moveEntry.piece || moveEntry.piece === 'p') return false;
+        try {
+          const beforeGame = new Chess(moveEntry.preFen);
+          const mover = moveEntry.color === 'b' ? 'b' : 'w';
+          const beforeCounts = countPiecesOnBoard(beforeGame.board());
+          const beforeMaterial = sumMaterial(beforeCounts[mover]);
+
+          const applied = new Chess(moveEntry.preFen);
+          const moveObj = {
+            from: moveEntry.from,
+            to: moveEntry.to,
+            promotion: moveEntry.promotion || undefined
+          };
+          const played = applied.move(moveObj);
+          if (!played) {
+            return false;
+          }
+
+          const afterCounts = countPiecesOnBoard(applied.board());
+          const afterMaterial = sumMaterial(afterCounts[mover]);
+          if (beforeMaterial - afterMaterial >= 3) {
+            return true;
+          }
+
+          if (token != null && token !== state.analysisToken) {
+            return false;
+          }
+
+          let replyUci = null;
+          try {
+            const probe = await engineController.run({
+              fen: applied.fen(),
+              depth: Math.max(10, Math.min(18, (depth || 18))),
+              movetime: Math.min(500, (movetime || 0) + 250)
+            });
+            if (token != null && token !== state.analysisToken) {
+              return false;
+            }
+            if (probe) {
+              replyUci = probe.bestmove || (Array.isArray(probe.entries) && probe.entries[0] && probe.entries[0].uci) || null;
+            }
+          } catch (err) {
+            if (token != null && token !== state.analysisToken) {
+              return false;
+            }
+          }
+
+          if (!replyUci) {
+            return beforeMaterial - afterMaterial >= 3;
+          }
+
+          const opponentGame = new Chess(applied.fen());
+          const reply = opponentGame.move({
+            from: replyUci.slice(0, 2),
+            to: replyUci.slice(2, 4),
+            promotion: replyUci.length > 4 ? replyUci[4] : undefined
+          });
+          if (!reply) {
+            return beforeMaterial - afterMaterial >= 3;
+          }
+
+          const finalCounts = countPiecesOnBoard(opponentGame.board());
+          const finalMaterial = sumMaterial(finalCounts[mover]);
+          return beforeMaterial - finalMaterial >= 3;
+        } catch (err) {
+          console.warn('Failed to evaluate sacrifice candidate', err);
+          return false;
+        }
       }
 
       const engineController = {
@@ -2402,6 +2621,7 @@
           return { afterEp: beforeEp };
         }
         if (token !== state.analysisToken) return { afterEp: beforeEp };
+
         const pvEntries = multiResult.entries.map((entry) => ({ ...entry }));
         const bestEntry = pvEntries.find((entry) => entry.rank === 1) || pvEntries[0] || null;
         let actualEntry = pvEntries.find((entry) => entry.uci === actualUci);
@@ -2416,10 +2636,12 @@
           const forcedEntries = forcedResult ? forcedResult.entries.map((entry) => ({ ...entry })) : [];
           actualEntry = forcedEntries.find((entry) => entry.uci === actualUci) || forcedEntries[0] || null;
         }
+
         const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
         const bestEp = cpToExpectedPoints(bestCp);
         const actualEp = cpToExpectedPoints(actualCp);
+
         let winPercentBefore = centipawnsToWinPercent(bestCp);
         if (winPercentBefore == null && Number.isFinite(beforeEp)) {
           winPercentBefore = beforeEp * 100;
@@ -2432,22 +2654,149 @@
         const cpLoss = computeCpLoss(bestCp, actualCp, moveEntry.color);
         const bestEvalParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
         const actualEvalParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
-        const classificationData = classifyMoveContext({
+
+        const moverColor = moveEntry.color === 'b' ? 'b' : 'w';
+        const moverIsWhite = moverColor === 'w';
+        const positionGame = new Chess(fen);
+        const legalMovesVerbose = positionGame.moves({ verbose: true });
+        const legalMoveCount = legalMovesVerbose.length;
+        const inCheckBefore = positionGame.in_check();
+        const legalMovesUci = legalMovesVerbose.map((mv) => `${mv.from}${mv.to}${mv.promotion || ''}`);
+        const previousEntry = index > 0 ? state.verboseHistory[index - 1] : null;
+        const isTrivialRecapture = Boolean(
+          previousEntry
+          && previousEntry.color !== moveEntry.color
+          && previousEntry.captured
+          && typeof previousEntry.to === 'string'
+          && typeof moveEntry.to === 'string'
+          && previousEntry.to === moveEntry.to
+          && typeof moveEntry.flags === 'string'
+          && moveEntry.flags.includes('c')
+        );
+
+        const moverEpMap = new Map();
+        const recordEpFromWhite = (uci, epWhiteVal) => {
+          if (!uci || !Number.isFinite(epWhiteVal)) return;
+          const epMoverVal = moverIsWhite ? epWhiteVal : 1 - epWhiteVal;
+          moverEpMap.set(uci, epMoverVal);
+        };
+        const recordEpFromCp = (uci, cpVal) => {
+          if (!uci || cpVal == null) return;
+          const epWhiteVal = cpToExpectedPoints(cpVal);
+          const epMoverVal = moverIsWhite ? epWhiteVal : 1 - epWhiteVal;
+          moverEpMap.set(uci, epMoverVal);
+        };
+
+        if (bestEntry && bestEntry.uci) {
+          if (Number.isFinite(bestEp)) {
+            recordEpFromWhite(bestEntry.uci, bestEp);
+          } else {
+            recordEpFromCp(bestEntry.uci, bestCp);
+          }
+        }
+        if (actualEntry && actualEntry.uci) {
+          if (Number.isFinite(actualEp)) {
+            recordEpFromWhite(actualEntry.uci, actualEp);
+          } else {
+            recordEpFromCp(actualEntry.uci, actualCp);
+          }
+        }
+        pvEntries.forEach((entry) => {
+          if (!entry || !entry.uci) return;
+          if (moverEpMap.has(entry.uci)) return;
+          const cpVal = evalStringToCentipawns(entry.eval);
+          recordEpFromCp(entry.uci, cpVal);
+        });
+
+        const quickDepth = Math.max(10, (depth || 20) - 4);
+        const quickTime = Math.min(320, Math.max(140, Math.floor(((movetime || 2000) * 0.18))));
+        const verifyDepth = Math.min((depth || 20) + 2, 24);
+        const verifyTime = Math.min(600, (movetime || 0) + 300);
+
+        async function probeMoveEp(uci, { force = false, depthOverride, movetimeOverride } = {}) {
+          if (!uci) return;
+          if (!force && moverEpMap.has(uci)) return;
+          let probe;
+          try {
+            probe = await engineController.run({
+              ...baseConfig,
+              depth: depthOverride ?? quickDepth,
+              movetime: movetimeOverride ?? quickTime,
+              searchMoves: [uci]
+            });
+          } catch (err) {
+            return;
+          }
+          if (token !== state.analysisToken) return;
+          if (!probe) return;
+          const target = probe.entries.find((entry) => entry.uci === uci) || probe.entries[0] || null;
+          if (!target) return;
+          const cpVal = evalStringToCentipawns(target.eval);
+          recordEpFromCp(uci, cpVal);
+        }
+
+        async function ensureCoverage(moves, options = {}) {
+          for (const uci of moves) {
+            if (token !== state.analysisToken) return false;
+            await probeMoveEp(uci, options);
+            if (token !== state.analysisToken) return false;
+          }
+          return true;
+        }
+
+        let onlyMoveVerified = false;
+        let sacrificeDetected = false;
+
+        const buildClassificationInput = () => ({
           bestEp,
           actualEp,
           beforeEp,
           moveEntry,
           bestEntry,
           actualEntry,
-          winPercentBefore,
-          winPercentAfter,
           pvEntries,
-          cpLoss,
           bestCp,
           actualCp,
           bestEval: bestEvalParsed,
-          actualEval: actualEvalParsed
+          actualEval: actualEvalParsed,
+          moverEpMap,
+          legalMoveCount,
+          inCheckBefore,
+          isTrivialRecapture,
+          sacrificeDetected,
+          onlyMoveVerified
         });
+
+        let classificationData = classifyMoveContext(buildClassificationInput());
+
+        if (classificationData.meta && classificationData.meta.needsFullScan) {
+          await ensureCoverage(legalMovesUci, { depthOverride: quickDepth, movetimeOverride: quickTime });
+          if (token !== state.analysisToken) return { afterEp: beforeEp };
+          classificationData = classifyMoveContext(buildClassificationInput());
+        }
+
+        if (classificationData.meta && classificationData.meta.requiresOnlyMoveVerification) {
+          const targetMoves = Array.isArray(classificationData.meta.nearBestMoves) && classificationData.meta.nearBestMoves.length
+            ? classificationData.meta.nearBestMoves
+            : legalMovesUci;
+          await ensureCoverage(targetMoves, { depthOverride: verifyDepth, movetimeOverride: verifyTime, force: true });
+          if (token !== state.analysisToken) return { afterEp: beforeEp };
+          onlyMoveVerified = true;
+          classificationData = classifyMoveContext(buildClassificationInput());
+        }
+
+        if (classificationData.classification === 'best' || classificationData.classification === 'excellent') {
+          sacrificeDetected = await detectPieceSacrificeAfterReply(moveEntry, {
+            token,
+            depth: depth || 20,
+            movetime: movetime || 0
+          });
+          if (token !== state.analysisToken) return { afterEp: beforeEp };
+          if (sacrificeDetected) {
+            classificationData = classifyMoveContext(buildClassificationInput());
+          }
+        }
+
         moveEntry.eval = actualEntry && actualEntry.eval ? actualEntry.eval : (bestEntry ? bestEntry.eval : null);
         moveEntry.analysis = {
           pvEntries,
@@ -2458,6 +2807,7 @@
           beforeEp,
           expectedLoss: classificationData.expectedLoss,
           classification: classificationData.classification,
+          overlay: classificationData.overlay,
           bestCp,
           actualCp,
           cpLoss,
