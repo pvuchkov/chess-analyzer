@@ -4342,7 +4342,11 @@
           if (token !== state.analysisToken) return;
           const result = await analyzeMoveAtIndex(i, beforeEp, token, fixedDepth, fixedMovetime);
           if (token !== state.analysisToken) return;
-          beforeEp = 1 - result.afterEp;
+          // Carry White's expected points forward unchanged so the next
+          // iteration receives the same reference frame. Inverting the value
+          // incorrectly swaps the perspective between plies and can misclassify
+          // moves (e.g., showing "Great" overlays for blunders).
+          beforeEp = result.afterEp;
           setStatus('engStatus', `Analyzed ${i + 1}/${state.verboseHistory.length} moves`);
         }
         if (token !== state.analysisToken) return;
