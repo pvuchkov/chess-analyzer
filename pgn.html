@@ -2673,39 +2673,39 @@
         return Math.max(0, Math.min(100, raw));
       }
 
+      // Consider a move a "sacrifice" only if, after an immediate recapture
+      // on the landing square, the net material balance (mover minus opponent)
+      // worsens by at least three points compared to before the move.
       function detectSacrifice(moveEntry) {
         if (!moveEntry || !moveEntry.preFen || !moveEntry.fen) return false;
         try {
-          const beforeGame = new Chess(moveEntry.preFen);
-          const movedPiece = beforeGame.get(moveEntry.from);
-          if (!movedPiece) return false;
+          const before = new Chess(moveEntry.preFen);
+          const moved = before.get(moveEntry.from);
+          if (!moved) return false;
 
-          const pieceValue = pieceValues[movedPiece.type];
-          if (!Number.isFinite(pieceValue) || pieceValue < 3) {
+          const movedVal = pieceValues[moved.type];
+          if (!Number.isFinite(movedVal) || movedVal < 3) {
             return false;
           }
 
           const mover = moveEntry.color;
-          const beforeCounts = countPiecesOnBoard(beforeGame.board());
-          const materialBefore = sumMaterial(beforeCounts[mover]);
+          const opponent = mover === 'w' ? 'b' : 'w';
 
-          const afterGame = new Chess(moveEntry.fen);
-          const afterCounts = countPiecesOnBoard(afterGame.board());
-          const materialAfter = sumMaterial(afterCounts[mover]);
-          if (materialBefore - materialAfter >= 3) {
-            return true;
-          }
+          const beforeCounts = countPiecesOnBoard(before.board());
+          const diffBefore = sumMaterial(beforeCounts[mover]) - sumMaterial(beforeCounts[opponent]);
 
+          const after = new Chess(moveEntry.fen);
           const targetSquare = moveEntry.to;
-          const opponentMoves = afterGame.moves({ verbose: true });
-          for (const reply of opponentMoves) {
+          const replies = after.moves({ verbose: true });
+          for (const reply of replies) {
             if (!reply || !reply.flags || !reply.flags.includes('c')) continue;
             if (reply.to !== targetSquare) continue;
             const replyGame = new Chess(moveEntry.fen);
             replyGame.move({ from: reply.from, to: reply.to, promotion: reply.promotion });
             const replyCounts = countPiecesOnBoard(replyGame.board());
-            const materialAfterReply = sumMaterial(replyCounts[mover]);
-            if (materialBefore - materialAfterReply >= 3) {
+            const diffAfter = sumMaterial(replyCounts[mover]) - sumMaterial(replyCounts[opponent]);
+            const netSwing = diffAfter - diffBefore;
+            if (netSwing <= -3) {
               return true;
             }
           }
