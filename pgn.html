@@ -2296,25 +2296,23 @@
         return (w + 0.5 * d) / total;
       }
 
-      function epFromWdlForMover(wdl, fen, fallbackColor = 'w') {
+      // Stockfish reports WDL counts for the side-to-move. Convert directly to
+      // expected points for that mover: EP = (wins + 0.5 * draws) / total.
+      function epFromWdlForMover(wdl /*, fen, fallbackColor = 'w' */) {
         if (!wdl) return null;
-        const stm = typeof fen === 'string'
-          ? sideToMoveFromFen(fen)
-          : (fallbackColor === 'b' ? 'b' : 'w');
         const w = Number.isFinite(wdl.w) ? Math.max(0, wdl.w) : 0;
         const d = Number.isFinite(wdl.d) ? Math.max(0, wdl.d) : 0;
         const l = Number.isFinite(wdl.l) ? Math.max(0, wdl.l) : 0;
         const total = w + d + l;
         if (total <= 0) return null;
-        const epWhite = (w + 0.5 * d) / total;
-        return stm === 'w' ? epWhite : 1 - epWhite;
+        return (w + 0.5 * d) / total;
       }
 
       function expectedPointsForMover(entry, fen, fallbackColor = 'w') {
         if (!entry) return null;
         const stm = typeof fen === 'string' ? sideToMoveFromFen(fen) : null;
         const mover = stm === 'b' ? 'b' : (stm === 'w' ? 'w' : (fallbackColor === 'b' ? 'b' : 'w'));
-        const epWdl = epFromWdlForMover(entry.wdl, fen, mover);
+        const epWdl = epFromWdlForMover(entry.wdl);
         if (Number.isFinite(epWdl)) {
           return epWdl;
         }
@@ -4191,14 +4189,14 @@
         const positionSummary = buildPositionSummary(fen, pvEntries);
         const bestCp = evalStringToCentipawns(bestEntry ? bestEntry.eval : null);
         const actualCp = evalStringToCentipawns(actualEntry ? actualEntry.eval : null);
-        let bestEp = cpToExpectedPoints(bestCp);
-        let actualEp = cpToExpectedPoints(actualCp);
-        const bestEpWdl = expectedPointsFromWdl(bestEntry ? bestEntry.wdl : null, 'w');
-        const actualEpWdl = expectedPointsFromWdl(actualEntry ? actualEntry.wdl : null, 'w');
-        if (bestEpWdl != null) bestEp = bestEpWdl;
-        if (actualEpWdl != null) actualEp = actualEpWdl;
         const bestMoverEp = expectedPointsForMover(bestEntry, fen, moverColor);
         const actualMoverEp = expectedPointsForMover(actualEntry, fen, moverColor);
+        let bestEp = Number.isFinite(bestMoverEp)
+          ? (moverIsWhite ? bestMoverEp : (1 - bestMoverEp))
+          : cpToExpectedPoints(bestCp);
+        let actualEp = Number.isFinite(actualMoverEp)
+          ? (moverIsWhite ? actualMoverEp : (1 - actualMoverEp))
+          : cpToExpectedPoints(actualCp);
         let winPercentBefore = winPercentForEntry(bestEntry, moverColor, fen);
         if (winPercentBefore == null && Number.isFinite(beforeEp)) {
           const beforeMoverEp = moverIsWhite ? beforeEp : 1 - beforeEp;
