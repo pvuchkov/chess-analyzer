@@ -187,6 +187,12 @@
       cursor: not-allowed;
     }
 
+    button.compact {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
     .status {
       min-height: 20px;
       font-size: 13px;
@@ -269,10 +275,30 @@
       color: var(--muted);
     }
 
+    .explanation-card-headline-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .explanation-card-headline-text {
+      flex: 1;
+    }
+
     .explanation-card-headline {
       font-size: 14px;
       font-weight: 600;
       color: var(--text);
+    }
+
+    .explanation-card button[data-action="show-line"] {
+      margin-left: auto;
+    }
+
+    .explanation-card button[data-action="show-line"].active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.18);
     }
 
     .explanation-card-list {
@@ -286,6 +312,15 @@
 
     .explanation-card-list li {
       list-style: disc;
+    }
+
+    .explanation-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .explanation-actions[hidden] {
+      display: none;
     }
 
     .board-area {
@@ -992,6 +1027,9 @@
       <h2 style="margin-top:22px;">Engine explanation</h2>
       <div id="explanationBox" class="explanation-panel">
         <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
+        <div id="explanationActions" class="explanation-actions" hidden>
+          <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear shown line</button>
+        </div>
         <div id="explanationCards" class="explanation-cards"></div>
         <div id="explanationDetails" class="explanation-details"></div>
       </div>
@@ -1075,7 +1113,8 @@
         analysisToken: 0,
         suggestionMode: 'played',
         badgeRaf: null,
-        headers: {}
+        headers: {},
+        lineOverlay: []
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -1106,6 +1145,7 @@
           title: 'Switch to played-move review'
         }
       };
+      const SHOW_LINE_CARD_KEYS = new Set(['idea', 'problem', 'solution']);
       const MULTIPV_MAX_CANDIDATES = 5;
       const PV_BEST_MARGIN = 0;
       const PV_KEEP_MARGIN = 0.02;
@@ -1623,6 +1663,7 @@
         } catch (err) {
           // ignore storage errors
         }
+        clearLineOverlay();
         applyAnalysisForCurrentPly();
       }
 
@@ -1657,6 +1698,7 @@
         svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.width}`);
         svg.setAttribute('width', rect.width);
         svg.setAttribute('height', rect.width);
+        redrawAllArrows();
       }
 
       function setStatus(id, msg, type) {
@@ -1818,6 +1860,7 @@
         state.ply = Math.max(0, Math.min(max, ply));
         const baseGame = createBaseGame();
         state.game = baseGame;
+        clearLineOverlay();
 
         if (state.ply === 0) {
           setBoardPosition(state.initialFen);
@@ -1838,11 +1881,14 @@
         updateUrlState();
       }
 
-      function drawArrows(list) {
+      function ensureArrowLayer() {
         const svg = byId('arrowLayer');
-        while (svg.firstChild) svg.removeChild(svg.firstChild);
-        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        defs.innerHTML = `
+        if (!svg) return null;
+
+        let defs = svg.querySelector('defs');
+        if (!defs) {
+          defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+          defs.innerHTML = `
         <marker id="m1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#22c55e" />
         </marker>
@@ -1851,41 +1897,92 @@
         </marker>
         <marker id="m3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#f87171" />
+        </marker>
+        <marker id="mOverlay" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
         </marker>`;
-        svg.appendChild(defs);
-        if (!list || !list.length) return;
-        const boardRect = byId('board').getBoundingClientRect();
-        const squareSize = boardRect.width / 8;
-        function squareCenter(sq) {
-          const file = sq.charCodeAt(0) - 97;
-          const rank = parseInt(sq[1], 10) - 1;
-          if (state.orientation === 'white') {
-            return {
-              x: (file + 0.5) * squareSize,
-              y: ((7 - rank) + 0.5) * squareSize
-            };
-          }
+          svg.appendChild(defs);
+        }
+
+        let baseLayer = svg.querySelector('#arrowBase');
+        if (!baseLayer) {
+          baseLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          baseLayer.setAttribute('id', 'arrowBase');
+          svg.appendChild(baseLayer);
+        }
+
+        let overlayLayer = svg.querySelector('#arrowOverlay');
+        if (!overlayLayer) {
+          overlayLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          overlayLayer.setAttribute('id', 'arrowOverlay');
+          svg.appendChild(overlayLayer);
+        }
+
+        return { svg, baseLayer, overlayLayer };
+      }
+
+      function clearChildren(node) {
+        if (!node) return;
+        while (node.firstChild) {
+          node.removeChild(node.firstChild);
+        }
+      }
+
+      function getSquareCenterCoords(square, squareSize) {
+        if (typeof square !== 'string' || square.length < 2) return null;
+        const normalized = square.toLowerCase();
+        const file = normalized.charCodeAt(0) - 97;
+        const rank = Number.parseInt(normalized[1], 10) - 1;
+        if (!Number.isFinite(file) || !Number.isFinite(rank)) return null;
+        if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
+        if (state.orientation === 'white') {
           return {
-            x: ((7 - file) + 0.5) * squareSize,
-            y: (rank + 0.5) * squareSize
+            x: (file + 0.5) * squareSize,
+            y: ((7 - rank) + 0.5) * squareSize
           };
         }
+        return {
+          x: ((7 - file) + 0.5) * squareSize,
+          y: (rank + 0.5) * squareSize
+        };
+      }
+
+      function drawArrows(list) {
+        const layers = ensureArrowLayer();
+        if (!layers) return;
+        const { baseLayer } = layers;
+        clearChildren(baseLayer);
+        if (!Array.isArray(list) || !list.length) return;
+
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        const boardRect = boardEl.getBoundingClientRect();
+        if (!boardRect || !boardRect.width) return;
+        const squareSize = boardRect.width / 8;
+        if (!Number.isFinite(squareSize) || squareSize <= 0) return;
+
         const colors = ['#22c55e', '#38bdf8', '#f87171'];
         const opacities = [1.0, 0.25, 0.25];
+
         list.forEach((entry, i) => {
-          if (!entry || !entry.uci) return;
-          const from = squareCenter(entry.uci.slice(0, 2));
-          const to = squareCenter(entry.uci.slice(2, 4));
+          if (!entry || typeof entry.uci !== 'string' || entry.uci.length < 4) return;
+          const fromSquare = entry.uci.slice(0, 2);
+          const toSquare = entry.uci.slice(2, 4);
+          const from = getSquareCenterCoords(fromSquare, squareSize);
+          const to = getSquareCenterCoords(toSquare, squareSize);
+          if (!from || !to) return;
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const len = Math.hypot(dx, dy);
           if (!len) return;
+
           const shorten = Math.min(12, len * 0.15);
           const startOffset = Math.min(12, len * 0.1);
           const sx = from.x + (dx / len) * startOffset;
           const sy = from.y + (dy / len) * startOffset;
           const ex = to.x - (dx / len) * shorten;
           const ey = to.y - (dy / len) * shorten;
+
           const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
           line.setAttribute('x1', sx);
           line.setAttribute('y1', sy);
@@ -1894,10 +1991,266 @@
           line.setAttribute('stroke', colors[i] || colors[2]);
           line.setAttribute('stroke-width', Math.max(4, 6 - i * 0.8));
           line.setAttribute('stroke-linecap', 'round');
-          line.setAttribute('marker-end', `url(#m${i + 1})`);
+          const markerId = i + 1;
+          line.setAttribute('marker-end', `url(#m${markerId <= 3 ? markerId : 3})`);
           line.setAttribute('opacity', opacities[i] || opacities[2]);
-          svg.appendChild(line);
+          baseLayer.appendChild(line);
         });
+      }
+
+      function drawArrowOverlay(list) {
+        const layers = ensureArrowLayer();
+        if (!layers) return;
+        const { overlayLayer } = layers;
+        clearChildren(overlayLayer);
+        if (!Array.isArray(list) || !list.length) return;
+
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        const boardRect = boardEl.getBoundingClientRect();
+        if (!boardRect || !boardRect.width) return;
+        const squareSize = boardRect.width / 8;
+        if (!Number.isFinite(squareSize) || squareSize <= 0) return;
+
+        list.forEach((segment) => {
+          if (!segment || typeof segment.uci !== 'string' || segment.uci.length < 4) return;
+          const fromSquare = segment.uci.slice(0, 2);
+          const toSquare = segment.uci.slice(2, 4);
+          const from = getSquareCenterCoords(fromSquare, squareSize);
+          const to = getSquareCenterCoords(toSquare, squareSize);
+          if (!from || !to) return;
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const len = Math.hypot(dx, dy);
+          if (!len) return;
+
+          const shorten = Math.min(12, len * 0.15);
+          const startOffset = Math.min(12, len * 0.1);
+          const sx = from.x + (dx / len) * startOffset;
+          const sy = from.y + (dy / len) * startOffset;
+          const ex = to.x - (dx / len) * shorten;
+          const ey = to.y - (dy / len) * shorten;
+
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', sx);
+          line.setAttribute('y1', sy);
+          line.setAttribute('x2', ex);
+          line.setAttribute('y2', ey);
+          line.setAttribute('stroke', segment.color || '#94a3b8');
+          line.setAttribute('stroke-width', Number.isFinite(segment.width) ? segment.width : 4);
+          line.setAttribute('stroke-linecap', 'round');
+          if (segment.dashed !== false) {
+            line.setAttribute('stroke-dasharray', segment.dashArray || '8 8');
+          }
+          if (segment.opacity != null) {
+            line.setAttribute('opacity', segment.opacity);
+          } else {
+            line.setAttribute('opacity', 0.65);
+          }
+          line.setAttribute('marker-end', 'url(#mOverlay)');
+          overlayLayer.appendChild(line);
+        });
+      }
+
+      function redrawAllArrows(baseList = null) {
+        const activeList = baseList != null
+          ? baseList
+          : (() => {
+            const analysis = getAnalysisForCurrentView();
+            return analysis ? analysis.pvEntries || [] : [];
+          })();
+        drawArrows(activeList);
+        drawArrowOverlay(state.lineOverlay);
+      }
+
+      function overlaysEqual(a, b) {
+        if (!Array.isArray(a) || !Array.isArray(b)) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+          const left = a[i] && a[i].uci;
+          const right = b[i] && b[i].uci;
+          if (left !== right) return false;
+        }
+        return true;
+      }
+
+      function overlayFromSeq(seq) {
+        if (!Array.isArray(seq) || !seq.length) return [];
+        const max = Math.min(seq.length, 12);
+        const segments = [];
+        for (let i = 0; i < max; i++) {
+          const move = seq[i];
+          if (typeof move !== 'string' || move.length < 4) continue;
+          const normalized = move.toLowerCase();
+          const opacity = Math.max(0.2, 0.85 - i * 0.08);
+          segments.push({
+            uci: normalized,
+            dashed: true,
+            opacity,
+            width: 4
+          });
+        }
+        return segments;
+      }
+
+      function uciSeqFromEntry(entry, limit = 8) {
+        if (!entry) return [];
+        if (Array.isArray(entry.pvMoves) && entry.pvMoves.length) {
+          return entry.pvMoves
+            .filter((mv) => typeof mv === 'string' && mv.length >= 4)
+            .slice(0, limit)
+            .map((mv) => mv.toLowerCase());
+        }
+        if (Array.isArray(entry.pvVerbose) && entry.pvVerbose.length) {
+          const moves = [];
+          for (let i = 0; i < entry.pvVerbose.length && moves.length < limit; i++) {
+            const mv = entry.pvVerbose[i];
+            if (!mv) continue;
+            if (typeof mv.uci === 'string' && mv.uci.length >= 4) {
+              moves.push(mv.uci.toLowerCase());
+            } else if (typeof mv.from === 'string' && typeof mv.to === 'string') {
+              const promotion = mv.promotion ? String(mv.promotion).toLowerCase() : '';
+              moves.push(`${mv.from}${mv.to}${promotion}`.toLowerCase());
+            }
+          }
+          if (moves.length) return moves;
+        }
+        if (typeof entry.uci === 'string' && entry.uci.length >= 4) {
+          return [entry.uci.toLowerCase()];
+        }
+        return [];
+      }
+
+      function replyUciSeqFromEntry(entry, limit = 6) {
+        if (!entry) return [];
+        const base = uciSeqFromEntry(entry, limit + 1);
+        if (!base.length) return [];
+        return base.slice(1, limit + 1);
+      }
+
+      function getOverlaySequenceForKind(kind, analysis) {
+        if (!analysis) return [];
+        if (kind === 'idea') {
+          const entry = analysis.actualEntry || analysis.bestEntry;
+          return uciSeqFromEntry(entry, 10);
+        }
+        if (kind === 'problem') {
+          const entry = analysis.actualEntry || analysis.bestEntry;
+          return replyUciSeqFromEntry(entry, 10);
+        }
+        if (kind === 'solution') {
+          const entry = analysis.bestEntry || analysis.actualEntry;
+          return uciSeqFromEntry(entry, 10);
+        }
+        return [];
+      }
+
+      function hasLineOverlay() {
+        return Array.isArray(state.lineOverlay) && state.lineOverlay.length > 0;
+      }
+
+      function updateLineOverlayButton() {
+        const actions = byId('explanationActions');
+        const button = byId('clearLineOverlayBtn');
+        const active = hasLineOverlay();
+        if (actions) {
+          actions.hidden = !active;
+        }
+        if (button) {
+          button.disabled = !active;
+        }
+      }
+
+      function refreshShowLineButtons(currentAnalysis = null) {
+        const container = byId('explanationCards');
+        if (!container) return;
+        const buttons = container.querySelectorAll('button[data-action="show-line"]');
+        if (!buttons.length) return;
+        const analysis = currentAnalysis || getAnalysisForCurrentView();
+        let overlayMatchesAny = false;
+        buttons.forEach((btn) => {
+          const kind = btn.dataset.kind;
+          if (!kind) return;
+          const seq = getOverlaySequenceForKind(kind, analysis);
+          const hasSeq = Array.isArray(seq) && seq.length > 0;
+          btn.disabled = !hasSeq;
+          const defaultLabel = kind === 'problem' ? 'Show reply' : 'Show line';
+          if (!hasSeq) {
+            btn.classList.remove('active');
+            btn.setAttribute('aria-pressed', 'false');
+            btn.textContent = defaultLabel;
+            return;
+          }
+          const overlay = overlayFromSeq(seq);
+          const isActive = overlaysEqual(state.lineOverlay, overlay);
+          if (isActive) overlayMatchesAny = true;
+          btn.classList.toggle('active', isActive);
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+          btn.textContent = isActive ? 'Hide line' : defaultLabel;
+        });
+        if (!overlayMatchesAny && hasLineOverlay()) {
+          state.lineOverlay = [];
+          drawArrowOverlay([]);
+          updateLineOverlayButton();
+        }
+      }
+
+      function setLineOverlay(segments, options = {}) {
+        const analysis = options && options.analysis ? options.analysis : null;
+        if (!Array.isArray(segments) || !segments.length) {
+          state.lineOverlay = [];
+        } else {
+          state.lineOverlay = segments
+            .filter((seg) => seg && typeof seg.uci === 'string' && seg.uci.length >= 4)
+            .map((seg) => ({
+              uci: seg.uci.toLowerCase(),
+              dashed: seg.dashed !== false,
+              opacity: seg.opacity,
+              width: seg.width,
+              color: seg.color,
+              dashArray: seg.dashArray
+            }));
+        }
+        drawArrowOverlay(state.lineOverlay);
+        updateLineOverlayButton();
+        refreshShowLineButtons(analysis);
+      }
+
+      function clearLineOverlay(options = {}) {
+        if (!hasLineOverlay()) {
+          updateLineOverlayButton();
+          refreshShowLineButtons(options && options.analysis ? options.analysis : null);
+          return;
+        }
+        setLineOverlay([], options);
+      }
+
+      function handleExplanationCardClick(event) {
+        const btn = event.target.closest('button[data-action="show-line"]');
+        if (!btn || btn.disabled) return;
+        const kind = btn.dataset.kind;
+        if (!kind) return;
+        const analysis = getAnalysisForCurrentView();
+        if (!analysis) {
+          refreshShowLineButtons(null);
+          return;
+        }
+        const seq = getOverlaySequenceForKind(kind, analysis);
+        if (!Array.isArray(seq) || !seq.length) {
+          refreshShowLineButtons(analysis);
+          return;
+        }
+        const overlay = overlayFromSeq(seq);
+        if (!overlay.length) {
+          refreshShowLineButtons(analysis);
+          return;
+        }
+        if (overlaysEqual(state.lineOverlay, overlay)) {
+          clearLineOverlay({ analysis });
+        } else {
+          setLineOverlay(overlay, { analysis });
+        }
+        btn.blur();
       }
 
       function uciToSan(fen, uci) {
@@ -3971,6 +4324,7 @@
         state.analysisCache = new Map();
         state.analysisStatus = 'idle';
         engineController.reset();
+        clearLineOverlay();
       }
 
       function getAnalysisForCurrentView() {
@@ -4050,10 +4404,24 @@
               cardEl.appendChild(titleEl);
             }
             if (card.headline) {
+              const headlineRow = document.createElement('div');
+              headlineRow.className = 'explanation-card-headline-row';
               const headEl = document.createElement('div');
-              headEl.className = 'explanation-card-headline';
+              headEl.className = 'explanation-card-headline explanation-card-headline-text';
               headEl.textContent = card.headline;
-              cardEl.appendChild(headEl);
+              headlineRow.appendChild(headEl);
+              if (card.key && SHOW_LINE_CARD_KEYS.has(card.key)) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'secondary compact';
+                btn.dataset.action = 'show-line';
+                btn.dataset.kind = card.key;
+                btn.setAttribute('aria-pressed', 'false');
+                btn.disabled = true;
+                btn.textContent = card.key === 'problem' ? 'Show reply' : 'Show line';
+                headlineRow.appendChild(btn);
+              }
+              cardEl.appendChild(headlineRow);
             }
             if (Array.isArray(card.bullets) && card.bullets.length) {
               const listEl = document.createElement('ul');
@@ -4071,6 +4439,7 @@
             cardsEl.appendChild(cardEl);
           });
         }
+        refreshShowLineButtons(analysis);
         detailsEl.innerHTML = '';
         if (Array.isArray(payload.details) && payload.details.length) {
           const list = document.createElement('ul');
@@ -4089,7 +4458,7 @@
       function applyAnalysisForCurrentPly() {
         const analysis = getAnalysisForCurrentView();
         if (analysis) {
-          drawArrows(analysis.pvEntries || []);
+          redrawAllArrows(analysis.pvEntries || []);
           updatePVDisplay(analysis.pvEntries || []);
           updateExplanationPanel(analysis);
           let evalText = null;
@@ -4109,7 +4478,7 @@
           return;
         }
 
-        drawArrows([]);
+        redrawAllArrows([]);
         updatePVDisplay([]);
         updateExplanationPanel(null);
         if (state.suggestionMode === 'next') {
@@ -4347,7 +4716,7 @@
         state.analysisStatus = state.verboseHistory.length ? 'running' : 'complete';
         renderMoves();
         updatePVDisplay([]);
-        drawArrows([]);
+        redrawAllArrows([]);
         if (!state.verboseHistory.length) {
           updateEvalBar(null);
           setStatus('engStatus', 'No moves to analyze.');
@@ -4399,7 +4768,7 @@
         updatePVDisplay([]);
         updateEloEstimates();
         const destination = typeof targetPly === 'number' ? targetPly : verboseHistory.length;
-        drawArrows([]);
+        redrawAllArrows([]);
         goToPly(destination);
         state.analysisStatus = 'queued';
         precomputeFullAnalysis();
@@ -4518,7 +4887,7 @@
           updateEvalBar(state.lastEval);
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
-            drawArrows(analysis ? analysis.pvEntries || [] : []);
+            redrawAllArrows(analysis ? analysis.pvEntries || [] : []);
             updateBoardClassificationBadge();
           });
         });
@@ -4533,6 +4902,15 @@
             toggleSuggestionMode();
           });
         }
+        const cardsContainer = byId('explanationCards');
+        if (cardsContainer) {
+          cardsContainer.addEventListener('click', handleExplanationCardClick);
+        }
+        const clearOverlayBtn = byId('clearLineOverlayBtn');
+        if (clearOverlayBtn) {
+          clearOverlayBtn.addEventListener('click', () => clearLineOverlay());
+        }
+        updateLineOverlayButton();
       }
 
       function getSystemTheme() {
