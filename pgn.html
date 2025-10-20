@@ -1274,13 +1274,9 @@
           bucket.moves++;
           if (!entry.analysis) return;
           bucket.analyzedMoves++;
-          const classification = entry.analysis.classification;
-          if (classification && Object.prototype.hasOwnProperty.call(bucket.counts, classification)) {
-            bucket.counts[classification] += 1;
-          }
-          const overlay = entry.analysis.overlay;
-          if (overlay && Object.prototype.hasOwnProperty.call(bucket.counts, overlay)) {
-            bucket.counts[overlay] += 1;
+          const displayClassification = getMoveDisplayClassification(entry.analysis);
+          if (displayClassification && Object.prototype.hasOwnProperty.call(bucket.counts, displayClassification)) {
+            bucket.counts[displayClassification] += 1;
           }
           const moveAccuracy = entry.analysis.accuracy;
           if (Number.isFinite(moveAccuracy)) {
@@ -1399,11 +1395,11 @@
         }
 
         const entry = state.verboseHistory[state.ply - 1];
-        if (!entry || !entry.analysis || !entry.analysis.classification || !entry.to) {
+        if (!entry || !entry.analysis || !entry.to) {
           return;
         }
 
-        const chosenClass = entry.analysis.overlay || entry.analysis.classification;
+        const chosenClass = getMoveDisplayClassification(entry.analysis);
         if (!chosenClass) {
           return;
         }
@@ -1739,6 +1735,11 @@
         return classificationIconSet.has(file) ? `./move-classifications/${file}.png` : null;
       }
 
+      function getMoveDisplayClassification(analysis) {
+        if (!analysis) return null;
+        return analysis.overlay || analysis.classification || null;
+      }
+
       function createMoveCell(entry, plyIndex) {
         const cell = document.createElement('div');
         cell.className = 'mv';
@@ -1747,8 +1748,7 @@
         cell.appendChild(label);
 
         if (entry && entry.analysis) {
-          const baseClass = entry.analysis.suggestionTag || entry.analysis.classification;
-          const chosenClass = entry.analysis.overlay || baseClass;
+          const chosenClass = getMoveDisplayClassification(entry.analysis);
           if (chosenClass) {
             const iconPath = classificationToIcon(chosenClass);
             if (iconPath) {
