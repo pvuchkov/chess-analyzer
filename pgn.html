@@ -745,65 +745,77 @@
     }
 
     .moves {
-      display: grid;
-      grid-template-columns: 50px 1fr 1fr;
-      gap: 6px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
       font-size: 14px;
     }
 
-    .moves-header-cell {
+    .move-tree-header {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      color: var(--muted);
       font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.3px;
-      color: var(--muted);
-      padding: 2px 10px;
+      padding: 0 6px;
     }
 
-    .moves-header-cell:first-child {
-      text-align: right;
-      padding-right: 6px;
+    .move-tree {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .moves-index {
-      text-align: right;
-      padding-right: 6px;
-      font-weight: 600;
-    }
-
-    .mv {
+    .move-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       padding: 6px 10px;
       border-radius: 10px;
       cursor: pointer;
       background: rgba(148, 163, 184, 0.12);
       transition: background 0.12s ease, transform 0.12s ease;
       position: relative;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      margin-left: calc(var(--indent, 0) * 16px);
     }
 
-    .mv:hover {
+    .move-row:hover {
       background: rgba(56, 189, 248, 0.18);
     }
 
-    .mv.active {
+    .move-row.active {
       background: rgba(56, 189, 248, 0.28);
       box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
     }
 
-    .eval {
-      position: absolute;
-      top: -12px;
-      right: 2px;
-      font-size: 10px;
+    .move-row.mainline {
+      background: rgba(148, 163, 184, 0.18);
+    }
+
+    .move-row.variation {
+      opacity: 0.92;
+    }
+
+    .move-row-index {
+      width: 50px;
+      font-weight: 600;
+      text-align: right;
+      color: var(--muted);
+    }
+
+    .move-row-san {
+      min-width: 0;
+    }
+
+    .move-row-eval {
+      font-size: 11px;
       font-weight: 600;
       color: var(--accent);
       background: rgba(15, 23, 42, 0.75);
-      padding: 1px 3px;
-      border-radius: 3px;
-      white-space: nowrap;
-      opacity: 0.85;
+      padding: 1px 4px;
+      border-radius: 4px;
     }
 
     .classification-icon {
@@ -1021,6 +1033,8 @@
         <button id="nextBtn">Next ▶</button>
         <button id="lastBtn">Last ⏭</button>
         <button id="flipBtn" class="secondary">Flip</button>
+        <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
+        <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
       </div>
       <div id="navStatus" class="status"></div>
 
@@ -1114,7 +1128,14 @@
         suggestionMode: 'played',
         badgeRaf: null,
         headers: {},
-        lineOverlay: []
+        lineOverlay: [],
+        nodeMap: new Map(),
+        rootNodeId: null,
+        currentNodeId: null,
+        lineSelections: new Map(),
+        mainlineSelections: new Map(),
+        nodeSeq: 0,
+        exploreMode: false
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -1126,6 +1147,120 @@
         q: 'queen',
         k: 'king'
       };
+
+      function resetMoveTree() {
+        state.nodeMap = new Map();
+        state.rootNodeId = null;
+        state.currentNodeId = null;
+        state.lineSelections = new Map();
+        state.mainlineSelections = new Map();
+        state.nodeSeq = 0;
+        state.verboseHistory = [];
+      }
+
+      function nextNodeId() {
+        state.nodeSeq = (state.nodeSeq || 0) + 1;
+        return `node-${state.nodeSeq}`;
+      }
+
+      function getNode(id) {
+        if (!id) return null;
+        return state.nodeMap.get(id) || null;
+      }
+
+      function getRootNode() {
+        return getNode(state.rootNodeId);
+      }
+
+      function getCurrentNode() {
+        return getNode(state.currentNodeId) || getRootNode();
+      }
+
+      function getPathToNode(nodeId) {
+        const path = [];
+        let cursor = getNode(nodeId);
+        while (cursor) {
+          path.push(cursor);
+          if (!cursor.parentId) break;
+          cursor = getNode(cursor.parentId);
+        }
+        return path.reverse();
+      }
+
+      function recomputeActiveLine() {
+        const root = getRootNode();
+        if (!root) {
+          state.verboseHistory = [];
+          return;
+        }
+        const visited = new Set([root.id]);
+        const sequence = [];
+        let cursor = root;
+        while (cursor) {
+          const nextId = state.lineSelections.get(cursor.id);
+          if (!nextId) break;
+          if (visited.has(nextId)) break;
+          const nextNode = getNode(nextId);
+          if (!nextNode) break;
+          sequence.push(nextNode);
+          visited.add(nextId);
+          cursor = nextNode;
+        }
+        state.verboseHistory = sequence;
+      }
+
+      function getNodeIndexInActiveLine(nodeId) {
+        if (!nodeId) return -1;
+        for (let i = 0; i < state.verboseHistory.length; i++) {
+          if (state.verboseHistory[i] && state.verboseHistory[i].id === nodeId) {
+            return i;
+          }
+        }
+        return -1;
+      }
+
+      function setActivePathToNode(nodeId) {
+        const path = getPathToNode(nodeId);
+        if (!path.length) return;
+        for (let i = 0; i < path.length - 1; i++) {
+          const parent = path[i];
+          const child = path[i + 1];
+          state.lineSelections.set(parent.id, child.id);
+        }
+        recomputeActiveLine();
+      }
+
+      function getMainlineChildId(nodeId) {
+        return state.mainlineSelections.get(nodeId) || null;
+      }
+
+      function setMainlineChild(parentId, childId) {
+        if (!parentId || !childId) return;
+        state.mainlineSelections.set(parentId, childId);
+      }
+
+      function buildActiveLineFromSelections() {
+        recomputeActiveLine();
+      }
+
+      function rejoinMainLine() {
+        const current = getCurrentNode();
+        let cursor = current;
+        while (cursor && cursor.parentId) {
+          const parent = getNode(cursor.parentId);
+          if (!parent) break;
+          const mainChild = getMainlineChildId(parent.id);
+          if (mainChild && state.lineSelections.get(parent.id) !== mainChild) {
+            state.lineSelections.set(parent.id, mainChild);
+          }
+          cursor = parent;
+        }
+        recomputeActiveLine();
+        const maxPly = state.verboseHistory.length;
+        const nextPly = Math.min(state.ply, maxPly);
+        goToPly(nextPly);
+        renderMoves();
+      }
       const pieceOrder = ['q', 'r', 'b', 'n', 'p'];
       const pieceLabels = { p: 'P', n: 'N', b: 'B', r: 'R', q: 'Q' };
       const inputHints = {
@@ -1680,8 +1815,35 @@
       function initBoard() {
         state.board = Chessboard('board', {
           position: 'start',
-          draggable: false,
-          pieceTheme: 'chesspieces/wikipedia/{piece}.png'
+          draggable: true,
+          pieceTheme: 'chesspieces/wikipedia/{piece}.png',
+          onDragStart: (source, piece) => {
+            if (!state.exploreMode) return false;
+            const turn = state.game ? state.game.turn() : 'w';
+            if (turn === 'w' && piece.startsWith('b')) return false;
+            if (turn === 'b' && piece.startsWith('w')) return false;
+            return true;
+          },
+          onDrop: (source, target) => {
+            if (!state.exploreMode) return 'snapback';
+            if (source === target) return 'snapback';
+            const fen = state.ply === 0
+              ? effectiveInitialFen()
+              : (state.verboseHistory[state.ply - 1] ? state.verboseHistory[state.ply - 1].fen : effectiveInitialFen());
+            const game = createBaseGame(fen);
+            const moveConfig = { from: source, to: target };
+            const piece = game.get(source);
+            if (piece && piece.type === 'p') {
+              const targetRank = target[1];
+              if ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1')) {
+                moveConfig.promotion = 'q';
+              }
+            }
+            const result = game.move(moveConfig);
+            if (!result) return 'snapback';
+            handleUserBranchMove({ move: result, fen: game.fen(), previousFen: fen });
+            return 'snapback';
+          }
         });
         syncArrowLayer();
         window.addEventListener('resize', () => {
@@ -1689,6 +1851,106 @@
           syncArrowLayer();
           scheduleBoardBadgeUpdate();
         });
+      }
+
+      function isOnMainLine() {
+        for (const [parentId, selectedId] of state.lineSelections.entries()) {
+          const mainChild = getMainlineChildId(parentId);
+          if (mainChild && selectedId && selectedId !== mainChild) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function updateExploreControls() {
+        const toggle = byId('exploreToggle');
+        const rejoin = byId('rejoinBtn');
+        if (toggle) {
+          toggle.textContent = state.exploreMode ? 'Disable explore' : 'Enable explore';
+          toggle.setAttribute('aria-pressed', state.exploreMode ? 'true' : 'false');
+        }
+        if (rejoin) {
+          rejoin.hidden = isOnMainLine();
+          rejoin.disabled = isOnMainLine();
+        }
+      }
+
+      function setExploreMode(enabled) {
+        state.exploreMode = Boolean(enabled);
+        updateExploreControls();
+      }
+
+      function toggleExploreMode() {
+        setExploreMode(!state.exploreMode);
+      }
+
+      function handleUserBranchMove({ move, fen, previousFen }) {
+        const parent = state.ply === 0 ? getRootNode() : getNode(state.verboseHistory[state.ply - 1].id);
+        if (!parent) return;
+        if (!Array.isArray(parent.children)) {
+          parent.children = [];
+        }
+
+        let existing = null;
+        for (const childId of parent.children) {
+          const child = getNode(childId);
+          if (!child) continue;
+          const sameMove = child.from === move.from && child.to === move.to;
+          const samePromotion = (child.promotion || null) === (move.promotion || null);
+          if (sameMove && samePromotion) {
+            existing = child;
+            break;
+          }
+        }
+
+        if (existing) {
+          setActivePathToNode(existing.id);
+          const idx = getNodeIndexInActiveLine(existing.id);
+          goToPly(idx + 1);
+          renderMoves();
+          return;
+        }
+
+        const nodeId = nextNodeId();
+        const ply = (parent.ply || 0) + 1;
+        const moveNumber = Math.floor((ply - 1) / 2) + 1;
+        const newNode = {
+          id: nodeId,
+          parentId: parent.id,
+          ply,
+          moveNumber,
+          mainline: false,
+          san: move.san,
+          uci: `${move.from}${move.to}${move.promotion || ''}`,
+          from: move.from,
+          to: move.to,
+          fen,
+          preFen: previousFen,
+          color: move.color,
+          piece: move.piece,
+          captured: move.captured || null,
+          promotion: move.promotion || null,
+          flags: move.flags,
+          analysis: null,
+          eval: null,
+          tags: null,
+          label: null,
+          children: []
+        };
+
+        parent.children.push(nodeId);
+        if (!state.mainlineSelections.has(parent.id) && parent.children.length) {
+          state.mainlineSelections.set(parent.id, parent.children[0]);
+        }
+        state.nodeMap.set(nodeId, newNode);
+        state.lineSelections.set(parent.id, nodeId);
+        setActivePathToNode(nodeId);
+        const index = getNodeIndexInActiveLine(nodeId);
+        goToPly(index + 1);
+        renderMoves();
+        state.analysisStatus = 'queued';
+        precomputeFullAnalysis();
       }
 
       function syncArrowLayer() {
@@ -1765,10 +2027,75 @@
           const preFen = temp.fen();
           const played = temp.move(mv);
           if (played) {
-            verbose.push({ ...played, fen: temp.fen(), preFen, eval: null, analysis: null });
+            const uci = `${played.from}${played.to}${played.promotion || ''}`;
+            verbose.push({ ...played, uci, fen: temp.fen(), preFen, eval: null, analysis: null });
           }
         }
         return verbose;
+      }
+
+      function createRootNode(fen) {
+        return {
+          id: nextNodeId(),
+          parentId: null,
+          fen,
+          preFen: null,
+          ply: 0,
+          moveNumber: 0,
+          children: [],
+          mainline: true,
+          san: null,
+          uci: null,
+          color: null,
+          piece: null,
+          captured: null,
+          promotion: null,
+          analysis: null,
+          eval: null,
+          tags: null,
+          label: 'Main line'
+        };
+      }
+
+      function buildMoveTree(verboseHistory, initialFen) {
+        resetMoveTree();
+        const baseGame = createBaseGame(initialFen);
+        const rootFen = initialFen && initialFen !== 'start'
+          ? initialFen
+          : baseGame.fen();
+        const rootNode = createRootNode(rootFen);
+        state.nodeMap.set(rootNode.id, rootNode);
+        state.rootNodeId = rootNode.id;
+        state.currentNodeId = rootNode.id;
+
+        let parent = rootNode;
+        verboseHistory.forEach((entry, index) => {
+          const nodeId = nextNodeId();
+          const moveNode = {
+            ...entry,
+            id: nodeId,
+            parentId: parent.id,
+            ply: index + 1,
+            moveNumber: Math.floor(index / 2) + 1,
+            children: Array.isArray(entry.children) ? [...entry.children] : [],
+            mainline: true,
+            analysis: entry.analysis || null,
+            eval: entry.eval || null,
+            tags: entry.tags || null,
+            label: entry.label || null,
+            uci: entry.uci || (entry.from && entry.to ? `${entry.from}${entry.to}${entry.promotion || ''}` : null)
+          };
+          if (!Array.isArray(moveNode.children)) {
+            moveNode.children = [];
+          }
+          state.nodeMap.set(nodeId, moveNode);
+          parent.children.push(nodeId);
+          setMainlineChild(parent.id, nodeId);
+          state.lineSelections.set(parent.id, nodeId);
+          parent = moveNode;
+        });
+
+        buildActiveLineFromSelections();
       }
 
       function classificationToIcon(classification) {
@@ -1782,77 +2109,126 @@
         return analysis.overlay || analysis.classification || null;
       }
 
-      function createMoveCell(entry, plyIndex) {
-        const cell = document.createElement('div');
-        cell.className = 'mv';
-        const label = document.createElement('span');
-        label.textContent = entry ? entry.san : '';
-        cell.appendChild(label);
-
-        if (entry && entry.analysis) {
-          const chosenClass = getMoveDisplayClassification(entry.analysis);
-          if (chosenClass) {
-            const iconPath = classificationToIcon(chosenClass);
-            if (iconPath) {
-              const icon = document.createElement('img');
-              icon.src = iconPath;
-              icon.alt = chosenClass;
-              icon.className = 'classification-icon';
-              cell.appendChild(icon);
-            }
-          }
-        }
-
-        const evalBadge = document.createElement('div');
-        evalBadge.className = 'eval';
-        evalBadge.textContent = entry && entry.eval ? entry.eval : '';
-        cell.appendChild(evalBadge);
-
-        cell.addEventListener('click', () => goToPly(plyIndex));
-        return cell;
-      }
-
       function renderMoves() {
         const container = byId('moves');
         if (!container) return;
         container.innerHTML = '';
-        const headerLabels = ['Move', 'White', 'Black'];
-        headerLabels.forEach((label, index) => {
-          const headerCell = document.createElement('div');
-          headerCell.className = 'moves-header-cell';
-          headerCell.textContent = label;
-          if (index === 0) headerCell.classList.add('muted');
-          container.appendChild(headerCell);
-        });
-        container.dataset.headerOffset = String(headerLabels.length);
-        const h = state.verboseHistory;
-        for (let i = 0; i < h.length; i += 2) {
-          const moveNo = document.createElement('div');
-          moveNo.textContent = `${Math.floor(i / 2) + 1}.`;
-          moveNo.className = 'muted moves-index';
-
-          const white = createMoveCell(h[i], i + 1);
-          const black = createMoveCell(h[i + 1], i + 2);
-
-          container.appendChild(moveNo);
-          container.appendChild(white);
-          container.appendChild(black);
+        const root = getRootNode();
+        if (!root) {
+          updateMoveSummary();
+          return;
         }
+
+        const header = document.createElement('div');
+        header.className = 'move-tree-header';
+        header.innerHTML = '<span>Move</span><span>Play</span>';
+        container.appendChild(header);
+
+        const list = document.createElement('div');
+        list.className = 'move-tree';
+        container.appendChild(list);
+
+        function renderMoveRow(node, depth, { isMainline = false, isVariation = false } = {}) {
+          const row = document.createElement('div');
+          row.className = 'move-row';
+          if (isMainline) row.classList.add('mainline');
+          if (isVariation) row.classList.add('variation');
+          row.dataset.nodeId = node.id;
+          row.style.setProperty('--indent', String(depth));
+
+          const prefix = document.createElement('span');
+          prefix.className = 'move-row-index';
+          const number = node.moveNumber || 0;
+          if (number > 0) {
+            prefix.textContent = node.color === 'b' ? `${number}…` : `${number}.`;
+          } else {
+            prefix.textContent = '';
+          }
+          row.appendChild(prefix);
+
+          const san = document.createElement('span');
+          san.className = 'move-row-san';
+          san.textContent = node.san || '';
+          row.appendChild(san);
+
+          if (node && node.analysis) {
+            const chosenClass = getMoveDisplayClassification(node.analysis);
+            if (chosenClass) {
+              const iconPath = classificationToIcon(chosenClass);
+              if (iconPath) {
+                const icon = document.createElement('img');
+                icon.src = iconPath;
+                icon.alt = chosenClass;
+                icon.className = 'classification-icon';
+                row.appendChild(icon);
+              }
+            }
+          }
+
+          if (node && node.eval) {
+            const badge = document.createElement('span');
+            badge.className = 'move-row-eval';
+            badge.textContent = node.eval;
+            row.appendChild(badge);
+          }
+
+          row.addEventListener('click', () => {
+            setActivePathToNode(node.id);
+            const idx = getNodeIndexInActiveLine(node.id);
+            goToPly(idx + 1);
+            renderMoves();
+          });
+
+          list.appendChild(row);
+        }
+
+        function renderVariationBranch(node, depth) {
+          if (!node) return;
+          renderMoveRow(node, depth, { isVariation: true });
+          const children = Array.isArray(node.children) ? node.children : [];
+          if (!children.length) return;
+          const preferred = state.lineSelections.get(node.id) || children[0];
+          const preferredNode = getNode(preferred);
+          if (preferredNode) {
+            renderVariationBranch(preferredNode, depth);
+          }
+          children.forEach((childId) => {
+            if (childId === preferred) return;
+            const childNode = getNode(childId);
+            if (childNode) {
+              renderVariationBranch(childNode, depth + 1);
+            }
+          });
+        }
+
+        function renderMainline(parentNode, depth) {
+          const selectedId = state.lineSelections.get(parentNode.id);
+          if (!selectedId) return;
+          const node = getNode(selectedId);
+          if (!node) return;
+          renderMoveRow(node, depth, { isMainline: true });
+          const siblings = Array.isArray(parentNode.children) ? parentNode.children : [];
+          siblings.forEach((childId) => {
+            if (childId === selectedId) return;
+            const childNode = getNode(childId);
+            if (childNode) {
+              renderVariationBranch(childNode, depth + 1);
+            }
+          });
+          renderMainline(node, depth);
+        }
+
+        renderMainline(root, 0);
         highlightActive();
         updateMoveSummary();
       }
 
       function highlightActive() {
-        Array.from(document.querySelectorAll('.mv')).forEach((el) => el.classList.remove('active'));
-        const idx = state.ply - 1;
-        if (idx < 0) return;
-        const row = Math.floor(idx / 2);
-        const col = idx % 2;
-        const container = byId('moves');
-        if (!container) return;
-        const headerOffset = parseInt(container.dataset.headerOffset || '0', 10);
-        const cell = container.children[headerOffset + row * 3 + 1 + col];
-        if (cell) cell.classList.add('active');
+        Array.from(document.querySelectorAll('.move-row')).forEach((el) => el.classList.remove('active'));
+        const node = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
+        if (!node) return;
+        const el = document.querySelector(`.move-row[data-node-id="${node.id}"]`);
+        if (el) el.classList.add('active');
       }
 
       function goToPly(ply) {
@@ -1864,6 +2240,7 @@
 
         if (state.ply === 0) {
           setBoardPosition(state.initialFen);
+          state.currentNodeId = state.rootNodeId;
         } else {
           for (let i = 0; i < state.ply; i++) {
             const mv = state.verboseHistory[i];
@@ -1871,6 +2248,7 @@
           }
           const fen = state.verboseHistory[state.ply - 1].fen;
           setBoardPosition(fen);
+          state.currentNodeId = state.verboseHistory[state.ply - 1].id;
         }
 
         highlightActive();
@@ -1879,6 +2257,7 @@
 
         setStatus('navStatus', `Move ${state.ply} / ${max}`);
         updateUrlState();
+        updateExploreControls();
       }
 
       function ensureArrowLayer() {
@@ -4332,9 +4711,14 @@
           if (state.ply >= state.verboseHistory.length) {
             return null;
           }
-          return state.analysisCache.get(state.ply + 1) || null;
+          const nextNode = state.verboseHistory[state.ply];
+          if (!nextNode) return null;
+          return nextNode.analysis || state.analysisCache.get(nextNode.id) || null;
         }
-        return state.analysisCache.get(state.ply) || null;
+        if (state.ply === 0) return null;
+        const currentNode = state.verboseHistory[state.ply - 1];
+        if (!currentNode) return null;
+        return currentNode.analysis || state.analysisCache.get(currentNode.id) || null;
       }
 
       function updateExplanationPanel(analysis) {
@@ -4701,7 +5085,9 @@
         if (state.ply === index + 1) {
           scheduleBoardBadgeUpdate();
         }
-        state.analysisCache.set(index + 1, moveEntry.analysis);
+        if (moveEntry && moveEntry.id) {
+          state.analysisCache.set(moveEntry.id, moveEntry.analysis);
+        }
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
           applyAnalysisForCurrentPly();
         }
@@ -4752,10 +5138,10 @@
 
       function initializeGame({ headers = {}, verboseHistory = [], initialFen = 'start', source, rawInput, targetPly }) {
         state.initialFen = initialFen || 'start';
-        state.verboseHistory = verboseHistory;
         if (typeof source === 'string') state.source = source;
         if (typeof rawInput === 'string') state.rawInput = rawInput;
         resetAnalysisState();
+        buildMoveTree(verboseHistory, state.initialFen);
         initializePieceCounts();
         state.game = createBaseGame();
         state.ply = 0;
@@ -4891,6 +5277,18 @@
             updateBoardClassificationBadge();
           });
         });
+        const exploreToggle = byId('exploreToggle');
+        if (exploreToggle) {
+          exploreToggle.addEventListener('click', () => {
+            toggleExploreMode();
+          });
+        }
+        const rejoinBtn = byId('rejoinBtn');
+        if (rejoinBtn) {
+          rejoinBtn.addEventListener('click', () => {
+            rejoinMainLine();
+          });
+        }
         byId('themeToggle').addEventListener('click', () => {
           const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
           const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -4911,6 +5309,7 @@
           clearOverlayBtn.addEventListener('click', () => clearLineOverlay());
         }
         updateLineOverlayButton();
+        updateExploreControls();
       }
 
       function getSystemTheme() {
