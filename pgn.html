@@ -1113,15 +1113,14 @@
       const EP_GAP_BEST_MAX = PV_BEST_MARGIN;
       const EP_GAP_EXCELLENT_MAX = PV_KEEP_MARGIN;
       const EP_GAP_ONLY_ONE = PV_ONLY_ONE_MARGIN;
+      const ONLY_MOVE_TOL = 0.05;
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 1e-6;
-      const GREAT_ONLY_MOVE_MARGIN = 0.05;
       const GREAT_PHASE_DELTA = 0.15;
       const GREAT_LOSING_BAND = 0.35;
       const GREAT_EQUAL_BAND = 0.45;
       const GREAT_EQUAL_BAND_UPPER = 0.55;
       const GREAT_WINNING_BAND = 0.65;
-      const GREAT_CRITICAL_DEFENSE_MARGIN = 0.20;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
@@ -2595,6 +2594,77 @@
         };
       }
 
+      function computeGreatOverlay({
+        fen,
+        EP1,
+        epBefore,
+        playedUci,
+        byMove,
+        legalMovesEp = [],
+        epPlayedOverride = null,
+        onlyMoveSampleComplete = false
+      }) {
+        if (!playedUci || !Number.isFinite(EP1)) {
+          return null;
+        }
+        let epPlayed = null;
+        if (byMove instanceof Map) {
+          const info = byMove.get(playedUci);
+          if (info && Number.isFinite(info.ep)) {
+            epPlayed = info.ep;
+          }
+        }
+        if (!Number.isFinite(epPlayed) && Number.isFinite(epPlayedOverride)) {
+          epPlayed = epPlayedOverride;
+        }
+        if (!Number.isFinite(epPlayed)) {
+          return null;
+        }
+        const gap = EP1 - epPlayed;
+        if (!Number.isFinite(gap) || gap > (EP_GAP_EXCELLENT_MAX + PV_EPSILON)) {
+          return null;
+        }
+
+        let goodCount = 0;
+        let playedCounted = false;
+        if (onlyMoveSampleComplete && Array.isArray(legalMovesEp)) {
+          legalMovesEp.forEach((item) => {
+            if (!item) return;
+            const uci = item.uci;
+            const ep = Number.isFinite(item.ep) ? item.ep : null;
+            if (!Number.isFinite(ep)) return;
+            const moveGap = EP1 - ep;
+            if (moveGap <= (ONLY_MOVE_TOL + PV_EPSILON)) {
+              goodCount += 1;
+              if (uci === playedUci) {
+                playedCounted = true;
+              }
+            }
+          });
+        }
+
+        const onlyMove = onlyMoveSampleComplete
+          && playedCounted
+          && goodCount === 1
+          && gap <= (ONLY_MOVE_TOL + PV_EPSILON);
+
+        let phaseFlip = false;
+        if (Number.isFinite(epBefore)) {
+          const delta = epPlayed - epBefore;
+          if (delta >= (GREAT_PHASE_DELTA - PV_EPSILON)) {
+            const crossesLosingToEqual = epBefore < GREAT_LOSING_BAND && epPlayed >= GREAT_EQUAL_BAND;
+            const crossesEqualToWinning = epBefore >= GREAT_EQUAL_BAND
+              && epBefore <= GREAT_EQUAL_BAND_UPPER
+              && epPlayed >= GREAT_WINNING_BAND;
+            if (crossesLosingToEqual || crossesEqualToWinning) {
+              phaseFlip = true;
+            }
+          }
+        }
+
+        return (onlyMove || phaseFlip) ? 'great' : null;
+      }
+
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
         if (!Number.isFinite(winPercentBefore) || !Number.isFinite(winPercentAfter)) {
           return null;
@@ -3512,61 +3582,37 @@
 
         const moverWinBefore = beforeMoverEp;
         const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
-        const moverWinDelta = moverWinBefore != null && moverWinAfter != null ? moverWinAfter - moverWinBefore : null;
         const entryEpByUci = new Map();
         entryData.forEach((item) => {
           if (!item || !item.entry || !item.entry.uci) return;
           entryEpByUci.set(item.entry.uci, Number.isFinite(item.epMover) ? item.epMover : null);
         });
+        const entryOverlayByMove = new Map();
+        entryEpByUci.forEach((ep, uci) => {
+          entryOverlayByMove.set(uci, { ep: Number.isFinite(ep) ? ep : null });
+        });
 
-        const safeMargin = GREAT_ONLY_MOVE_MARGIN + PV_EPSILON;
-        let safeMoveCount = 0;
-        let nonLosingMoveCount = 0;
-        let actualIsSafeMove = false;
-        let actualPreservesNonLosing = false;
-        if (haveAllMovesEvaluated && actualId) {
-          legalMoveList.forEach((mv) => {
-            const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
-            if (!entryEpByUci.has(uci)) return;
-            const ep = entryEpByUci.get(uci);
-            if (Number.isFinite(bestMoverEp) && Number.isFinite(ep) && (bestMoverEp - ep) <= safeMargin) {
-              safeMoveCount += 1;
-              if (uci === actualId) {
-                actualIsSafeMove = true;
-              }
-            }
-            if (Number.isFinite(ep) && ep >= (GREAT_EQUAL_BAND - PV_EPSILON)) {
-              nonLosingMoveCount += 1;
-              if (uci === actualId) {
-                actualPreservesNonLosing = true;
-              }
-            }
-          });
-        }
-
-        const actualKeepsMargin = loss == null ? sameAsBest : loss <= (GREAT_ONLY_MOVE_MARGIN + PV_EPSILON);
-        const onlyMoveKeepsMargin = haveAllMovesEvaluated && !forcedMove && actualKeepsMargin && actualIsSafeMove && safeMoveCount === 1;
-        const onlyMovePreservesNonLosing = haveAllMovesEvaluated && !forcedMove && actualPreservesNonLosing && nonLosingMoveCount === 1;
-
-        const crossesLosingToEqual = moverWinBefore != null && moverWinAfter != null
-          && moverWinBefore < GREAT_LOSING_BAND && moverWinAfter >= GREAT_EQUAL_BAND;
-        const crossesEqualToWinning = moverWinBefore != null && moverWinAfter != null
-          && moverWinBefore >= GREAT_EQUAL_BAND && moverWinBefore <= GREAT_EQUAL_BAND_UPPER
-          && moverWinAfter >= GREAT_WINNING_BAND;
-        const phaseFlip = moverWinDelta != null
-          && moverWinDelta >= (GREAT_PHASE_DELTA - PV_EPSILON)
-          && (crossesLosingToEqual || crossesEqualToWinning);
-
-        const criticalDefense = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
-          && (bestMoverEp - alternativeBestMoverEp) >= (GREAT_CRITICAL_DEFENSE_MARGIN - PV_EPSILON)
-          && actualKeepsMargin;
+        const legalMoveEvaluations = [];
+        legalMoveList.forEach((mv) => {
+          const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
+          const ep = entryEpByUci.has(uci) ? entryEpByUci.get(uci) : null;
+          legalMoveEvaluations.push({ uci, ep: Number.isFinite(ep) ? ep : null });
+        });
 
         const allowsGreatOverlay = baseline === 'best' || baseline === 'excellent' || baseline === 'good';
-        let greatCandidate = allowsGreatOverlay && !forcedMove && !trivialRecapture
-          && (onlyMoveKeepsMargin || onlyMovePreservesNonLosing || phaseFlip || criticalDefense);
-
-        if (greatCandidate && baseline === 'good' && !(onlyMoveKeepsMargin || onlyMovePreservesNonLosing)) {
-          greatCandidate = false;
+        let greatOverlay = null;
+        if (allowsGreatOverlay && !forcedMove && !trivialRecapture && actualId) {
+          const overlaySource = summaryByMove instanceof Map ? summaryByMove : entryOverlayByMove;
+          greatOverlay = computeGreatOverlay({
+            fen: baselineFen,
+            EP1: bestMoverEp,
+            epBefore: beforeMoverEp,
+            playedUci: actualId,
+            byMove: overlaySource,
+            legalMovesEp: legalMoveEvaluations,
+            epPlayedOverride: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
+            onlyMoveSampleComplete: haveAllMovesEvaluated && !forcedMove
+          });
         }
 
         const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
@@ -3607,7 +3653,7 @@
         let overlay = null;
         if (brilliantCandidate) {
           overlay = 'brilliant';
-        } else if (greatCandidate) {
+        } else if (greatOverlay === 'great') {
           overlay = 'great';
         } else if (missCandidate && baseline !== 'blunder') {
           overlay = 'miss';
