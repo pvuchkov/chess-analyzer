@@ -256,6 +256,21 @@
       filter: drop-shadow(0 1px 4px rgba(8, 15, 35, 0.45));
     }
 
+    .board-move-badge-overlay {
+      position: absolute;
+      bottom: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      display: none;
+      filter: drop-shadow(0 1px 3px rgba(8, 15, 35, 0.55));
+    }
+
+    .board-move-badge[data-overlay] .board-move-badge-overlay {
+      display: block;
+    }
+
     .board-move-badge[data-classification="best"],
     .board-move-badge[data-classification="excellent"],
     .board-move-badge[data-classification="good"],
@@ -657,6 +672,12 @@
       filter: drop-shadow(0 0 2px rgba(15, 23, 42, 0.5));
     }
 
+    .classification-icon.overlay {
+      width: 16px;
+      height: 16px;
+      opacity: 0.95;
+    }
+
     .pv-list {
       display: grid;
       gap: 8px;
@@ -811,6 +832,7 @@
           <div class="board-badge-layer">
             <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
               <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+              <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
             </div>
           </div>
         </div>
@@ -1091,6 +1113,10 @@
           if (classification && Object.prototype.hasOwnProperty.call(bucket.counts, classification)) {
             bucket.counts[classification] += 1;
           }
+          const overlay = entry.analysis.overlay;
+          if (overlay && Object.prototype.hasOwnProperty.call(bucket.counts, overlay)) {
+            bucket.counts[overlay] += 1;
+          }
           const moveAccuracy = entry.analysis.accuracy;
           if (Number.isFinite(moveAccuracy)) {
             bucket.accuracySum += moveAccuracy;
@@ -1193,13 +1219,18 @@
       function updateBoardClassificationBadge() {
         const badge = byId('boardMoveBadge');
         const icon = byId('boardMoveBadgeIcon');
+        const overlayIcon = byId('boardMoveBadgeOverlay');
         const boardEl = byId('board');
-        if (!badge || !icon || !boardEl) return;
+        if (!badge || !icon || !overlayIcon || !boardEl) return;
 
         badge.style.display = 'none';
         badge.removeAttribute('data-classification');
+        badge.removeAttribute('data-overlay');
         icon.removeAttribute('src');
         icon.alt = '';
+        overlayIcon.removeAttribute('src');
+        overlayIcon.alt = '';
+        overlayIcon.style.display = 'none';
 
         if (state.ply === 0) {
           return;
@@ -1231,6 +1262,17 @@
         badge.setAttribute('data-classification', normalizedClass);
         icon.src = iconPath;
         icon.alt = entry.analysis.classification;
+        const overlayClass = entry.analysis.overlay;
+        if (overlayClass) {
+          const normalizedOverlay = overlayClass.toLowerCase().replace(/\s+/g, '-');
+          const overlayPath = classificationToIcon(overlayClass);
+          if (overlayPath) {
+            overlayIcon.src = overlayPath;
+            overlayIcon.alt = `${overlayClass.charAt(0).toUpperCase()}${overlayClass.slice(1)}`;
+            overlayIcon.style.display = 'block';
+            badge.setAttribute('data-overlay', normalizedOverlay);
+          }
+        }
         badge.style.display = 'flex';
       }
 
@@ -1545,14 +1587,28 @@
         label.textContent = entry ? entry.san : '';
         cell.appendChild(label);
 
-        if (entry && entry.analysis && entry.analysis.classification) {
-          const iconPath = classificationToIcon(entry.analysis.classification);
-          if (iconPath) {
-            const icon = document.createElement('img');
-            icon.src = iconPath;
-            icon.alt = entry.analysis.classification;
-            icon.className = 'classification-icon';
-            cell.appendChild(icon);
+        if (entry && entry.analysis) {
+          const baseClass = entry.analysis.classification;
+          if (baseClass) {
+            const iconPath = classificationToIcon(baseClass);
+            if (iconPath) {
+              const icon = document.createElement('img');
+              icon.src = iconPath;
+              icon.alt = baseClass;
+              icon.className = 'classification-icon';
+              cell.appendChild(icon);
+            }
+          }
+          const overlayClass = entry.analysis.overlay;
+          if (overlayClass) {
+            const overlayPath = classificationToIcon(overlayClass);
+            if (overlayPath) {
+              const overlayIcon = document.createElement('img');
+              overlayIcon.src = overlayPath;
+              overlayIcon.alt = `${overlayClass.charAt(0).toUpperCase()}${overlayClass.slice(1)}`;
+              overlayIcon.className = 'classification-icon overlay';
+              cell.appendChild(overlayIcon);
+            }
           }
         }
 
@@ -1877,6 +1933,66 @@
         return clampRating(rating);
       }
 
+      function parseRatingValue(raw) {
+        if (raw == null) return null;
+        const str = String(raw).trim();
+        if (!str || str === '?' || str === '—') return null;
+        const match = str.match(/-?\d+/);
+        if (!match) return null;
+        const value = parseInt(match[0], 10);
+        return Number.isFinite(value) ? value : null;
+      }
+
+      function getHeaderRating(color) {
+        if (!state.headers) return null;
+        const prefix = color === 'b' ? 'Black' : 'White';
+        const keys = [`${prefix}Elo`, `${prefix}Rating`, `${prefix}USCF`, `${prefix}Fide`, `${prefix}FIDE`];
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(state.headers, key)) {
+            const parsed = parseRatingValue(state.headers[key]);
+            if (Number.isFinite(parsed)) {
+              return clampRating(parsed);
+            }
+          }
+        }
+        return null;
+      }
+
+      function getPlayerRating(color) {
+        const fromHeader = getHeaderRating(color);
+        if (Number.isFinite(fromHeader)) {
+          return fromHeader;
+        }
+        return 1500;
+      }
+
+      function getAverageGameRating() {
+        const white = getPlayerRating('w');
+        const black = getPlayerRating('b');
+        if (Number.isFinite(white) && Number.isFinite(black)) {
+          return (white + black) / 2;
+        }
+        if (Number.isFinite(white)) return white;
+        if (Number.isFinite(black)) return black;
+        return 1500;
+      }
+
+      function ratingLerp(rating, lowRating, highRating, lowValue, highValue) {
+        const clamped = clampRating(Number.isFinite(rating) ? rating : (lowRating + highRating) / 2);
+        if (clamped <= lowRating) return lowValue;
+        if (clamped >= highRating) return highValue;
+        const ratio = (clamped - lowRating) / (highRating - lowRating);
+        return lowValue + (highValue - lowValue) * ratio;
+      }
+
+      function slopeForRating(rating) {
+        const clamped = clampRating(Number.isFinite(rating) ? rating : 1500);
+        const minSlope = 0.0032;
+        const maxSlope = 0.006;
+        const ratio = Math.max(0, Math.min(1, (clamped - 400) / (2600 - 400)));
+        return minSlope + (maxSlope - minSlope) * ratio;
+      }
+
       function parseGameResultScores(resultTag) {
         const normalized = typeof resultTag === 'string' ? resultTag.trim() : '';
         switch (normalized) {
@@ -1932,17 +2048,21 @@
         }
       }
 
-      function centipawnsToWinPercent(cp) {
-        if (cp == null || Number.isNaN(cp)) return null;
+      function cpToExpectedPoints(cp, ratingOverride) {
+        if (cp == null || Number.isNaN(cp)) return 0.5;
+        if (cp >= 10000) return 1;
+        if (cp <= -10000) return 0;
+        const rating = Number.isFinite(ratingOverride) ? ratingOverride : getAverageGameRating();
+        const slope = slopeForRating(rating);
         const capped = Math.max(-2000, Math.min(2000, cp));
-        const winChance = 1 / (1 + Math.exp(-0.004 * capped));
-        return Math.max(0, Math.min(100, winChance * 100));
+        const winChance = 1 / (1 + Math.exp(-slope * capped));
+        return Math.max(0, Math.min(1, winChance));
       }
 
-      function cpToExpectedPoints(cp) {
-        const winPercent = centipawnsToWinPercent(cp);
-        if (winPercent == null) return 0.5;
-        return winPercent / 100;
+      function centipawnsToWinPercent(cp, ratingOverride) {
+        if (cp == null || Number.isNaN(cp)) return null;
+        const ep = cpToExpectedPoints(cp, ratingOverride);
+        return Math.max(0, Math.min(100, ep * 100));
       }
 
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
@@ -1983,28 +2103,37 @@
         moveEntry,
         bestEntry,
         actualEntry,
-        winPercentBefore,
-        winPercentAfter,
         pvEntries,
-        cpLoss,
         bestCp,
         actualCp,
         bestEval,
         actualEval
       }) {
-        const safeBefore = Number.isFinite(beforeEp) ? beforeEp : null;
+        const moverColor = moveEntry && moveEntry.color === 'b' ? 'b' : 'w';
+        const moverIsWhite = moverColor === 'w';
         const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
-        const moverIsWhite = !moveEntry || moveEntry.color !== 'b';
-        let loss = null;
-        if (Number.isFinite(bestEp) && Number.isFinite(actualEp)) {
-          const oriented = moverIsWhite ? bestEp - actualEp : actualEp - bestEp;
-          loss = Math.max(0, oriented);
-        }
+        const averageRating = getAverageGameRating();
+        const moverRating = getPlayerRating(moverColor);
 
-        const cpLossValue = Number.isFinite(cpLoss) ? Math.max(0, cpLoss) : null;
+        const bestWhiteEp = Number.isFinite(bestEp) ? bestEp : (Number.isFinite(bestCp) ? cpToExpectedPoints(bestCp, averageRating) : null);
+        const actualWhiteEp = Number.isFinite(actualEp) ? actualEp : (Number.isFinite(actualCp) ? cpToExpectedPoints(actualCp, averageRating) : null);
+
+        const bestMoverEp = Number.isFinite(bestWhiteEp) ? (moverIsWhite ? bestWhiteEp : 1 - bestWhiteEp) : null;
+        const actualMoverEp = Number.isFinite(actualWhiteEp) ? (moverIsWhite ? actualWhiteEp : 1 - actualWhiteEp) : null;
+        const beforeMoverEp = Number.isFinite(beforeEp) ? beforeEp : null;
+
         const cpGap = Number.isFinite(bestCp) && Number.isFinite(actualCp)
           ? Math.abs(bestCp - actualCp)
           : null;
+
+        let loss = null;
+        if (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp)) {
+          loss = Math.max(0, bestMoverEp - actualMoverEp);
+          if (cpGap != null && cpGap <= 15) {
+            loss = 0;
+          }
+        }
+        const zeroLossThreshold = 0.0025;
 
         const bestMateVal = bestEval && bestEval.type === 'mate' ? bestEval.value : null;
         const actualMateVal = actualEval && actualEval.type === 'mate' ? actualEval.value : null;
@@ -2023,31 +2152,22 @@
         let classification;
         if (actualMateForOpponent) {
           if (bestMateForOpponent && actualMateDistance != null && bestMateDistance != null) {
-            if (actualMateDistance < bestMateDistance) {
-              classification = 'blunder';
-            } else {
-              classification = 'best';
-            }
+            classification = actualMateDistance <= bestMateDistance ? 'best' : 'blunder';
           } else {
             classification = 'blunder';
           }
         } else {
-          const withinTolerance = (cpLossValue != null && cpLossValue <= 10)
-            || (cpGap != null && cpGap <= 15)
-            || sameAsBest;
-          if (withinTolerance) {
+          if (loss == null) {
+            classification = (sameAsBest || (cpGap != null && cpGap <= 15)) ? 'best' : 'good';
+          } else if (sameAsBest || loss <= zeroLossThreshold || (cpGap != null && cpGap <= 15)) {
             classification = 'best';
-          } else if (cpLossValue == null) {
-            classification = sameAsBest ? 'best' : 'good';
-          } else if (cpLossValue <= 30) {
+          } else if (loss <= 0.02) {
             classification = 'excellent';
-          } else if (cpLossValue <= 60) {
-            classification = 'great';
-          } else if (cpLossValue <= 90) {
+          } else if (loss <= 0.05) {
             classification = 'good';
-          } else if (cpLossValue <= 120) {
+          } else if (loss <= 0.10) {
             classification = 'inaccuracy';
-          } else if (cpLossValue <= 250) {
+          } else if (loss <= 0.20) {
             classification = 'mistake';
           } else {
             classification = 'blunder';
@@ -2067,54 +2187,106 @@
         }
 
         const baseline = classification;
-        const winBefore = Number.isFinite(winPercentBefore) ? winPercentBefore : null;
-        const winAfter = Number.isFinite(winPercentAfter) ? winPercentAfter : null;
-        const winDelta = winBefore != null && winAfter != null ? winAfter - winBefore : null;
 
-        let secondBestWin = null;
-        if (pvEntries && pvEntries.length) {
-          const secondEntry = pvEntries.find((entry) => entry.rank === 2);
-          if (secondEntry) {
-            const secondCp = evalStringToCentipawns(secondEntry.eval);
-            const win = centipawnsToWinPercent(secondCp);
-            if (Number.isFinite(win)) {
-              secondBestWin = win;
-            }
-          }
+        const entryData = [];
+        if (Array.isArray(pvEntries)) {
+          pvEntries.forEach((entry) => {
+            const cp = evalStringToCentipawns(entry.eval);
+            const epWhite = cpToExpectedPoints(cp, averageRating);
+            const epMover = Number.isFinite(epWhite) ? (moverIsWhite ? epWhite : 1 - epWhite) : null;
+            entryData.push({ entry, epMover });
+          });
+        }
+        const actualId = actualEntry && actualEntry.uci ? actualEntry.uci : null;
+        if (actualId && !entryData.some((item) => item.entry && item.entry.uci === actualId)) {
+          entryData.push({ entry: actualEntry, epMover: Number.isFinite(actualMoverEp) ? actualMoverEp : null });
         }
 
+        let alternativeBestMoverEp = null;
+        entryData.forEach((item) => {
+          if (!item.entry) return;
+          if (actualId && item.entry.uci === actualId) return;
+          if (!Number.isFinite(item.epMover)) return;
+          if (alternativeBestMoverEp == null || item.epMover > alternativeBestMoverEp) {
+            alternativeBestMoverEp = item.epMover;
+          }
+        });
+
+        const nearBestMargin = ratingLerp(moverRating, 1000, 2000, 0.022, 0.016);
+        let nearBestCount = 0;
+        if (Number.isFinite(bestMoverEp)) {
+          entryData.forEach((item) => {
+            if (!Number.isFinite(item.epMover)) return;
+            if (bestMoverEp - item.epMover <= nearBestMargin + 1e-6) {
+              nearBestCount += 1;
+            }
+          });
+        }
+
+        const moverWinBefore = beforeMoverEp;
+        const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
+        const moverWinDelta = moverWinBefore != null && moverWinAfter != null ? moverWinAfter - moverWinBefore : null;
+
+        const losingThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.35);
+        const winningThreshold = ratingLerp(moverRating, 1000, 2000, 0.62, 0.70);
+        const swingDelta = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
+        const crossDelta = ratingLerp(moverRating, 1000, 2000, 0.07, 0.1);
+
+        const swingImprovement = moverWinBefore != null && moverWinAfter != null
+          && (
+            (moverWinBefore <= losingThreshold && moverWinAfter >= winningThreshold && moverWinDelta >= swingDelta)
+            || (moverWinBefore < 0.5 && moverWinAfter >= 0.5 && moverWinDelta >= crossDelta)
+          );
+
+        const onlyMove = sameAsBest && Number.isFinite(bestMoverEp) && nearBestCount === 1;
+        const bigSaveMargin = ratingLerp(moverRating, 1000, 2000, 0.08, 0.12);
+        const bigSave = sameAsBest && Number.isFinite(bestMoverEp) && alternativeBestMoverEp != null
+          && bestMoverEp - alternativeBestMoverEp >= bigSaveMargin;
+
         let greatCandidate = false;
-        if ((baseline === 'best' || baseline === 'excellent' || baseline === 'good') && winBefore != null && winAfter != null) {
-          const savedFromLosing = winBefore < 35 && winAfter >= 45 && winDelta >= 10;
-          const convertedToWin = winBefore >= 35 && winBefore <= 60 && winAfter >= 65 && winDelta >= 10;
-          const onlyMove = sameAsBest && secondBestWin != null && winAfter - secondBestWin >= 12;
-          if (savedFromLosing || convertedToWin || onlyMove) {
+        if ((baseline === 'best' || baseline === 'excellent' || baseline === 'good') && moverWinAfter != null) {
+          if (swingImprovement || onlyMove || bigSave) {
             greatCandidate = true;
           }
         }
 
-        let brilliantCandidate = false;
-        if ((baseline === 'best' || baseline === 'excellent') && detectSacrifice(moveEntry) && winAfter != null) {
-          const notAlreadyWinning = !(winBefore != null && winBefore >= 80);
-          const keepsPositionPlayable = winAfter >= 40;
-          const maintainsStrength = winBefore == null || winAfter >= winBefore - 5;
-          if (notAlreadyWinning && keepsPositionPlayable && maintainsStrength) {
-            brilliantCandidate = true;
-          }
-        }
+        const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
+        const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
+        const nearBestSac = loss == null ? sameAsBest : loss <= 0.02 + 1e-6;
+        const notAlreadyWinning = !(moverWinBefore != null && moverWinBefore >= notAlreadyWinningThreshold);
+        const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
+        const alternativeWinning = alternativeBestMoverEp != null && alternativeBestMoverEp >= notAlreadyWinningThreshold;
 
-        let finalClassification = classification;
+        const brilliantCandidate = (baseline === 'best' || baseline === 'excellent')
+          && detectSacrifice(moveEntry)
+          && nearBestSac
+          && keepsPlayable
+          && notAlreadyWinning
+          && !alternativeWinning;
+
+        const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
+        const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
+        const missDropThreshold = ratingLerp(moverRating, 1000, 2000, 0.58, 0.68);
+        const missGapThreshold = ratingLerp(moverRating, 1000, 2000, 0.14, 0.2);
+
+        const missCandidate = moverWinBefore != null
+          && moverWinAfter != null
+          && Number.isFinite(bestMoverEp)
+          && moverWinBefore >= missOpportunityThreshold
+          && bestMoverEp >= missConversionThreshold
+          && moverWinAfter <= missDropThreshold
+          && (bestMoverEp - moverWinAfter) >= missGapThreshold;
+
+        let overlay = null;
         if (brilliantCandidate) {
-          finalClassification = 'brilliant';
+          overlay = 'brilliant';
         } else if (greatCandidate) {
-          finalClassification = 'great';
+          overlay = 'great';
+        } else if (missCandidate && baseline !== 'blunder') {
+          overlay = 'miss';
         }
 
-        if (safeBefore != null && safeBefore >= 0.65 && bestEp >= 0.85 && actualEp <= 0.55) {
-          finalClassification = 'miss';
-        }
-
-        return { classification: finalClassification, expectedLoss: loss };
+        return { classification: baseline, overlay, expectedLoss: loss };
       }
 
       const engineController = {
@@ -2458,6 +2630,7 @@
           beforeEp,
           expectedLoss: classificationData.expectedLoss,
           classification: classificationData.classification,
+          overlay: classificationData.overlay,
           bestCp,
           actualCp,
           cpLoss,
