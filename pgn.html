@@ -1913,6 +1913,9 @@
       const ALREADY_WINNING_CP = 300;
       const NOT_BAD_TOLERANCE_CP = 50;
       const SAC_MIN_LOSS_POINTS = 2;
+      const isMate = (ev) => ev && typeof ev === 'object' && Object.prototype.hasOwnProperty.call(ev, 'mate');
+      const mateForUs = (ev) => isMate(ev) && ev.mate > 0;
+      const mateForThem = (ev) => isMate(ev) && ev.mate < 0;
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
         { key: 'great', label: 'Great', icon: './move-classifications/great.png' },
@@ -3662,6 +3665,17 @@
         return { type: 'cp', pawns, cp: pawns * 100 };
       }
 
+      function normalizeEvalForMover(evalStr, moverIsWhite) {
+        const parsed = parseEvalString(evalStr);
+        if (!parsed) return null;
+        if (parsed.type === 'mate') {
+          const mate = moverIsWhite ? parsed.value : -parsed.value;
+          return { mate };
+        }
+        const cp = moverIsWhite ? parsed.cp : -parsed.cp;
+        return { cp };
+      }
+
       function evalStringToCentipawns(evalStr) {
         const parsed = parseEvalString(evalStr);
         if (!parsed) return null;
@@ -4444,6 +4458,61 @@
         }
       }
 
+      function computeMaterialDeltaAfterReply(moveEntry, actualEntry) {
+        if (!moveEntry || !moveEntry.preFen || !moveEntry.from || !moveEntry.to) return null;
+        const pvMoves = actualEntry && Array.isArray(actualEntry.pvMoves) ? actualEntry.pvMoves : null;
+        const pvSan = actualEntry && Array.isArray(actualEntry.pvSan) ? actualEntry.pvSan : null;
+        const replyUci = pvMoves && pvMoves.length > 1 && typeof pvMoves[1] === 'string' ? pvMoves[1] : null;
+        const replySan = pvSan && pvSan.length > 1 && typeof pvSan[1] === 'string' ? pvSan[1] : null;
+        if (!replyUci && !replySan) {
+          return null;
+        }
+        try {
+          const game = new Chess(moveEntry.preFen);
+          const mover = moveEntry.color === 'b' ? 'b' : 'w';
+          const opponent = mover === 'w' ? 'b' : 'w';
+          const beforeCounts = countPiecesOnBoard(game.board());
+          const beforeDiff = sumMaterial(beforeCounts[mover]) - sumMaterial(beforeCounts[opponent]);
+          const executed = game.move({
+            from: moveEntry.from,
+            to: moveEntry.to,
+            promotion: moveEntry.promotion
+          });
+          if (!executed) return null;
+          let replyApplied = false;
+          if (replyUci && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(replyUci)) {
+            const replyMove = {
+              from: replyUci.slice(0, 2),
+              to: replyUci.slice(2, 4)
+            };
+            if (replyUci.length > 4) {
+              replyMove.promotion = replyUci.slice(4);
+            }
+            const replyResult = game.move(replyMove);
+            if (replyResult) {
+              replyApplied = true;
+            }
+          }
+          if (!replyApplied && replySan) {
+            try {
+              const replyResult = game.move(replySan);
+              if (replyResult) {
+                replyApplied = true;
+              }
+            } catch (err) {
+              // ignore SAN parsing failures
+            }
+          }
+          if (!replyApplied) return null;
+          const afterCounts = countPiecesOnBoard(game.board());
+          const afterDiff = sumMaterial(afterCounts[mover]) - sumMaterial(afterCounts[opponent]);
+          return afterDiff - beforeDiff;
+        } catch (err) {
+          console.warn('Failed to compute material delta after reply', err);
+          return null;
+        }
+      }
+
       function applySpecialPromotions({
         baseLabel,
         preEvalCp,
@@ -4451,6 +4520,9 @@
         bestLineEvalCp,
         secondBestEvalCp,
         materialDeltaAfterMove,
+        materialDeltaAfterReply = null,
+        preEval = null,
+        postEval = null,
         phase = null,
         moveSan = null
       }) {
@@ -4462,16 +4534,46 @@
           return null;
         }
 
-        const hasSacrifice = Number.isFinite(materialDeltaAfterMove)
+        const normalizedPreBest = preEval && preEval.best ? preEval.best : null;
+        const normalizedPreSecond = preEval && preEval.secondBest ? preEval.secondBest : null;
+        const fallbackPreBest = !normalizedPreBest && Number.isFinite(preEvalCp) ? { cp: preEvalCp } : null;
+        const fallbackPreSecond = !normalizedPreSecond && Number.isFinite(secondBestEvalCp) ? { cp: secondBestEvalCp } : null;
+        const preBestEval = normalizedPreBest || fallbackPreBest;
+        const preSecondEval = normalizedPreSecond || fallbackPreSecond;
+        const postEvalObj = postEval || (Number.isFinite(postEvalCp) ? { cp: postEvalCp } : null);
+
+        const immediateSacrifice = Number.isFinite(materialDeltaAfterMove)
           && materialDeltaAfterMove <= -SAC_MIN_LOSS_POINTS;
-        const nearBest = Number.isFinite(bestLineEvalCp)
-          && Number.isFinite(postEvalCp)
-          && (bestLineEvalCp - postEvalCp) <= NEAR_BEST_CP;
-        const notAlreadyWinning = Number.isFinite(preEvalCp)
-          && preEvalCp < ALREADY_WINNING_CP;
-        const notBadAfter = Number.isFinite(preEvalCp)
-          && Number.isFinite(postEvalCp)
-          && postEvalCp >= (preEvalCp - NOT_BAD_TOLERANCE_CP);
+        const replySacrifice = Number.isFinite(materialDeltaAfterReply)
+          && materialDeltaAfterReply <= -SAC_MIN_LOSS_POINTS;
+        const hasSacrifice = immediateSacrifice || replySacrifice;
+
+        const comparisonPreCp = Number.isFinite(preEvalCp)
+          ? preEvalCp
+          : (preBestEval && Number.isFinite(preBestEval.cp) ? preBestEval.cp : null);
+        const comparisonPostCp = Number.isFinite(postEvalCp)
+          ? postEvalCp
+          : (postEvalObj && Number.isFinite(postEvalObj.cp) ? postEvalObj.cp : null);
+
+        const cpNearBest = Number.isFinite(bestLineEvalCp)
+          && Number.isFinite(comparisonPostCp)
+          && (bestLineEvalCp - comparisonPostCp) <= NEAR_BEST_CP;
+        const nearBest = cpNearBest || (mateForUs(preBestEval) && mateForUs(postEvalObj));
+
+        const cpKeepsGood = Number.isFinite(comparisonPreCp)
+          && Number.isFinite(comparisonPostCp)
+          && comparisonPostCp >= (comparisonPreCp - NOT_BAD_TOLERANCE_CP);
+        const keepsGood = mateForUs(postEvalObj) || cpKeepsGood;
+
+        const secondKeepsWinning = mateForUs(preSecondEval)
+          || (preSecondEval && Number.isFinite(preSecondEval.cp) && preSecondEval.cp >= ALREADY_WINNING_CP);
+        const mateOnlyIfYouFindIt = mateForUs(preBestEval) && !secondKeepsWinning;
+
+        const alreadyWinningByCp = Number.isFinite(comparisonPreCp)
+          && comparisonPreCp >= ALREADY_WINNING_CP;
+        const alreadyCompletelyWinning = mateForUs(preBestEval)
+          ? secondKeepsWinning
+          : alreadyWinningByCp;
         const endgameOnlyMove = phase === 'endgame'
           ? (Number.isFinite(bestLineEvalCp)
             && Number.isFinite(secondBestEvalCp)
@@ -4486,8 +4588,8 @@
         if ((normalizedBase === 'best' || nearBest)
           && hasSacrifice
           && nearBest
-          && notAlreadyWinning
-          && notBadAfter
+          && keepsGood
+          && (mateOnlyIfYouFindIt || !alreadyCompletelyWinning)
           && endgameOnlyMove) {
           const gapText = formatNegativeCpGap(bestVsSecondGap);
           const evalText = formatCpAsPawnString(postEvalCp, { forceSign: true });
@@ -4511,7 +4613,9 @@
               postEvalCp,
               bestLineEvalCp,
               secondBestEvalCp,
-              materialDeltaAfterMove
+              materialDeltaAfterMove,
+              materialDeltaAfterReply,
+              mateOnlyIfYouFindIt
             }
           };
         }
@@ -5947,14 +6051,21 @@
           return moverIsWhite ? cp : -cp;
         };
 
+        const evalByUci = new Map();
+        const candidateCps = [];
         let bestLineEvalCp = toMoverCp(bestCp);
         let secondBestEvalCp = null;
         if (Array.isArray(pvEntries)) {
-          const candidateCps = [];
           pvEntries.forEach((entry) => {
             if (!entry) return;
             const cpValue = evalStringToCentipawns(entry.eval);
             const normalizedCp = toMoverCp(cpValue);
+            if (entry.uci) {
+              const normalizedEval = normalizeEvalForMover(entry.eval, moverIsWhite);
+              if (normalizedEval) {
+                evalByUci.set(entry.uci, normalizedEval);
+              }
+            }
             if (!Number.isFinite(normalizedCp)) return;
             candidateCps.push({ cp: normalizedCp, uci: entry.uci });
           });
@@ -5969,7 +6080,30 @@
 
         const preEvalCp = bestLineEvalCp;
         const postEvalCp = toMoverCp(actualCp);
+        let preBestEval = null;
+        if (candidateCps.length > 0) {
+          const bestCandidate = candidateCps[0];
+          if (bestCandidate && bestCandidate.uci && evalByUci.has(bestCandidate.uci)) {
+            preBestEval = evalByUci.get(bestCandidate.uci);
+          }
+        }
+        if (!preBestEval && Number.isFinite(bestLineEvalCp)) {
+          preBestEval = { cp: bestLineEvalCp };
+        }
+        let preSecondBestEval = null;
+        if (candidateCps.length > 1) {
+          const secondCandidate = candidateCps[1];
+          if (secondCandidate && secondCandidate.uci && evalByUci.has(secondCandidate.uci)) {
+            preSecondBestEval = evalByUci.get(secondCandidate.uci);
+          }
+        }
+        if (!preSecondBestEval && Number.isFinite(secondBestEvalCp)) {
+          preSecondBestEval = { cp: secondBestEvalCp };
+        }
+        const postEval = normalizeEvalForMover(actualEntry ? actualEntry.eval : null, moverIsWhite)
+          || (Number.isFinite(postEvalCp) ? { cp: postEvalCp } : null);
         const materialDeltaAfterMove = computeMaterialDeltaAfterMove(moveEntry);
+        const materialDeltaAfterReply = computeMaterialDeltaAfterReply(moveEntry, actualEntry);
 
         let promotion = null;
         try {
@@ -5980,6 +6114,9 @@
             bestLineEvalCp,
             secondBestEvalCp,
             materialDeltaAfterMove,
+            materialDeltaAfterReply,
+            preEval: { best: preBestEval, secondBest: preSecondBestEval },
+            postEval,
             moveSan: actualEntry && (actualEntry.san || actualEntry.uci)
               ? (actualEntry.san || actualEntry.uci)
               : null
