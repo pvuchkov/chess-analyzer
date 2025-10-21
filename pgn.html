@@ -4018,23 +4018,16 @@
 
               if (altMoves.length) {
                 let ignoreResult = null;
-                const controller = (window.engineController && typeof window.engineController.run === 'function')
-                  ? window.engineController
-                  : (typeof engineController !== 'undefined' && typeof engineController.run === 'function'
-                    ? engineController
-                    : null);
-                if (controller) {
-                  try {
-                    ignoreResult = await controller.run({
-                      fen: afterFen,
-                      depth: replyDepth,
-                      movetime: replyMovetime,
-                      searchMoves: altMoves,
-                      ply: ply + 1
-                    });
-                  } catch (err) {
-                    ignoreResult = null;
-                  }
+                try {
+                  ignoreResult = await engineController.run({
+                    fen: afterFen,
+                    depth: replyDepth,
+                    movetime: replyMovetime,
+                    searchMoves: altMoves,
+                    ply: ply + 1
+                  });
+                } catch (err) {
+                  ignoreResult = null;
                 }
                 if (token !== state.analysisToken) {
                   throw new Error('cancelled');
@@ -4331,29 +4324,18 @@
         const previousMoveEntry = options.previousMoveEntry || null;
         const includeMoveOptions = {
           token,
-          ply: Number.isFinite(moveEntry.ply) ? moveEntry.ply : state.ply
+          ply: Number.isFinite(moveEntry.ply) ? moveEntry.ply : state.ply,
+          includeMoveUci: actualUci
         };
-        if (actualUci) {
-          includeMoveOptions.includeMoveUci = actualUci;
-        }
 
-        let preAnalysis = options.preAnalysis || null;
-        if (preAnalysis && preAnalysis.fen && preAnalysis.fen !== preFen) {
-          preAnalysis = null;
-        }
-        if (preAnalysis && actualUci && !(preAnalysis.entriesByUci && preAnalysis.entriesByUci.has(actualUci))) {
-          preAnalysis = null;
-        }
-
-        if (!preAnalysis) {
-          try {
-            preAnalysis = await ensureAnalysisForFen(preFen, includeMoveOptions);
-          } catch (err) {
-            if (err && err.message === 'cancelled') {
-              return { cancelled: true };
-            }
-            throw err;
+        let preAnalysis;
+        try {
+          preAnalysis = await ensureAnalysisForFen(preFen, includeMoveOptions);
+        } catch (err) {
+          if (err && err.message === 'cancelled') {
+            return { cancelled: true };
           }
+          throw err;
         }
 
         let classification = classifyPlayedMove({
@@ -4616,6 +4598,8 @@
           }
         }
 
+        const baseline = classification;
+
         let legalMoveList = Array.isArray(legalMoves) ? legalMoves : [];
         if (!Array.isArray(legalMoves) && moveEntry && moveEntry.preFen) {
           try {
@@ -4731,6 +4715,11 @@
             }
           }
         });
+        const entryOverlayByMove = new Map();
+        entryEpByUci.forEach((ep, uci) => {
+          entryOverlayByMove.set(uci, { ep: Number.isFinite(ep) ? ep : null });
+        });
+
         const legalMoveEvaluations = [];
         legalMoveList.forEach((mv) => {
           const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
@@ -4765,45 +4754,105 @@
         const allowsGreatOverlay = suggestionTag === 'best' || suggestionTag === 'excellent';
         let greatOverlay = null;
         if (allowsGreatOverlay && !forcedMove && !trivialRecapture && actualId) {
-          const legalMovesEp = legalMoveEvaluations.filter((m) => Number.isFinite(m.ep));
-          const onlyMoveSampleComplete = haveAllMovesEvaluated;
+          const overlaySource = summaryByMove instanceof Map ? summaryByMove : entryOverlayByMove;
           greatOverlay = computeGreatOverlay({
             fen: baselineFen,
-            EP1: Number.isFinite(bestMoverEp) ? (moverIsWhite ? bestMoverEp : 1 - bestMoverEp) : null,
-            epBefore: beforeWhiteEp,
+            EP1: bestMoverEp,
+            epBefore: beforeMoverEp,
             playedUci: actualId,
-            byMove: summaryByMove || null,
-            legalMovesEp,
-            epPlayedOverride: Number.isFinite(actualMoverEp) ? (moverIsWhite ? actualMoverEp : 1 - actualMoverEp) : null,
-            onlyMoveSampleComplete,
+            byMove: overlaySource,
+            legalMovesEp: legalMoveEvaluations,
+            epPlayedOverride: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
+            onlyMoveSampleComplete: haveAllMovesEvaluated && !forcedMove,
             moverRating
           });
         }
 
-        // Overlay classification (visual badges)
-        let overlay = null;
-        if (greatOverlay === 'great') overlay = 'great';
-
-        // Eye-catching sacs that are still engine-approved → “Brilliant”
-        if (!overlay && actualMoveIsSac && (classification === 'best' || classification === 'excellent')) {
-          overlay = 'brilliant';
+        const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
+        const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
+        const nearBestSac = loss == null ? sameAsBest : loss <= (PV_KEEP_MARGIN + PV_EPSILON);
+        let nonSacBestMoverEp = Number.isFinite(nonSacBestOverride) ? nonSacBestOverride : null;
+        if (nonSacBestMoverEp == null) {
+          entryData.forEach((item) => {
+            if (item.isSac) return;
+            if (!Number.isFinite(item.epMover)) return;
+            if (nonSacBestMoverEp == null || item.epMover > nonSacBestMoverEp) {
+              nonSacBestMoverEp = item.epMover;
+            }
+          });
         }
+        const nonSacAlreadyWinning = nonSacBestMoverEp != null && nonSacBestMoverEp >= notAlreadyWinningThreshold;
+        const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
 
-        // Missed forced win → “Miss”
-        if (!overlay && bestMateForMover && !actualMateForMover) {
+        const mateDistanceLimit = 5;
+        const mateDistancesKnown = actualMateDistance != null && bestMateDistance != null;
+        const mateNotSlower = mateDistancesKnown && actualMateDistance <= bestMateDistance;
+        const mateDistancesReasonable = mateDistancesKnown && actualMateDistance <= mateDistanceLimit;
+        const mateSacBrilliant = (baseline === 'best' || baseline === 'excellent')
+          && actualMoveIsSac
+          && nearBestSac
+          && actualMateForMover
+          && bestMateForMover
+          && mateDistancesReasonable
+          && (mateNotSlower || onlyMatingMove);
+
+        const brilliantCandidate = ((baseline === 'best' || baseline === 'excellent')
+          && actualMoveIsSac
+          && nearBestSac
+          && keepsPlayable
+          && !nonSacAlreadyWinning)
+          || mateSacBrilliant;
+
+        const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
+        const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
+        const missDropThreshold = ratingLerp(moverRating, 1000, 2000, 0.58, 0.68);
+        const missGapThreshold = ratingLerp(moverRating, 1000, 2000, 0.14, 0.2);
+
+        const missCandidate = moverWinBefore != null
+          && moverWinAfter != null
+          && Number.isFinite(bestMoverEp)
+          && moverWinBefore >= missOpportunityThreshold
+          && bestMoverEp >= missConversionThreshold
+          && moverWinAfter <= missDropThreshold
+          && (bestMoverEp - moverWinAfter) >= missGapThreshold;
+
+        let overlay = null;
+        if (brilliantCandidate) {
+          overlay = 'brilliant';
+        } else if (greatOverlay === 'great') {
+          overlay = 'great';
+        } else if (missCandidate && baseline !== 'blunder') {
           overlay = 'miss';
         }
 
-        // Very small change around equality → “Book”
-        if (
-          !overlay &&
-          cpGap != null && cpGap < 5 &&
-          Math.abs((moverWinAfter ?? bestMoverEp ?? 0.5) - (moverWinBefore ?? 0.5)) < 0.01
-        ) {
-          overlay = 'book';
+        const overlayCandidate = overlay;
+
+        if (overlay === 'great' && !(baseline === 'best' || baseline === 'excellent')) {
+          overlay = null;
         }
 
-        return { classification, overlay, expectedLoss: loss, suggestionTag };
+        if (typeof console !== 'undefined' && console && typeof console.table === 'function') {
+          try {
+            console.table({
+              ply: moveEntry && Number.isFinite(moveEntry.ply) ? moveEntry.ply : null,
+              move: actualEntry && (actualEntry.san || actualEntry.uci) ? (actualEntry.san || actualEntry.uci) : null,
+              EP1_bestMoverEp: Number.isFinite(bestMoverEp) ? bestMoverEp.toFixed(3) : null,
+              EP_played: Number.isFinite(actualMoverEp) ? actualMoverEp.toFixed(3) : null,
+              gap: (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp))
+                ? (bestMoverEp - actualMoverEp).toFixed(3)
+                : null,
+              epBeforeMover: Number.isFinite(beforeMoverEp) ? beforeMoverEp.toFixed(3) : null,
+              suggestionTag,
+              baseline,
+              overlayCandidate,
+              overlayFinal: overlay
+            });
+          } catch (err) {
+            // ignore logging errors
+          }
+        }
+
+        return { classification: baseline, overlay, expectedLoss: loss, suggestionTag };
       }
 
       const engineController = {
@@ -5068,185 +5117,198 @@
       }
 
       function engineSignature() {
-        const depth = DEFAULT_ANALYSIS_DEPTH;
-        const multipv = MULTIPV_MAX_CANDIDATES;
-        const wdl = 1;
-        const ver = state.engineVersion || 'sf';
-        return `d=${depth}|mpv=${multipv}|wdl=${wdl}|v=${ver}`;
+        const version = state.engineVersion || 'unknown';
+        return `depth=${DEFAULT_ANALYSIS_DEPTH}|multipv=${MULTIPV_MAX_CANDIDATES}|wdl=1|movetime=${DEFAULT_ANALYSIS_MOVETIME}|engine=${version}`;
       }
 
-      function analysisCacheKey(fen, opts = {}) {
-        const sig = engineSignature();
-        const includeMove = opts.includeMoveUci ? `|inc=${opts.includeMoveUci}` : '';
-        return `${fen}||${sig}${includeMove}`;
+      function getAnalysisCacheKey(fen) {
+        return `${fen}|${engineSignature()}`;
       }
 
-      async function ensureAnalysisForFen(fen, opts = {}) {
-        if (!fen) throw new Error('No FEN');
+      function cloneEngineEntry(entry) {
+        if (!entry) return null;
+        return {
+          ...entry,
+          pvMoves: Array.isArray(entry.pvMoves) ? entry.pvMoves.slice() : [],
+          pvSan: Array.isArray(entry.pvSan) ? entry.pvSan.slice() : [],
+          pvVerbose: Array.isArray(entry.pvVerbose) ? entry.pvVerbose.map((mv) => ({ ...mv })) : []
+        };
+      }
 
-        const key = analysisCacheKey(fen, opts);
-        const baseKey = analysisCacheKey(fen, {});
+      function getCachedPositionAnalysis(fen) {
+        if (!fen) return null;
+        const key = getAnalysisCacheKey(fen);
+        return state.analysisByFen.get(key) || null;
+      }
 
-        if (opts.includeMoveUci) {
-          const baseCached = state.analysisByFen.get(baseKey);
-          if (baseCached && baseCached.entriesByUci?.has(opts.includeMoveUci)) {
-            return baseCached;
-          }
+      function setCachedPositionAnalysis(fen, analysis) {
+        if (!fen || !analysis) return;
+        const key = getAnalysisCacheKey(fen);
+        state.analysisByFen.set(key, analysis);
+      }
+
+      async function ensureAnalysisHasMove(analysis, fen, uci, options = {}) {
+        if (!analysis || !uci) return null;
+        if (!analysis.entriesByUci) {
+          analysis.entriesByUci = new Map();
         }
-
-        if (state.analysisByFen.has(key)) {
-          return state.analysisByFen.get(key);
+        if (analysis.entriesByUci.has(uci)) {
+          return analysis.entriesByUci.get(uci) || null;
         }
-
-        if (state.analysisPromises.has(key)) {
-          return state.analysisPromises.get(key);
+        ensureEngine();
+        await waitForEngineReady();
+        if (options.token != null && options.token !== state.analysisToken) {
+          throw new Error('cancelled');
         }
-
-        if (key !== baseKey && state.analysisPromises.has(baseKey)) {
-          const pending = state.analysisPromises.get(baseKey);
-          return pending.then((analysis) => {
-            if (opts.includeMoveUci && analysis?.entriesByUci?.has(opts.includeMoveUci)) {
-              return analysis;
-            }
-            return ensureAnalysisForFen(fen, { ...opts });
-          });
-        }
-
-        const runPromise = (async () => {
-          const token = opts.token != null ? opts.token : state.analysisToken;
-
-          const controller = (window.engineController && typeof window.engineController.run === 'function')
-            ? window.engineController
-            : (typeof engineController !== 'undefined' && typeof engineController.run === 'function'
-              ? engineController
-              : null);
-          let res = null;
-          if (controller) {
-            res = await controller.run({
-              fen,
-              depth: DEFAULT_ANALYSIS_DEPTH,
-              movetime: DEFAULT_ANALYSIS_MOVETIME,
-              multipv: MULTIPV_MAX_CANDIDATES,
-              showWdl: true,
-              includeMoveUci: opts.includeMoveUci || null,
-              ply: opts.ply != null ? opts.ply : state.ply
-            });
-          }
-
-          if (token !== state.analysisToken) throw new Error('cancelled');
-
-          const entries = Array.isArray(res?.entries) ? res.entries : [];
-
-          const enriched = entries.map((entry, idx) => {
-            const pvVerbose = convertPvToVerbose(fen, entry.pvMoves || entry.pv || entry.pvSan || entry.pvUci || entry.pv, 16);
-            const pvSan = pvVerbose.map((mv) => mv.san);
-            return {
-              ...entry,
-              rank: idx + 1,
-              pvVerbose,
-              pvSan
-            };
-          });
-
-          const entriesByUci = new Map();
-          enriched.forEach((entry) => {
-            if (entry?.uci) {
-              entriesByUci.set(entry.uci, entry);
-            }
-          });
-
-          const { entries: pvEntries, meta: shortlistMeta } = shortlistPvEntries(enriched, { fen });
-          const bestEntry = pvEntries[0] || enriched[0] || null;
-          let summary = buildPositionSummary(fen, enriched);
-
-          const analysis = {
+        let forcedResult = null;
+        try {
+          forcedResult = await engineController.run({
             fen,
-            depth: res?.depth || DEFAULT_ANALYSIS_DEPTH,
-            movetime: res?.movetime || DEFAULT_ANALYSIS_MOVETIME,
-            pvEntries,
-            entriesByUci,
+            depth: DEFAULT_ANALYSIS_DEPTH,
+            movetime: DEFAULT_ANALYSIS_MOVETIME,
+            searchMoves: [uci],
+            ply: Number.isFinite(options.ply) ? options.ply : 0
+          });
+        } catch (err) {
+          forcedResult = null;
+        }
+        if (options.token != null && options.token !== state.analysisToken) {
+          throw new Error('cancelled');
+        }
+        const forcedEntry = forcedResult && Array.isArray(forcedResult.entries)
+          ? forcedResult.entries.find((entry) => entry && entry.uci === uci) || forcedResult.entries[0] || null
+          : null;
+        if (!forcedEntry) {
+          return null;
+        }
+        const cloned = cloneEngineEntry(forcedEntry);
+        if (cloned && cloned.uci) {
+          analysis.entriesByUci.set(cloned.uci, cloned);
+        }
+        return cloned;
+      }
+
+      async function ensureAnalysisForFen(fen, options = {}) {
+        if (!fen) return null;
+        const key = getAnalysisCacheKey(fen);
+        if (state.analysisByFen.has(key)) {
+          const cached = state.analysisByFen.get(key);
+          if (options.includeMoveUci) {
+            await ensureAnalysisHasMove(cached, fen, options.includeMoveUci, options);
+          }
+          return cached;
+        }
+        if (state.analysisPromises.has(key)) {
+          const existing = await state.analysisPromises.get(key);
+          if (options.includeMoveUci) {
+            await ensureAnalysisHasMove(existing, fen, options.includeMoveUci, options);
+          }
+          return existing;
+        }
+
+        const promise = (async () => {
+          ensureEngine();
+          await waitForEngineReady();
+          if (options.token != null && options.token !== state.analysisToken) {
+            throw new Error('cancelled');
+          }
+          const result = await engineController.run({
+            fen,
+            depth: DEFAULT_ANALYSIS_DEPTH,
+            movetime: DEFAULT_ANALYSIS_MOVETIME,
+            ply: Number.isFinite(options.ply) ? options.ply : 0
+          });
+          if (options.token != null && options.token !== state.analysisToken) {
+            throw new Error('cancelled');
+          }
+          const entries = Array.isArray(result.entries) ? result.entries.map((entry) => cloneEngineEntry(entry)) : [];
+          const bestEntry = entries.find((entry) => entry && entry.rank === 1) || entries[0] || null;
+          const summary = buildPositionSummary(fen, entries);
+          const analysis = {
+            key,
+            fen,
+            depth: result && Number.isFinite(result.depth) ? result.depth : DEFAULT_ANALYSIS_DEPTH,
+            movetime: DEFAULT_ANALYSIS_MOVETIME,
+            pvEntries: entries,
             bestEntry,
-            bestEp: bestEntry ? expectedPointsForMover(bestEntry, fen, sideToMoveFromFen(fen)) : null,
+            shortlistMeta: result && result.shortlist ? { ...result.shortlist } : null,
             summary,
-            shortlistMeta,
+            entriesByUci: new Map(),
             classifications: new Map()
           };
-
-          state.analysisByFen.set(baseKey, analysis);
-          if (state.analysisByFen.size > 800) {
-            const firstKey = state.analysisByFen.keys().next().value;
-            state.analysisByFen.delete(firstKey);
-          }
-          if (controller && opts.includeMoveUci && !entriesByUci.has(opts.includeMoveUci)) {
-            try {
-              const forced = await controller.run({
-                fen,
-                depth: DEFAULT_ANALYSIS_DEPTH,
-                movetime: DEFAULT_ANALYSIS_MOVETIME,
-                multipv: 1,
-                showWdl: true,
-                searchMoves: [opts.includeMoveUci],
-                ply: opts.ply != null ? opts.ply : state.ply
-              });
-              if (token !== state.analysisToken) throw new Error('cancelled');
-              const fe = forced && Array.isArray(forced.entries)
-                ? forced.entries.find((e) => e && e.uci === opts.includeMoveUci) || forced.entries[0] || null
-                : null;
-              if (fe && fe.uci) {
-                const pvVerbose = convertPvToVerbose(fen, fe.pvMoves || fe.pv || fe.pvSan || fe.pvUci || fe.pv, 16);
-                const pvSan = pvVerbose.map((mv) => mv.san);
-                const injected = { ...fe, rank: (enriched.length + 1), pvVerbose, pvSan };
-                analysis.entriesByUci.set(injected.uci, injected);
-                const ep = expectedPointsForMover(injected, fen, sideToMoveFromFen(fen));
-                if (analysis.summary) {
-                  const byMove = analysis.summary.byMove instanceof Map ? analysis.summary.byMove : new Map();
-                  byMove.set(injected.uci, {
-                    ep,
-                    tag: null,
-                    eval: injected.eval || null,
-                    pvSan
-                  });
-                  analysis.summary = {
-                    ...analysis.summary,
-                    byMove
-                  };
-                } else {
-                  summary = buildPositionSummary(fen, [...enriched, injected]);
-                  analysis.summary = summary;
-                }
-              }
-            } catch (e) {
-              console.warn('Forced includeMove search failed', e);
+          entries.forEach((entry) => {
+            if (entry && entry.uci) {
+              analysis.entriesByUci.set(entry.uci, entry);
             }
-          }
+          });
+          setCachedPositionAnalysis(fen, analysis);
           return analysis;
         })();
 
-        state.analysisPromises.set(key, runPromise);
-        if (key !== baseKey) {
-          state.analysisPromises.set(baseKey, runPromise);
-        }
+        state.analysisPromises.set(key, promise);
         try {
-          return await runPromise;
+          const analysis = await promise;
+          if (options.includeMoveUci) {
+            await ensureAnalysisHasMove(analysis, fen, options.includeMoveUci, options);
+          }
+          return analysis;
         } finally {
           state.analysisPromises.delete(key);
-          if (key !== baseKey) {
-            state.analysisPromises.delete(baseKey);
-          }
         }
       }
 
+      function formatPositionAnalysis(cached) {
+        if (!cached) return null;
+        return {
+          pvEntries: Array.isArray(cached.pvEntries) ? cached.pvEntries : [],
+          bestEntry: cached.bestEntry || null,
+          shortlist: cached.shortlistMeta || null,
+          depth: cached.depth || 0,
+          movetime: cached.movetime || null,
+          summary: cached.summary || null,
+          classification: null,
+          overlay: null,
+          suggestionTag: null,
+          actualEntry: null,
+          beforeEp: null,
+          bestEp: null,
+          actualEp: null,
+          bestCp: null,
+          actualCp: null,
+          cpLoss: null,
+          winPercentBefore: null,
+          winPercentAfter: null,
+          accuracy: null,
+          explanation: null,
+          planScenarios: null,
+          postAnalysis: cached
+        };
+      }
+
       function getAnalysisForCurrentView() {
-        if (state.suggestionMode !== 'next' && state.ply > 0) {
-          const node = state.verboseHistory[state.ply - 1];
-          if (node && node.analysis) return node.analysis;
+        if (state.suggestionMode === 'next') {
+          if (state.ply >= state.verboseHistory.length) {
+            const currentNode = state.ply > 0 ? state.verboseHistory[state.ply - 1] : getRootNode();
+            const fen = currentNode && currentNode.fen ? currentNode.fen : effectiveInitialFen();
+            const cached = getCachedPositionAnalysis(fen);
+            return formatPositionAnalysis(cached);
+          }
+          const nextNode = state.verboseHistory[state.ply];
+          if (!nextNode) {
+            const currentNode = state.ply > 0 ? state.verboseHistory[state.ply - 1] : getRootNode();
+            const fen = currentNode && currentNode.fen ? currentNode.fen : effectiveInitialFen();
+            const cached = getCachedPositionAnalysis(fen);
+            return formatPositionAnalysis(cached);
+          }
+          return nextNode.analysis || state.analysisCache.get(nextNode.id) || null;
         }
-        const fen = (state.suggestionMode === 'next')
-          ? (state.ply === 0 ? effectiveInitialFen() : state.verboseHistory[state.ply - 1]?.fen)
-          : (state.ply === 0 ? effectiveInitialFen() : state.verboseHistory[state.ply - 1]?.preFen);
-        if (!fen) return null;
-        const key = analysisCacheKey(fen, {});
-        return state.analysisByFen.get(key) || null;
+        if (state.ply === 0) {
+          const cached = getCachedPositionAnalysis(effectiveInitialFen());
+          return formatPositionAnalysis(cached);
+        }
+        const currentNode = state.verboseHistory[state.ply - 1];
+        if (!currentNode) return null;
+        return currentNode.analysis || state.analysisCache.get(currentNode.id) || null;
       }
 
       function updateExplanationPanel(analysis) {
@@ -5367,77 +5429,61 @@
         }
       }
 
-      async function applyAnalysisForCurrentPly(options = {}) {
-        const viewingRoot = state.ply === 0;
-        const preFen = viewingRoot
-          ? effectiveInitialFen()
-          : (state.verboseHistory[state.ply - 1]?.preFen || effectiveInitialFen());
-        const postFen = viewingRoot
-          ? effectiveInitialFen()
-          : state.verboseHistory[state.ply - 1]?.fen;
-
-        const wantNext = state.suggestionMode === 'next';
-        const token = (options && options.token != null) ? options.token : nextAnalysisToken();
-
-        try {
-          if (!wantNext) {
-            const moveEntry = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
-            const includeOpts = {
-              token,
-              ply: Math.max(0, state.ply - 1)
-            };
-            if (moveEntry?.uci) {
-              includeOpts.includeMoveUci = moveEntry.uci;
-            }
-
-            const preAnalysis = await ensureAnalysisForFen(preFen, includeOpts);
-
-            if (moveEntry) {
-              await analyzeMoveEntry(moveEntry, {
-                beforeEp: preAnalysis.summary?.EP1 ?? null,
-                token,
-                previousMoveEntry: state.ply > 1 ? state.verboseHistory[state.ply - 2] : null,
-                ensurePostAnalysis: false,
-                computePlans: false,
-                preAnalysis
-              });
-            }
-
-            const moveAnalysis = moveEntry ? (moveEntry.analysis || null) : null;
-            const pvEntries = preAnalysis.pvEntries || [];
-            updatePVDisplay(pvEntries);
-            redrawAllArrows(pvEntries);
-            updateExplanationPanel(moveAnalysis || preAnalysis);
-            const evalText = preAnalysis.bestEntry?.eval || (pvEntries[0]?.eval ?? '0.00');
-            updateEvalBar(evalText);
-            const shortlistMsg = preAnalysis.shortlistMeta?.message || null;
-            setStatus('engStatus', shortlistMsg || `Depth ${preAnalysis.depth || DEFAULT_ANALYSIS_DEPTH}`);
-          } else {
-            const postAnalysis = await ensureAnalysisForFen(postFen, { token, ply: state.ply });
-            const pvEntries = postAnalysis.pvEntries || [];
-            updatePVDisplay(pvEntries);
-            redrawAllArrows(pvEntries);
-            updateExplanationPanel(postAnalysis);
-            const evalText = postAnalysis.bestEntry?.eval || (pvEntries[0]?.eval ?? '0.00');
-            updateEvalBar(evalText);
-            const shortlistMsg = postAnalysis.shortlistMeta?.message || null;
-            setStatus('engStatus', shortlistMsg || `Depth ${postAnalysis.depth || DEFAULT_ANALYSIS_DEPTH}`);
-          }
-        } catch (err) {
-          if (err?.message === 'cancelled') {
-            return;
-          }
-          console.error('applyAnalysisForCurrentPly failed', err);
-        } finally {
-          refreshExplanationUI();
-          scheduleBoardBadgeUpdate();
-        }
-      }
-
-      function refreshExplanationUI() {
+      function applyAnalysisForCurrentPly() {
         const analysis = getAnalysisForCurrentView();
-        refreshShowLineButtons(analysis);
-        updateLineOverlayButton();
+        if (analysis) {
+          redrawAllArrows(analysis.pvEntries || []);
+          updatePVDisplay(analysis.pvEntries || []);
+          updateExplanationPanel(analysis);
+          let evalText = null;
+          if (state.suggestionMode === 'played') {
+            if (analysis.actualEntry && analysis.actualEntry.eval) {
+              evalText = analysis.actualEntry.eval;
+            } else if (state.ply > 0 && analysis.bestEntry && analysis.bestEntry.eval) {
+              evalText = analysis.bestEntry.eval;
+            }
+          } else if (analysis.bestEntry && analysis.bestEntry.eval) {
+            evalText = analysis.bestEntry.eval;
+          }
+          updateEvalBar(evalText);
+          const baseStatus = `Precomputed (depth ${analysis.depth || 0})`;
+          const shortlistMessage = analysis.shortlist && analysis.shortlist.message ? analysis.shortlist.message : null;
+          setStatus('engStatus', shortlistMessage ? `${baseStatus} — ${shortlistMessage}` : baseStatus);
+          return;
+        }
+
+        redrawAllArrows([]);
+        updatePVDisplay([]);
+        updateExplanationPanel(null);
+        if (state.suggestionMode === 'next') {
+          updateEvalBar(null);
+          if (state.ply >= state.verboseHistory.length) {
+            setStatus('engStatus', 'Game complete. No next move to analyze.');
+          } else if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
+            setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
+          } else if (state.analysisStatus === 'position') {
+            setStatus('engStatus', 'Analyzing position…');
+          } else {
+            setStatus('engStatus', 'Next-move suggestion not available yet.');
+          }
+          return;
+        }
+
+        if (state.analysisStatus === 'running' || state.analysisStatus === 'queued') {
+          setStatus('engStatus', state.analysisStatus === 'queued' ? 'Preparing analysis…' : 'Analyzing entire game…');
+        } else if (state.analysisStatus === 'position') {
+          setStatus('engStatus', 'Analyzing position…');
+        }
+        if (state.ply === 0) {
+          updateEvalBar(null);
+        } else {
+          const entry = state.verboseHistory[state.ply - 1];
+          let evalText = entry && entry.eval ? entry.eval : null;
+          if (!evalText && entry && entry.san && entry.san.includes('#')) {
+            evalText = entry.color === 'b' ? '#-1' : '#1';
+          }
+          updateEvalBar(evalText);
+        }
       }
       async function analyzeMoveAtIndex(index, beforeEp, token) {
         const moveEntry = state.verboseHistory[index];
@@ -5452,16 +5498,13 @@
           return { afterEp: beforeEp };
         }
         if (state.ply === index + 1 || (state.suggestionMode === 'next' && state.ply === index)) {
-          applyAnalysisForCurrentPly({ token });
+          applyAnalysisForCurrentPly();
         }
         renderMoves();
         updateEloEstimates();
         return { afterEp: result && Number.isFinite(result.afterEp) ? result.afterEp : beforeEp };
       }
       async function precomputeFullAnalysis() {
-        if (state.exploreMode) {
-          return;
-        }
         const token = nextAnalysisToken();
         state.analysisCache = new Map();
         state.analysisStatus = state.verboseHistory.length ? 'running' : 'complete';
@@ -5522,7 +5565,11 @@
         state.analysisStatus = 'queued';
         precomputeFullAnalysis();
         setStatus('loadStatus', 'Game ready.', 'ok');
-        collapseLoadPanel();
+        const loadPanel = byId('loadPanel');
+        if (loadPanel) {
+          loadPanel.open = false;
+          persistPanelState('loadPanel', false);
+        }
         updateUrlState();
       }
 
@@ -5645,24 +5692,25 @@
         if (exploreToggle) {
           exploreToggle.addEventListener('click', () => {
             toggleExploreMode();
-            applyAnalysisForCurrentPly();
           });
         }
         const rejoinBtn = byId('rejoinBtn');
         if (rejoinBtn) {
           rejoinBtn.addEventListener('click', () => {
             rejoinMainLine();
-            applyAnalysisForCurrentPly();
           });
         }
         const resetExplore = byId('exploreResetBtn');
         if (resetExplore) {
           resetExplore.addEventListener('click', () => {
             rejoinMainLine();
-            setExploreMode(true);
-            applyAnalysisForCurrentPly();
           });
         }
+        byId('themeToggle').addEventListener('click', () => {
+          const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+          const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+          setTheme(newTheme);
+        });
         const suggestionToggle = byId('suggestionToggle');
         if (suggestionToggle) {
           suggestionToggle.addEventListener('click', () => {
@@ -5682,45 +5730,60 @@
       }
 
       function initCollapsiblePanels() {
-        ['loadPanel', 'moveSummaryPanel', 'engineSuggestions'].forEach((id) => {
-          const el = byId(id);
-          if (!el) return;
-          const defaultOpen = id === 'engineSuggestions';
-          el.open = restorePanelState(id, defaultOpen);
-          el.addEventListener('toggle', () => {
-            persistPanelState(id, el.open);
+        const loadPanel = byId('loadPanel');
+        if (loadPanel) {
+          loadPanel.open = restorePanelState('loadPanel', false);
+          loadPanel.addEventListener('toggle', () => {
+            persistPanelState('loadPanel', loadPanel.open);
           });
-        });
-      }
-
-      function collapseLoadPanel() {
-        const el = byId('loadPanel');
-        if (el) {
-          el.open = false;
-          persistPanelState('loadPanel', false);
+        }
+        const summaryPanel = byId('moveSummaryPanel');
+        if (summaryPanel) {
+          summaryPanel.open = restorePanelState('moveSummaryPanel', false);
+          summaryPanel.addEventListener('toggle', () => {
+            persistPanelState('moveSummaryPanel', summaryPanel.open);
+          });
         }
       }
 
-      function applyTheme(theme) {
+      function getSystemTheme() {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+
+      function getSavedTheme() {
+        return localStorage.getItem('theme');
+      }
+
+      function setTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        const t = byId('themeToggle');
-        if (t) t.textContent = theme === 'light' ? '🌚 Dark' : '☀️ Light';
+        localStorage.setItem('theme', theme);
+        updateThemeButton(theme);
       }
 
-      (function initTheme() {
-        const saved = (() => { try { return localStorage.getItem('theme'); } catch { return null; } })();
-        const system = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        applyTheme(saved || system);
-        const btn = byId('themeToggle');
-        if (btn) {
-          btn.addEventListener('click', () => {
-            const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-            const next = cur === 'light' ? 'dark' : 'light';
-            applyTheme(next);
-            try { localStorage.setItem('theme', next); } catch {}
+      function updateThemeButton(theme) {
+        const button = byId('themeToggle');
+        if (theme === 'dark') {
+          button.textContent = '☀️ Light';
+          button.title = 'Switch to light theme';
+        } else {
+          button.textContent = '🌙 Dark';
+          button.title = 'Switch to dark theme';
+        }
+      }
+
+      function initTheme() {
+        const savedTheme = getSavedTheme();
+        const systemTheme = getSystemTheme();
+        const theme = savedTheme || systemTheme;
+        setTheme(theme);
+        if (window.matchMedia) {
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!getSavedTheme()) {
+              setTheme(e.matches ? 'dark' : 'light');
+            }
           });
         }
-      })();
+      }
 
       async function loadFromQuery() {
         const params = new URLSearchParams(window.location.search);
@@ -5771,6 +5834,7 @@
           return;
         }
 
+        initTheme();
         initBoard();
         initMoveSummary();
         updateMoveSummary();
