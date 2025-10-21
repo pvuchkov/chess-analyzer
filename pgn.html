@@ -145,20 +145,7 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
-      max-height: calc(100vh - (var(--header-height) + (var(--layout-padding) * 2)));
-      overflow-y: auto;
-      padding-right: 8px;
-      scrollbar-gutter: stable both-edges;
       min-width: 0;
-    }
-
-    .info-column::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    .info-column::-webkit-scrollbar-thumb {
-      background: rgba(148, 163, 184, 0.35);
-      border-radius: 999px;
     }
 
     .card {
@@ -187,7 +174,6 @@
     .board-shell {
       position: relative;
       width: 100%;
-      padding-bottom: clamp(68px, 10vh, 96px);
       isolation: isolate;
     }
 
@@ -446,8 +432,8 @@
     .board-area {
       display: grid;
       grid-template-columns: var(--eval-bar-width) minmax(0, 1fr);
-      column-gap: 0;
       align-items: stretch;
+      gap: clamp(12px, 1.5vw, 18px);
       width: 100%;
       max-height: var(--board-max-height);
     }
@@ -545,7 +531,7 @@
       position: relative;
       width: 100%;
       height: 100%;
-      min-height: clamp(260px, 60vh, var(--board-max-height));
+      min-height: 0;
       background: var(--eval-black);
       border-radius: 0;
       border: 1px solid var(--eval-border);
@@ -778,22 +764,13 @@
     }
 
     .board-toolbar {
-      position: absolute;
-      inset-inline: clamp(8px, 2vw, 18px);
-      inset-block-end: clamp(8px, 2vh, 18px);
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 12px 18px;
-      border-radius: 16px;
+      width: 100%;
       background: rgba(8, 15, 35, 0.82);
       border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 16px;
       box-shadow: 0 18px 42px rgba(8, 15, 35, 0.55);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      z-index: 4;
     }
 
     [data-theme="light"] .board-toolbar {
@@ -804,30 +781,50 @@
 
     .nav-toolbar {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 12px;
-      width: 100%;
+      padding: 6px 12px;
+      height: 48px;
+      box-sizing: border-box;
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    .nav-toolbar::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .nav-toolbar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
     }
 
     .nav-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
+      display: inline-flex;
       align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .nav-toolbar button {
+      flex: 0 0 auto;
+      white-space: nowrap;
     }
 
     .nav-meta {
-      display: flex;
-      flex-wrap: wrap;
+      display: inline-flex;
+      align-items: center;
       gap: 12px;
       font-size: 11px;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.12em;
       margin-left: auto;
+      flex: 0 0 auto;
       justify-content: flex-end;
     }
 
@@ -1316,10 +1313,6 @@
         grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
         gap: clamp(16px, 2vw, 22px);
       }
-
-      .info-column {
-        max-height: calc(100vh - (var(--header-height) + (var(--layout-padding) * 1.5)));
-      }
     }
 
     @media (max-width: 1024px) {
@@ -1363,7 +1356,7 @@
       .eval-vertical {
         width: 18px;
         max-width: none;
-        min-height: 180px;
+        min-height: 0;
       }
 
       .material-panel {
@@ -1377,20 +1370,18 @@
         border-radius: 18px 18px 0 0;
         margin: 12px 0 0;
         box-shadow: 0 -10px 30px rgba(8, 15, 35, 0.45);
+        z-index: 5;
       }
 
       [data-theme="light"] .board-toolbar {
         box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.2);
       }
 
-      .nav-toolbar {
-        justify-content: center;
-      }
-
       .nav-meta {
         width: 100%;
         justify-content: center;
         margin-left: 0;
+        flex: 0 0 100%;
       }
 
       .engine-toolbar {
@@ -1399,8 +1390,6 @@
       }
 
       .info-column {
-        max-height: none;
-        overflow: visible;
         padding-right: 0;
       }
     }
@@ -1436,22 +1425,42 @@
                 </div>
               </div>
             </div>
-            <div class="board-toolbar nav-toolbar" role="toolbar" aria-label="Move navigation">
-              <div class="nav-buttons">
-                <button id="firstBtn" class="secondary">⏮ First</button>
-                <button id="prevBtn" class="secondary">◀ Prev</button>
-                <button id="nextBtn">Next ▶</button>
-                <button id="lastBtn">Last ⏭</button>
-                <button id="flipBtn" class="secondary">Flip</button>
-                <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
-                <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
-                <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
-              </div>
-              <div class="nav-meta" role="status" aria-live="polite">
-                <span id="navMoveCount" class="nav-meta-item">Move 0 / 0</span>
-                <span id="navSideToMove" class="nav-meta-item">White to move</span>
-                <span id="navEvalValue" class="nav-meta-item">Eval —</span>
-              </div>
+          </div>
+          <div class="board-toolbar nav-toolbar" role="toolbar" aria-label="Move navigation">
+            <div class="nav-buttons">
+              <button id="firstBtn" class="secondary" data-label="⏮ First" data-label-compact="⏮">⏮ First</button>
+              <button id="prevBtn" class="secondary" data-label="◀ Prev" data-label-compact="◀">◀ Prev</button>
+              <button id="nextBtn" data-label="Next ▶" data-label-compact="▶">Next ▶</button>
+              <button id="lastBtn" data-label="Last ⏭" data-label-compact="⏭">Last ⏭</button>
+              <button id="flipBtn" class="secondary" data-label="Flip" data-label-compact="Flip">Flip</button>
+              <button
+                id="exploreToggle"
+                class="secondary"
+                title="Toggle explore mode"
+                data-label="Enable explore"
+                data-label-compact="Explore"
+              >Enable explore</button>
+              <button
+                id="exploreResetBtn"
+                class="secondary"
+                title="Reset explore branch"
+                data-label="Reset to game"
+                data-label-compact="Reset"
+                hidden
+              >Reset to game</button>
+              <button
+                id="rejoinBtn"
+                class="secondary"
+                title="Return to the main line"
+                data-label="Rejoin main line"
+                data-label-compact="Rejoin"
+                hidden
+              >Rejoin main line</button>
+            </div>
+            <div class="nav-meta" role="status" aria-live="polite">
+              <span id="navMoveCount" class="nav-meta-item">Move 0 / 0</span>
+              <span id="navSideToMove" class="nav-meta-item">White to move</span>
+              <span id="navEvalValue" class="nav-meta-item">Eval —</span>
             </div>
           </div>
           <div class="material-panel">
@@ -1659,6 +1668,87 @@
         nodeSeq: 0,
         exploreMode: false
       };
+
+      const navToolbarManager = {
+        buttons: [],
+        isCompact: null,
+        query: typeof window !== 'undefined' && window.matchMedia
+          ? window.matchMedia('(max-width: 640px)')
+          : null
+      };
+
+      let updateEvalBarHeight = () => {};
+      let evalBarObserver = null;
+
+      function updateNavToolbarLabels(force = false) {
+        if (!navToolbarManager.buttons.length) return;
+        const shouldCompact = navToolbarManager.query
+          ? navToolbarManager.query.matches
+          : window.innerWidth <= 640;
+        if (!force && navToolbarManager.isCompact === shouldCompact) return;
+        navToolbarManager.buttons.forEach((button) => {
+          if (!button.dataset.label) {
+            button.dataset.label = button.textContent.trim();
+          }
+          const full = button.dataset.label || '';
+          const compact = button.dataset.labelCompact || '';
+          const nextLabel = shouldCompact && compact ? compact : full;
+          if (nextLabel && button.textContent !== nextLabel) {
+            button.textContent = nextLabel;
+          } else if (!nextLabel && shouldCompact && full) {
+            button.textContent = full;
+          }
+        });
+        navToolbarManager.isCompact = shouldCompact;
+      }
+
+      function initNavToolbar() {
+        const toolbar = document.querySelector('.nav-toolbar');
+        if (!toolbar) return;
+        navToolbarManager.buttons = Array.from(toolbar.querySelectorAll('button'));
+        navToolbarManager.buttons.forEach((button) => {
+          if (!button.dataset.label) {
+            button.dataset.label = button.textContent.trim();
+          }
+        });
+        updateNavToolbarLabels(true);
+        if (navToolbarManager.query) {
+          navToolbarManager.query.addEventListener('change', () => updateNavToolbarLabels(true));
+        }
+        window.addEventListener('resize', () => updateNavToolbarLabels(true));
+      }
+
+      function initEvalBarSync() {
+        const boardWrap = document.querySelector('.board-wrap');
+        const evalColumn = document.getElementById('evalColumn');
+        if (!boardWrap || !evalColumn) return;
+        const evalVertical = evalColumn.querySelector('.eval-vertical');
+        if (!evalVertical) return;
+
+        const applyHeight = () => {
+          const rect = boardWrap.getBoundingClientRect();
+          const height = Math.round(rect.height);
+          if (height > 0) {
+            evalColumn.style.height = `${height}px`;
+          } else {
+            evalColumn.style.height = '';
+          }
+          evalVertical.style.height = '100%';
+        };
+
+        updateEvalBarHeight = applyHeight;
+
+        if (typeof ResizeObserver !== 'undefined') {
+          if (evalBarObserver) {
+            evalBarObserver.disconnect();
+          }
+          evalBarObserver = new ResizeObserver(() => applyHeight());
+          evalBarObserver.observe(boardWrap);
+        }
+
+        applyHeight();
+        requestAnimationFrame(() => applyHeight());
+      }
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
       const pieceNames = {
@@ -2436,10 +2526,12 @@
           }
         });
         syncArrowLayer();
+        initEvalBarSync();
         window.addEventListener('resize', () => {
           state.board.resize();
           syncArrowLayer();
           scheduleBoardBadgeUpdate();
+          updateEvalBarHeight();
         });
       }
 
@@ -2458,7 +2550,9 @@
         const rejoin = byId('rejoinBtn');
         const reset = byId('exploreResetBtn');
         if (toggle) {
-          toggle.textContent = state.exploreMode ? 'Disable explore' : 'Enable explore';
+          const label = state.exploreMode ? 'Disable explore' : 'Enable explore';
+          toggle.dataset.label = label;
+          toggle.textContent = label;
           toggle.setAttribute('aria-pressed', state.exploreMode ? 'true' : 'false');
         }
         if (rejoin) {
@@ -2469,6 +2563,7 @@
           reset.hidden = !state.exploreMode;
           reset.disabled = !state.exploreMode;
         }
+        updateNavToolbarLabels(true);
       }
 
       function setExploreMode(enabled) {
@@ -6711,6 +6806,7 @@
           state.orientation = state.orientation === 'white' ? 'black' : 'white';
           state.board.flip();
           updateEvalBar(state.lastEval);
+          updateEvalBarHeight();
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
             redrawAllArrows(analysis ? analysis.pvEntries || [] : []);
@@ -6948,6 +7044,7 @@
         }
 
         initTheme();
+        initNavToolbar();
         initBoard();
         initMoveSummary();
         updateMoveSummary();
