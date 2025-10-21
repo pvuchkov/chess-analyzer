@@ -6266,63 +6266,12 @@
           mateDistanceTest = allLoseOrSlow;
         }
 
-        const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(EP_secondBest)
-          ? bestMoverEp - EP_secondBest
-          : null;
-        const sacTwoPly = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice2Ply === true;
-        const meetsOnlyMoveGap = (!Number.isFinite(secondBestEvalCp) && !Number.isFinite(EP_secondBest))
-          || (Number.isFinite(onlyMoveGapCp) && onlyMoveGapCp >= ONLY_MOVE_GAP_CP)
-          || (Number.isFinite(epGapToSecond) && epGapToSecond >= (ONLY_MOVE_GAP_EP - PV_EPSILON));
-        const isOnlyWinningMove = mateDistanceTest || meetsOnlyMoveGap;
-
-        const mateSacDepthLimit = BRILLIANT_MATE_SAC_MAX_DEPTH;
-        const mateSacBrilliant = (baseline === 'best' || nearBest)
-          && sacTwoPly
-          && actualMateForMover
-          && Number.isFinite(actualMateDistance)
-          && actualMateDistance <= mateSacDepthLimit;
-
-        const cpKeepsEval = Number.isFinite(preEvalCp)
-          && Number.isFinite(postEvalCpAfterReReply)
-          && postEvalCpAfterReReply >= (preEvalCp - NOT_BAD_TOLERANCE_CP);
-        const nonMateBrilliant = (baseline === 'best' || nearBest)
-          && !actualMateForMover
-          && sacTwoPly
-          && nearBest
-          && cpKeepsEval
-          && meetsOnlyMoveGap;
-        const greatCandidate = nearBest
-          && Number.isFinite(epGapToSecond)
-          && epGapToSecond >= (0.20 - PV_EPSILON);
-
-        let overlay = null;
-        let brilliantReason = null;
-        if (mateSacBrilliant) {
-          overlay = 'brilliant';
-          brilliantReason = 'mateSac';
-        } else if (nonMateBrilliant) {
-          overlay = 'brilliant';
-          brilliantReason = 'sacrifice2Ply';
-        } else if (greatCandidate) {
-          overlay = 'great';
-        } else if (missCandidate && baseline !== 'blunder') {
-          overlay = 'miss';
-        }
-
-        const playedUci = actualEntry && actualEntry.uci ? actualEntry.uci : null;
-        const bestUci = (bestEntry && bestEntry.uci)
-          ? bestEntry.uci
-          : (bestDistinctEntry && bestDistinctEntry.entry ? bestDistinctEntry.entry.uci : null);
-        const secondBestUci = secondDistinctEntry && secondDistinctEntry.entry
-          ? secondDistinctEntry.entry.uci
-          : null;
-
-        const overlayCandidate = overlay;
-
         const toMoverCp = (cp) => {
           if (!Number.isFinite(cp)) return null;
           return moverIsWhite ? cp : -cp;
         };
+
+        const sacTwoPly = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice2Ply === true;
 
         const evalByUci = new Map();
         const cpByUci = new Map();
@@ -6389,6 +6338,58 @@
         const postEval = normalizeEvalForMover(actualEntry ? actualEntry.eval : null, moverIsWhite)
           || (Number.isFinite(postEvalCp) ? { cp: postEvalCp } : null);
         const postEvalCpAfterReReply = Number.isFinite(postEvalCp) ? postEvalCp : null;
+
+        const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(EP_secondBest)
+          ? bestMoverEp - EP_secondBest
+          : null;
+        const meetsOnlyMoveGap = (!Number.isFinite(secondBestEvalCp) && !Number.isFinite(EP_secondBest))
+          || (Number.isFinite(onlyMoveGapCp) && onlyMoveGapCp >= ONLY_MOVE_GAP_CP)
+          || (Number.isFinite(epGapToSecond) && epGapToSecond >= (ONLY_MOVE_GAP_EP - PV_EPSILON));
+        const isOnlyWinningMove = mateDistanceTest || meetsOnlyMoveGap;
+
+        const mateSacDepthLimit = BRILLIANT_MATE_SAC_MAX_DEPTH;
+        const mateSacBrilliant = (baseline === 'best' || nearBest)
+          && sacTwoPly
+          && actualMateForMover
+          && Number.isFinite(actualMateDistance)
+          && actualMateDistance <= mateSacDepthLimit;
+
+        const cpKeepsEval = Number.isFinite(preEvalCp)
+          && Number.isFinite(postEvalCpAfterReReply)
+          && postEvalCpAfterReReply >= (preEvalCp - NOT_BAD_TOLERANCE_CP);
+        const nonMateBrilliant = (baseline === 'best' || nearBest)
+          && !actualMateForMover
+          && sacTwoPly
+          && nearBest
+          && cpKeepsEval
+          && meetsOnlyMoveGap;
+        const greatCandidate = nearBest
+          && Number.isFinite(epGapToSecond)
+          && epGapToSecond >= (0.20 - PV_EPSILON);
+
+        let overlay = null;
+        let brilliantReason = null;
+        if (mateSacBrilliant) {
+          overlay = 'brilliant';
+          brilliantReason = 'mateSac';
+        } else if (nonMateBrilliant) {
+          overlay = 'brilliant';
+          brilliantReason = 'sacrifice2Ply';
+        } else if (greatCandidate) {
+          overlay = 'great';
+        } else if (missCandidate && baseline !== 'blunder') {
+          overlay = 'miss';
+        }
+
+        const playedUci = actualEntry && actualEntry.uci ? actualEntry.uci : null;
+        const bestUci = (bestEntry && bestEntry.uci)
+          ? bestEntry.uci
+          : (bestDistinctEntry && bestDistinctEntry.entry ? bestDistinctEntry.entry.uci : null);
+        const secondBestUci = secondDistinctEntry && secondDistinctEntry.entry
+          ? secondDistinctEntry.entry.uci
+          : null;
+
+        const overlayCandidate = overlay;
 
         let promotion = null;
         try {
