@@ -1905,6 +1905,14 @@
       const DEFAULT_ANALYSIS_DEPTH = 20;
       const DEFAULT_ANALYSIS_MOVETIME = 2000;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
+      const enableSpecialPromotions = true;
+      const NEAR_BEST_CP = 50;
+      const ONLY_MOVE_GAP_CP = 150;
+      const SWING_TO_EQUAL_CP = 80;
+      const SWING_TO_WIN_CP = 150;
+      const ALREADY_WINNING_CP = 300;
+      const NOT_BAD_TOLERANCE_CP = 50;
+      const SAC_MIN_LOSS_POINTS = 2;
       const moveSummaryCategories = [
         { key: 'brilliant', label: 'Brilliant', icon: './move-classifications/brilliant.png' },
         { key: 'great', label: 'Great', icon: './move-classifications/great.png' },
@@ -2215,6 +2223,16 @@
         badge.setAttribute('data-classification', normalizedClass);
         icon.src = iconPath;
         icon.alt = chosenClass;
+        const promotionTooltip = entry.analysis && entry.analysis.promotion && entry.analysis.promotion.tooltip
+          ? entry.analysis.promotion.tooltip
+          : null;
+        if (promotionTooltip) {
+          badge.title = promotionTooltip;
+          icon.title = promotionTooltip;
+        } else {
+          badge.removeAttribute('title');
+          icon.removeAttribute('title');
+        }
         badge.removeAttribute('data-overlay');
         badge.style.display = 'flex';
       }
@@ -2907,6 +2925,9 @@
                 const icon = document.createElement('img');
                 icon.src = iconPath;
                 icon.alt = chosenClass;
+                if (node.analysis.promotion && node.analysis.promotion.tooltip) {
+                  icon.title = node.analysis.promotion.tooltip;
+                }
                 icon.className = 'classification-icon';
                 row.appendChild(icon);
               }
@@ -4405,6 +4426,157 @@
         return (onlyMove || phaseFlip) ? 'great' : null;
       }
 
+      function computeMaterialDeltaAfterMove(moveEntry) {
+        if (!moveEntry || !moveEntry.preFen || !moveEntry.fen) return null;
+        try {
+          const before = new Chess(moveEntry.preFen);
+          const after = new Chess(moveEntry.fen);
+          const mover = moveEntry.color === 'b' ? 'b' : 'w';
+          const opponent = mover === 'w' ? 'b' : 'w';
+          const beforeCounts = countPiecesOnBoard(before.board());
+          const afterCounts = countPiecesOnBoard(after.board());
+          const beforeDiff = sumMaterial(beforeCounts[mover]) - sumMaterial(beforeCounts[opponent]);
+          const afterDiff = sumMaterial(afterCounts[mover]) - sumMaterial(afterCounts[opponent]);
+          return afterDiff - beforeDiff;
+        } catch (err) {
+          console.warn('Failed to compute material delta', err);
+          return null;
+        }
+      }
+
+      function applySpecialPromotions({
+        baseLabel,
+        preEvalCp,
+        postEvalCp,
+        bestLineEvalCp,
+        secondBestEvalCp,
+        materialDeltaAfterMove,
+        phase = null,
+        moveSan = null
+      }) {
+        if (!enableSpecialPromotions) {
+          return null;
+        }
+        const normalizedBase = typeof baseLabel === 'string' ? baseLabel.toLowerCase() : '';
+        if (!(normalizedBase === 'best' || normalizedBase === 'excellent')) {
+          return null;
+        }
+
+        const hasSacrifice = Number.isFinite(materialDeltaAfterMove)
+          && materialDeltaAfterMove <= -SAC_MIN_LOSS_POINTS;
+        const nearBest = Number.isFinite(bestLineEvalCp)
+          && Number.isFinite(postEvalCp)
+          && (bestLineEvalCp - postEvalCp) <= NEAR_BEST_CP;
+        const notAlreadyWinning = Number.isFinite(preEvalCp)
+          && preEvalCp < ALREADY_WINNING_CP;
+        const notBadAfter = Number.isFinite(preEvalCp)
+          && Number.isFinite(postEvalCp)
+          && postEvalCp >= (preEvalCp - NOT_BAD_TOLERANCE_CP);
+        const endgameOnlyMove = phase === 'endgame'
+          ? (Number.isFinite(bestLineEvalCp)
+            && Number.isFinite(secondBestEvalCp)
+            && (bestLineEvalCp - secondBestEvalCp) >= ONLY_MOVE_GAP_CP)
+          : true;
+
+        const bestVsSecondGap = Number.isFinite(bestLineEvalCp)
+          && Number.isFinite(secondBestEvalCp)
+          ? (bestLineEvalCp - secondBestEvalCp)
+          : null;
+
+        if ((normalizedBase === 'best' || nearBest)
+          && hasSacrifice
+          && nearBest
+          && notAlreadyWinning
+          && notBadAfter
+          && endgameOnlyMove) {
+          const gapText = formatNegativeCpGap(bestVsSecondGap);
+          const evalText = formatCpAsPawnString(postEvalCp, { forceSign: true });
+          const tooltipParts = ['Promoted to Brilliant: sacrifice kept the evaluation on track.'];
+          if (evalText) {
+            tooltipParts.push(`Eval ≈ ${evalText}.`);
+          }
+          if (gapText) {
+            tooltipParts.push(`2nd-best is ${gapText} worse.`);
+          }
+          return {
+            label: 'brilliant',
+            reason: 'brilliant-sacrifice',
+            tooltip: tooltipParts.join(' '),
+            log: {
+              move: moveSan || null,
+              baseLabel: normalizedBase,
+              promotedTo: 'brilliant',
+              reason: 'brilliant-sacrifice',
+              preEvalCp,
+              postEvalCp,
+              bestLineEvalCp,
+              secondBestEvalCp,
+              materialDeltaAfterMove
+            }
+          };
+        }
+
+        const onlyMove = Number.isFinite(bestVsSecondGap)
+          && bestVsSecondGap >= ONLY_MOVE_GAP_CP;
+        const swingToEqual = Number.isFinite(preEvalCp)
+          && Number.isFinite(postEvalCp)
+          && preEvalCp <= -SWING_TO_EQUAL_CP
+          && postEvalCp >= -NEAR_BEST_CP;
+        const swingToWin = Number.isFinite(preEvalCp)
+          && Number.isFinite(postEvalCp)
+          && Math.abs(preEvalCp) <= NEAR_BEST_CP
+          && postEvalCp >= SWING_TO_WIN_CP;
+
+        if (onlyMove || swingToEqual || swingToWin) {
+          let reason = 'great-only-move';
+          const tooltipParts = ['Promoted to Great:'];
+          if (onlyMove) {
+            reason = 'great-only-move';
+            tooltipParts.push('only move preserved the advantage.');
+            const gapText = formatNegativeCpGap(bestVsSecondGap);
+            if (gapText) {
+              tooltipParts.push(`Next-best is ${gapText} worse.`);
+            }
+          } else if (swingToEqual) {
+            reason = 'great-swing-equal';
+            const fromText = formatCpAsPawnString(preEvalCp, { forceSign: true });
+            const toText = formatCpAsPawnString(postEvalCp, { forceSign: true });
+            if (fromText && toText) {
+              tooltipParts.push(`evaluation swung from ${fromText} to ${toText}.`);
+            } else {
+              tooltipParts.push('evaluation swung back to equality.');
+            }
+          } else if (swingToWin) {
+            reason = 'great-swing-win';
+            const fromText = formatCpAsPawnString(preEvalCp, { forceSign: true });
+            const toText = formatCpAsPawnString(postEvalCp, { forceSign: true });
+            if (fromText && toText) {
+              tooltipParts.push(`evaluation jumped from ${fromText} to ${toText}.`);
+            } else {
+              tooltipParts.push('evaluation jumped into winning territory.');
+            }
+          }
+          return {
+            label: 'great',
+            reason,
+            tooltip: tooltipParts.join(' '),
+            log: {
+              move: moveSan || null,
+              baseLabel: normalizedBase,
+              promotedTo: 'great',
+              reason,
+              preEvalCp,
+              postEvalCp,
+              bestLineEvalCp,
+              secondBestEvalCp,
+              materialDeltaAfterMove
+            }
+          };
+        }
+
+        return null;
+      }
+
       function computeMoveAccuracy(winPercentBefore, winPercentAfter) {
         if (!Number.isFinite(winPercentBefore) || !Number.isFinite(winPercentAfter)) {
           return null;
@@ -4529,6 +4701,26 @@
         if (abs >= 10) return `${abs.toFixed(0)}%`;
         if (abs >= 3) return `${abs.toFixed(1)}%`;
         return `${abs.toFixed(1)}%`;
+      }
+
+      function formatCpAsPawnString(cp, { forceSign = false } = {}) {
+        if (!Number.isFinite(cp)) return null;
+        const pawns = cp / 100;
+        const abs = Math.abs(pawns);
+        const decimals = abs >= 1 ? 1 : 2;
+        const rounded = pawns.toFixed(decimals);
+        if (rounded.startsWith('-')) {
+          return rounded;
+        }
+        if (forceSign && !rounded.startsWith('+')) {
+          return `+${rounded}`;
+        }
+        return rounded;
+      }
+
+      function formatNegativeCpGap(cpGap) {
+        if (!Number.isFinite(cpGap)) return null;
+        return formatCpAsPawnString(-Math.abs(cpGap), { forceSign: true });
       }
 
       function winPercentForEntry(entry, moverColor, fen = null) {
@@ -5190,7 +5382,7 @@
           bestMoverEp,
           actualMoverEp,
           rootFen: preFen
-        }) || { classification: null, overlay: null, expectedLoss: null, suggestionTag: null };
+        }) || { classification: null, overlay: null, expectedLoss: null, suggestionTag: null, promotion: null };
 
         const evalText = actualEntry && actualEntry.eval
           ? actualEntry.eval
@@ -5207,6 +5399,7 @@
           classification: classificationData.classification,
           overlay: classificationData.overlay,
           suggestionTag: classificationData.suggestionTag,
+          promotion: classificationData.promotion || null,
           bestCp,
           actualCp,
           cpLoss,
@@ -5749,6 +5942,64 @@
           overlay = null;
         }
 
+        const toMoverCp = (cp) => {
+          if (!Number.isFinite(cp)) return null;
+          return moverIsWhite ? cp : -cp;
+        };
+
+        let bestLineEvalCp = toMoverCp(bestCp);
+        let secondBestEvalCp = null;
+        if (Array.isArray(pvEntries)) {
+          const candidateCps = [];
+          pvEntries.forEach((entry) => {
+            if (!entry) return;
+            const cpValue = evalStringToCentipawns(entry.eval);
+            const normalizedCp = toMoverCp(cpValue);
+            if (!Number.isFinite(normalizedCp)) return;
+            candidateCps.push({ cp: normalizedCp, uci: entry.uci });
+          });
+          candidateCps.sort((a, b) => b.cp - a.cp);
+          if (candidateCps.length > 0 && Number.isFinite(candidateCps[0].cp)) {
+            bestLineEvalCp = candidateCps[0].cp;
+          }
+          if (candidateCps.length > 1 && Number.isFinite(candidateCps[1].cp)) {
+            secondBestEvalCp = candidateCps[1].cp;
+          }
+        }
+
+        const preEvalCp = bestLineEvalCp;
+        const postEvalCp = toMoverCp(actualCp);
+        const materialDeltaAfterMove = computeMaterialDeltaAfterMove(moveEntry);
+
+        let promotion = null;
+        try {
+          promotion = applySpecialPromotions({
+            baseLabel: baseline,
+            preEvalCp,
+            postEvalCp,
+            bestLineEvalCp,
+            secondBestEvalCp,
+            materialDeltaAfterMove,
+            moveSan: actualEntry && (actualEntry.san || actualEntry.uci)
+              ? (actualEntry.san || actualEntry.uci)
+              : null
+          });
+        } catch (err) {
+          console.warn('Failed to apply special promotions', err);
+        }
+
+        let finalClassification = baseline;
+        if (promotion && promotion.label) {
+          finalClassification = promotion.label;
+          if (promotion.log && typeof console !== 'undefined' && console && typeof console.info === 'function') {
+            try {
+              console.info('Special promotion', promotion.log);
+            } catch (err) {
+              // ignore logging errors
+            }
+          }
+        }
+
         if (typeof console !== 'undefined' && console && typeof console.table === 'function') {
           try {
             console.table({
@@ -5770,7 +6021,7 @@
           }
         }
 
-        return { classification: baseline, overlay, expectedLoss: loss, suggestionTag };
+        return { classification: finalClassification, overlay, expectedLoss: loss, suggestionTag, promotion };
       }
 
       const engineController = {
