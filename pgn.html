@@ -96,6 +96,17 @@
       .layout {
         grid-template-columns: 1fr;
       }
+
+      .board-expl-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .engine-expl {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
+      }
     }
 
     .card {
@@ -120,6 +131,10 @@
       gap: 12px;
       flex-wrap: wrap;
       align-items: stretch;
+    }
+
+    .nav-controls {
+      align-items: center;
     }
 
     .row+.row {
@@ -367,6 +382,19 @@
       display: none;
     }
 
+    .board-expl-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, min(480px, 36vw));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .board-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
     .board-area {
       display: flex;
       gap: 18px;
@@ -376,6 +404,25 @@
     .board-wrap {
       position: relative;
       flex: 1;
+    }
+
+    .engine-expl {
+      position: sticky;
+      top: 12px;
+      max-height: calc(100vh - 24px);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-right: 4px;
+    }
+
+    .engine-expl h2 {
+      margin-top: 0;
+    }
+
+    .engine-expl .explanation-panel {
+      margin-top: 0;
     }
 
     #board {
@@ -1144,60 +1191,64 @@
         </div>
       </details>
 
-      <h2>Board</h2>
-      <div class="board-area">
-        <div class="eval-column" id="evalColumn" data-orientation="white">
-          <div class="eval-label eval-label-black" id="evalBlackValue"></div>
-          <div class="eval-vertical">
-            <div class="eval-fill" id="evalFill"></div>
-            <div class="eval-marker" id="evalMarker"></div>
-          </div>
-          <div class="eval-label" id="evalWhiteValue">0.00</div>
-        </div>
-        <div class="board-wrap">
-          <div id="board"></div>
-          <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
-          <div class="board-badge-layer">
-            <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
-              <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
-              <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
+      <div class="board-expl-layout">
+        <div class="board-column">
+          <h2>Board</h2>
+          <div class="board-area">
+            <div class="eval-column" id="evalColumn" data-orientation="white">
+              <div class="eval-label eval-label-black" id="evalBlackValue"></div>
+              <div class="eval-vertical">
+                <div class="eval-fill" id="evalFill"></div>
+                <div class="eval-marker" id="evalMarker"></div>
+              </div>
+              <div class="eval-label" id="evalWhiteValue">0.00</div>
+            </div>
+            <div class="board-wrap">
+              <div id="board"></div>
+              <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+              <div class="board-badge-layer">
+                <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
+                  <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+                  <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
+                </div>
+              </div>
             </div>
           </div>
+          <div class="material-panel">
+            <div class="material-card">
+              <div class="material-player">White</div>
+              <div class="material-score" id="materialWhite">0</div>
+              <div class="material-capture" id="materialWhiteCapture">—</div>
+            </div>
+            <div class="material-card">
+              <div class="material-player">Black</div>
+              <div class="material-score" id="materialBlack">0</div>
+              <div class="material-capture" id="materialBlackCapture">—</div>
+            </div>
+          </div>
+          <div class="row nav-controls">
+            <button id="firstBtn" class="secondary">⏮ First</button>
+            <button id="prevBtn" class="secondary">◀ Prev</button>
+            <button id="nextBtn">Next ▶</button>
+            <button id="lastBtn">Last ⏭</button>
+            <button id="flipBtn" class="secondary">Flip</button>
+            <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
+            <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
+            <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
+          </div>
+          <div id="navStatus" class="status"></div>
         </div>
-      </div>
-      <div class="material-panel">
-        <div class="material-card">
-          <div class="material-player">White</div>
-          <div class="material-score" id="materialWhite">0</div>
-          <div class="material-capture" id="materialWhiteCapture">—</div>
-        </div>
-        <div class="material-card">
-          <div class="material-player">Black</div>
-          <div class="material-score" id="materialBlack">0</div>
-          <div class="material-capture" id="materialBlackCapture">—</div>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:14px; align-items:center;">
-        <button id="firstBtn" class="secondary">⏮ First</button>
-        <button id="prevBtn" class="secondary">◀ Prev</button>
-        <button id="nextBtn">Next ▶</button>
-        <button id="lastBtn">Last ⏭</button>
-        <button id="flipBtn" class="secondary">Flip</button>
-        <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
-        <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
-        <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
-      </div>
-      <div id="navStatus" class="status"></div>
-
-      <h2 style="margin-top:22px;">Engine explanation</h2>
-      <div id="explanationBox" class="explanation-panel">
-        <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
-        <div id="explanationActions" class="explanation-actions" hidden>
-          <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear shown line</button>
-        </div>
-        <div id="explanationCards" class="explanation-cards"></div>
-        <div id="explanationDetails" class="explanation-details"></div>
+        <aside class="engine-expl">
+          <h2>Engine explanation</h2>
+          <div id="explanationBox" class="explanation-panel">
+            <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
+            <div id="explanationActions" class="explanation-actions" hidden>
+              <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear shown line</button>
+            </div>
+            <div id="explanationCards" class="explanation-cards"></div>
+            <div id="explanationDetails" class="explanation-details"></div>
+          </div>
+        </aside>
       </div>
     </div>
 
