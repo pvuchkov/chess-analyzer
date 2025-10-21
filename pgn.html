@@ -4449,9 +4449,18 @@
           const opponent = mover === 'w' ? 'b' : 'w';
           const beforeCounts = countPiecesOnBoard(before.board());
           const afterCounts = countPiecesOnBoard(after.board());
-          const beforeDiff = sumMaterial(beforeCounts[mover]) - sumMaterial(beforeCounts[opponent]);
-          const afterDiff = sumMaterial(afterCounts[mover]) - sumMaterial(afterCounts[opponent]);
-          return afterDiff - beforeDiff;
+          const beforeMoverMaterial = sumMaterial(beforeCounts[mover]);
+          const afterMoverMaterial = sumMaterial(afterCounts[mover]);
+          const beforeDiff = beforeMoverMaterial - sumMaterial(beforeCounts[opponent]);
+          const afterDiff = afterMoverMaterial - sumMaterial(afterCounts[opponent]);
+          return {
+            before: beforeDiff,
+            after: afterDiff,
+            delta: afterDiff - beforeDiff,
+            beforeUs: beforeMoverMaterial,
+            afterUs: afterMoverMaterial,
+            deltaUs: afterMoverMaterial - beforeMoverMaterial
+          };
         } catch (err) {
           console.warn('Failed to compute material delta', err);
           return null;
@@ -4472,7 +4481,8 @@
           const mover = moveEntry.color === 'b' ? 'b' : 'w';
           const opponent = mover === 'w' ? 'b' : 'w';
           const beforeCounts = countPiecesOnBoard(game.board());
-          const beforeDiff = sumMaterial(beforeCounts[mover]) - sumMaterial(beforeCounts[opponent]);
+          const beforeMoverMaterial = sumMaterial(beforeCounts[mover]);
+          const beforeDiff = beforeMoverMaterial - sumMaterial(beforeCounts[opponent]);
           const executed = game.move({
             from: moveEntry.from,
             to: moveEntry.to,
@@ -4505,8 +4515,16 @@
           }
           if (!replyApplied) return null;
           const afterCounts = countPiecesOnBoard(game.board());
-          const afterDiff = sumMaterial(afterCounts[mover]) - sumMaterial(afterCounts[opponent]);
-          return afterDiff - beforeDiff;
+          const afterMoverMaterial = sumMaterial(afterCounts[mover]);
+          const afterDiff = afterMoverMaterial - sumMaterial(afterCounts[opponent]);
+          return {
+            before: beforeDiff,
+            after: afterDiff,
+            delta: afterDiff - beforeDiff,
+            beforeUs: beforeMoverMaterial,
+            afterUs: afterMoverMaterial,
+            deltaUs: afterMoverMaterial - beforeMoverMaterial
+          };
         } catch (err) {
           console.warn('Failed to compute material delta after reply', err);
           return null;
@@ -5815,29 +5833,6 @@
 
         const baseline = classification;
 
-        let legalMoveList = Array.isArray(legalMoves) ? legalMoves : [];
-        if (!Array.isArray(legalMoves) && moveEntry && moveEntry.preFen) {
-          try {
-            const legalGame = new Chess(moveEntry.preFen);
-            legalMoveList = legalGame.moves({ verbose: true });
-          } catch (err) {
-            legalMoveList = [];
-          }
-        }
-
-        const legalMoveCount = legalMoveList.length;
-        const forcedMove = legalMoveCount === 1;
-        const previousMove = previousMoveEntry || null;
-        const trivialRecapture = Boolean(
-          previousMove
-          && previousMove.flags
-          && previousMove.flags.includes('c')
-          && moveEntry
-          && moveEntry.flags
-          && moveEntry.flags.includes('c')
-          && previousMove.to === moveEntry.to
-        );
-
         const entryData = [];
         const actualMoveIsSac = actualMoveSacIndicator != null
           ? Boolean(actualMoveSacIndicator)
@@ -5896,26 +5891,6 @@
           });
         }
 
-        let alternativeBestMoverEp = null;
-        entryData.forEach((item) => {
-          if (!item.entry) return;
-          if (actualId && item.entry.uci === actualId) return;
-          if (!Number.isFinite(item.epMover)) return;
-          if (alternativeBestMoverEp == null || item.epMover > alternativeBestMoverEp) {
-            alternativeBestMoverEp = item.epMover;
-          }
-        });
-
-        const evaluatedUcis = new Set();
-        entryData.forEach((item) => {
-          if (item.entry && item.entry.uci) {
-            evaluatedUcis.add(item.entry.uci);
-          }
-        });
-
-        const haveAllMovesEvaluated = legalMoveCount > 0
-          && legalMoveList.every((mv) => evaluatedUcis.has(`${mv.from}${mv.to}${mv.promotion || ''}`));
-
         const moverWinBefore = beforeMoverEp;
         const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
         const entryEpByUci = new Map();
@@ -5930,93 +5905,37 @@
             }
           }
         });
-        const entryOverlayByMove = new Map();
-        entryEpByUci.forEach((ep, uci) => {
-          entryOverlayByMove.set(uci, { ep: Number.isFinite(ep) ? ep : null });
-        });
-
-        const legalMoveEvaluations = [];
-        legalMoveList.forEach((mv) => {
-          const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
-          const ep = entryEpByUci.has(uci) ? entryEpByUci.get(uci) : null;
-          legalMoveEvaluations.push({ uci, ep: Number.isFinite(ep) ? ep : null });
-        });
-
-        let onlyMatingMove = false;
-        if (
-          actualId
-          && actualMateForMover
-          && bestMateForMover
-          && haveAllMovesEvaluated
-          && Array.isArray(legalMoveList)
-          && legalMoveList.length > 0
-        ) {
-          let otherMateForMover = false;
-          for (const mv of legalMoveList) {
-            const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
-            if (uci === actualId) continue;
-            const mateVal = mateValueByMove.has(uci) ? mateValueByMove.get(uci) : null;
-            if (mateVal == null) continue;
-            const mateForMover = (moverIsWhite && mateVal > 0) || (!moverIsWhite && mateVal < 0);
-            if (mateForMover) {
-              otherMateForMover = true;
-              break;
-            }
+        let alternativeBest = null;
+        entryData.forEach((item) => {
+          if (!item.entry) return;
+          if (actualId && item.entry.uci === actualId) return;
+          if (!Number.isFinite(item.epMover)) return;
+          if (!alternativeBest || item.epMover > alternativeBest.ep) {
+            alternativeBest = { ep: item.epMover, entry: item.entry };
           }
-          onlyMatingMove = !otherMateForMover;
-        }
+        });
 
-        const allowsGreatOverlay = suggestionTag === 'best' || suggestionTag === 'excellent';
-        let greatOverlay = null;
-        if (allowsGreatOverlay && !forcedMove && !trivialRecapture && actualId) {
-          const overlaySource = summaryByMove instanceof Map ? summaryByMove : entryOverlayByMove;
-          greatOverlay = computeGreatOverlay({
-            fen: baselineFen,
-            EP1: bestMoverEp,
-            epBefore: beforeMoverEp,
-            playedUci: actualId,
-            byMove: overlaySource,
-            legalMovesEp: legalMoveEvaluations,
-            epPlayedOverride: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
-            onlyMoveSampleComplete: haveAllMovesEvaluated && !forcedMove,
-            moverRating
-          });
-        }
+        let altMaxOverTopK = null;
+        entryData.forEach((item) => {
+          if (!item.entry) return;
+          if (bestEntry && item.entry.uci === bestEntry.uci) return;
+          if (!Number.isFinite(item.epMover)) return;
+          if (altMaxOverTopK == null || item.epMover > altMaxOverTopK) {
+            altMaxOverTopK = item.epMover;
+          }
+        });
 
-        const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
-        const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
-        const nearBestSac = loss == null ? sameAsBest : loss <= (PV_KEEP_MARGIN + PV_EPSILON);
-        let nonSacBestMoverEp = Number.isFinite(nonSacBestOverride) ? nonSacBestOverride : null;
-        if (nonSacBestMoverEp == null) {
-          entryData.forEach((item) => {
-            if (item.isSac) return;
-            if (!Number.isFinite(item.epMover)) return;
-            if (nonSacBestMoverEp == null || item.epMover > nonSacBestMoverEp) {
-              nonSacBestMoverEp = item.epMover;
-            }
-          });
-        }
-        const nonSacAlreadyWinning = nonSacBestMoverEp != null && nonSacBestMoverEp >= notAlreadyWinningThreshold;
-        const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
+        const EP_secondBest = alternativeBest ? alternativeBest.ep : null;
+        const EP_altMaxOverTopK = altMaxOverTopK;
 
-        const mateDistanceLimit = 5;
-        const mateDistancesKnown = actualMateDistance != null && bestMateDistance != null;
-        const mateNotSlower = mateDistancesKnown && actualMateDistance <= bestMateDistance;
-        const mateDistancesReasonable = mateDistancesKnown && actualMateDistance <= mateDistanceLimit;
-        const mateSacBrilliant = (baseline === 'best' || baseline === 'excellent')
-          && actualMoveIsSac
-          && nearBestSac
-          && actualMateForMover
-          && bestMateForMover
-          && mateDistancesReasonable
-          && (mateNotSlower || onlyMatingMove);
-
-        const brilliantCandidate = ((baseline === 'best' || baseline === 'excellent')
-          && actualMoveIsSac
-          && nearBestSac
-          && keepsPlayable
-          && !nonSacAlreadyWinning)
-          || mateSacBrilliant;
+        const materialAfterMoveInfo = computeMaterialDeltaAfterMove(moveEntry);
+        const materialDeltaAfterMoveNet = materialAfterMoveInfo ? materialAfterMoveInfo.delta : null;
+        const materialDeltaAfterMoveUs = materialAfterMoveInfo ? materialAfterMoveInfo.deltaUs : null;
+        const materialReplyInfo = computeMaterialDeltaAfterReply(moveEntry, actualEntry);
+        const materialBefore = materialReplyInfo ? materialReplyInfo.beforeUs : null;
+        const materialAfterReply = materialReplyInfo ? materialReplyInfo.afterUs : null;
+        const materialDeltaAfterReply = materialReplyInfo ? materialReplyInfo.deltaUs : null;
+        const materialDeltaAfterReplyNet = materialReplyInfo ? materialReplyInfo.delta : null;
 
         const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
         const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
@@ -6031,20 +5950,75 @@
           && moverWinAfter <= missDropThreshold
           && (bestMoverEp - moverWinAfter) >= missGapThreshold;
 
+        const epNearBest = Number.isFinite(bestMoverEp)
+          && Number.isFinite(actualMoverEp)
+          && Math.abs(bestMoverEp - actualMoverEp) <= (0.02 + PV_EPSILON);
+        const cpNearBest = !epNearBest
+          && Number.isFinite(bestCp)
+          && Number.isFinite(actualCp)
+          && Math.abs(bestCp - actualCp) <= 20;
+        const nearBest = epNearBest || cpNearBest;
+
+        const sacrificeValueRaw = Number.isFinite(materialDeltaAfterReply) && materialDeltaAfterReply < 0
+          ? -materialDeltaAfterReply
+          : (actualMateForMover && Number.isFinite(materialDeltaAfterMoveUs) && materialDeltaAfterMoveUs < 0
+            ? -materialDeltaAfterMoveUs
+            : null);
+        const sacrificeValue = Number.isFinite(sacrificeValueRaw) && sacrificeValueRaw > 0
+          ? sacrificeValueRaw
+          : null;
+        const isSacrifice = actualMoveIsSac
+          && ((Number.isFinite(sacrificeValue) && sacrificeValue >= (3 - PV_EPSILON)) || actualMateForMover)
+          && (materialReplyInfo != null || actualMateForMover);
+
+        const mateSlack = 2;
+        let mateDistanceTest = false;
+        if (bestMateForMover && actualMateForMover && Number.isFinite(bestMateDistance)) {
+          let allLoseOrSlow = true;
+          entryData.forEach((item) => {
+            if (!item.entry || (actualId && item.entry.uci === actualId)) return;
+            const mateVal = mateValueByMove.has(item.entry.uci) ? mateValueByMove.get(item.entry.uci) : null;
+            if (mateVal == null) {
+              allLoseOrSlow = false;
+              return;
+            }
+            const mateForMover = (moverIsWhite && mateVal > 0) || (!moverIsWhite && mateVal < 0);
+            if (!mateForMover) {
+              return;
+            }
+            const altDistance = Math.abs(mateVal);
+            const reference = Number.isFinite(actualMateDistance) ? actualMateDistance : bestMateDistance;
+            if (!Number.isFinite(reference) || altDistance < (reference + mateSlack)) {
+              allLoseOrSlow = false;
+            }
+          });
+          mateDistanceTest = allLoseOrSlow;
+        }
+
+        const isOnlyWinningMove = (Number.isFinite(EP_secondBest) && EP_secondBest < 0.90) || mateDistanceTest;
+
+        const brilliantCandidate = baseline === 'best'
+          && isSacrifice
+          && nearBest
+          && isOnlyWinningMove;
+
+        const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(EP_secondBest)
+          ? bestMoverEp - EP_secondBest
+          : null;
+        const greatCandidate = nearBest
+          && Number.isFinite(epGapToSecond)
+          && epGapToSecond >= (0.20 - PV_EPSILON);
+
         let overlay = null;
         if (brilliantCandidate) {
           overlay = 'brilliant';
-        } else if (greatOverlay === 'great') {
+        } else if (greatCandidate) {
           overlay = 'great';
         } else if (missCandidate && baseline !== 'blunder') {
           overlay = 'miss';
         }
 
         const overlayCandidate = overlay;
-
-        if (overlay === 'great' && !(baseline === 'best' || baseline === 'excellent')) {
-          overlay = null;
-        }
 
         const toMoverCp = (cp) => {
           if (!Number.isFinite(cp)) return null;
@@ -6102,8 +6076,6 @@
         }
         const postEval = normalizeEvalForMover(actualEntry ? actualEntry.eval : null, moverIsWhite)
           || (Number.isFinite(postEvalCp) ? { cp: postEvalCp } : null);
-        const materialDeltaAfterMove = computeMaterialDeltaAfterMove(moveEntry);
-        const materialDeltaAfterReply = computeMaterialDeltaAfterReply(moveEntry, actualEntry);
 
         let promotion = null;
         try {
@@ -6113,8 +6085,8 @@
             postEvalCp,
             bestLineEvalCp,
             secondBestEvalCp,
-            materialDeltaAfterMove,
-            materialDeltaAfterReply,
+            materialDeltaAfterMove: materialDeltaAfterMoveNet,
+            materialDeltaAfterReply: materialDeltaAfterReplyNet,
             preEval: { best: preBestEval, secondBest: preSecondBestEval },
             postEval,
             moveSan: actualEntry && (actualEntry.san || actualEntry.uci)
@@ -6139,15 +6111,52 @@
 
         if (typeof console !== 'undefined' && console && typeof console.table === 'function') {
           try {
+            const formatEvalForLog = (val) => {
+              if (!val) return null;
+              if (typeof val.mate === 'number' && Number.isFinite(val.mate)) {
+                const prefix = val.mate >= 0 ? '+' : '-';
+                return `${prefix}M${Math.abs(val.mate)}`;
+              }
+              if (typeof val.cp === 'number' && Number.isFinite(val.cp)) {
+                const pawns = val.cp / 100;
+                const formatted = pawns === 0 ? '0.00' : (pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2));
+                return `${formatted}`;
+              }
+              return null;
+            };
+            const sfBeforeEval = preBestEval || (Number.isFinite(preEvalCp) ? { cp: preEvalCp } : null);
+            const sfBestEval = preBestEval || null;
+            const sfPlayedEval = postEval || null;
+            const sfSecondEval = preSecondBestEval || (Number.isFinite(secondBestEvalCp) ? { cp: secondBestEvalCp } : null);
             console.table({
               ply: moveEntry && Number.isFinite(moveEntry.ply) ? moveEntry.ply : null,
               move: actualEntry && (actualEntry.san || actualEntry.uci) ? (actualEntry.san || actualEntry.uci) : null,
               EP1_bestMoverEp: Number.isFinite(bestMoverEp) ? bestMoverEp.toFixed(3) : null,
               EP_played: Number.isFinite(actualMoverEp) ? actualMoverEp.toFixed(3) : null,
+              EP_secondBest: Number.isFinite(EP_secondBest) ? EP_secondBest.toFixed(3) : null,
+              EP_altMaxOverTopK: Number.isFinite(EP_altMaxOverTopK) ? EP_altMaxOverTopK.toFixed(3) : null,
               gap: (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp))
                 ? (bestMoverEp - actualMoverEp).toFixed(3)
                 : null,
               epBeforeMover: Number.isFinite(beforeMoverEp) ? beforeMoverEp.toFixed(3) : null,
+              sfBefore: formatEvalForLog(sfBeforeEval),
+              sfBest: formatEvalForLog(sfBestEval),
+              sfPlayed: formatEvalForLog(sfPlayedEval),
+              sfSecondBest: formatEvalForLog(sfSecondEval),
+              isMateBefore: Boolean(bestMateForMover),
+              mateDepthBefore: bestMateDistance != null ? bestMateDistance : null,
+              isMateAfter: Boolean(actualMateForMover),
+              mateDepthAfter: actualMateDistance != null ? actualMateDistance : null,
+              materialBefore,
+              materialAfterReply,
+              materialDeltaAfterReply,
+              materialDeltaAfterReplyNet,
+              sacrificeValue,
+              isSacrifice,
+              isOnlyWinningMove,
+              nearBest,
+              brilliantCandidate,
+              greatCandidate,
               suggestionTag,
               baseline,
               overlayCandidate,
