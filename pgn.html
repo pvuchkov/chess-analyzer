@@ -919,6 +919,85 @@
       color: var(--muted);
     }
 
+    .mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mode-toggle-label {
+      display: inline-flex;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 0;
+      outline: none;
+    }
+
+    .mode-toggle-label.active {
+      color: var(--accent);
+    }
+
+    .mode-toggle-label:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .mode-toggle-switch {
+      position: relative;
+      width: 46px;
+      height: 24px;
+      cursor: pointer;
+    }
+
+    .mode-toggle-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .mode-toggle-track {
+      position: relative;
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
+      transition: background 0.2s ease;
+    }
+
+    .mode-toggle-handle {
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--panel);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+      transition: transform 0.2s ease;
+    }
+
+    .mode-toggle-switch input:checked + .mode-toggle-track {
+      background: var(--accent);
+    }
+
+    .mode-toggle-switch input:checked + .mode-toggle-track .mode-toggle-handle {
+      transform: translateX(20px);
+    }
+
+    .mode-toggle-switch input:focus-visible + .mode-toggle-track {
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.55);
+    }
+
     .hint {
       font-size: 12px;
       color: var(--muted);
@@ -1090,13 +1169,40 @@
         <summary>
           <span class="collapsible-title">Engine suggestions</span>
           <span class="collapsible-meta">
-            <span id="suggestionModeLabel" class="suggestion-mode-label">Played move review</span>
+            <span id="suggestionModeLabel" class="suggestion-mode-label">Current move</span>
             <span>(eval ± rating change vs best)</span>
           </span>
         </summary>
         <div class="collapsible-body">
           <div class="row" style="margin:0; justify-content:flex-end;">
-            <button id="suggestionToggle" class="secondary">Show next move advice</button>
+            <div class="mode-toggle" role="group" aria-label="Suggestion mode">
+              <span
+                id="suggestionToggleOffLabel"
+                class="mode-toggle-label active"
+                role="button"
+                tabindex="0"
+                aria-pressed="true"
+              >Current move</span>
+              <label class="mode-toggle-switch">
+                <input
+                  type="checkbox"
+                  id="suggestionToggle"
+                  role="switch"
+                  aria-label="Toggle next move suggestions"
+                  aria-checked="false"
+                />
+                <span class="mode-toggle-track">
+                  <span class="mode-toggle-handle"></span>
+                </span>
+              </label>
+              <span
+                id="suggestionToggleOnLabel"
+                class="mode-toggle-label"
+                role="button"
+                tabindex="0"
+                aria-pressed="false"
+              >Next move</span>
+            </div>
           </div>
           <div class="pv-list" id="pvList"></div>
           <div id="engStatus" class="status"></div>
@@ -1285,14 +1391,12 @@
       };
       const suggestionModeOptions = {
         played: {
-          label: 'Played move review',
-          button: 'Show next move advice',
-          title: 'Switch to next-move advice'
+          label: 'Current move',
+          switchTitle: 'Switch to next move suggestions'
         },
         next: {
-          label: 'Next move advice',
-          button: 'Show move review',
-          title: 'Switch to played-move review'
+          label: 'Next move',
+          switchTitle: 'Switch to current move review'
         }
       };
       const SHOW_LINE_CARD_KEYS = new Set(['idea', 'problem', 'solution']);
@@ -1815,15 +1919,32 @@
 
       function updateSuggestionModeUI() {
         const label = byId('suggestionModeLabel');
-        const button = byId('suggestionToggle');
+        const toggle = byId('suggestionToggle');
+        const offLabel = byId('suggestionToggleOffLabel');
+        const onLabel = byId('suggestionToggleOnLabel');
         const config = suggestionModeOptions[state.suggestionMode] || suggestionModeOptions.played;
         if (label) {
           label.textContent = config.label;
         }
-        if (button) {
-          button.textContent = config.button;
-          button.title = config.title;
-          button.setAttribute('aria-pressed', state.suggestionMode === 'next' ? 'true' : 'false');
+        if (toggle) {
+          const isNext = state.suggestionMode === 'next';
+          toggle.checked = isNext;
+          toggle.setAttribute('aria-checked', isNext ? 'true' : 'false');
+          if (config.switchTitle) {
+            toggle.setAttribute('title', config.switchTitle);
+          } else {
+            toggle.removeAttribute('title');
+          }
+        }
+        if (offLabel) {
+          const isActive = state.suggestionMode === 'played';
+          offLabel.classList.toggle('active', isActive);
+          offLabel.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+        if (onLabel) {
+          const isActive = state.suggestionMode === 'next';
+          onLabel.classList.toggle('active', isActive);
+          onLabel.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         }
       }
 
@@ -1840,11 +1961,6 @@
         }
         clearLineOverlay();
         applyAnalysisForCurrentPly();
-      }
-
-      function toggleSuggestionMode() {
-        const nextMode = state.suggestionMode === 'next' ? 'played' : 'next';
-        setSuggestionMode(nextMode);
       }
 
       function initSuggestionMode() {
@@ -4124,22 +4240,29 @@
           summary += '.';
         }
 
-        const details = [];
+        const bullets = [];
         if (gain != null && gain > 0.75 && actualEntry && actualEntry.uci !== bestEntry.uci) {
           const approx = formatWinDeltaDisplay(gain);
           if (approx) {
-            details.push(`${moveLabel} improves the position by about ${approx}.`);
+            bullets.push(`${moveLabel} improves the position by about ${approx}.`);
           }
         } else if (actualEntry && actualEntry.uci === bestEntry.uci) {
-          details.push('The game move already follows this recommendation.');
+          bullets.push('The game move already follows this recommendation.');
         }
 
-        if (Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
-          const snippet = bestEntry.pvSan.slice(0, 6).join(' ');
-          details.push(`Line: ${snippet}`);
+        const snippet = formatLineSnippet(bestEntry.pvSan, 6);
+        if (snippet) {
+          bullets.push(`Line: ${snippet}`);
         }
 
-        return { headline: summary, details };
+        const cards = [{
+          key: 'solution',
+          title: 'Suggested line',
+          headline: `Start with ${moveLabel}`,
+          bullets
+        }];
+
+        return { headline: summary, details: [], cards };
       }
 
       function classifyPlayedMove({
@@ -5713,8 +5836,30 @@
         });
         const suggestionToggle = byId('suggestionToggle');
         if (suggestionToggle) {
-          suggestionToggle.addEventListener('click', () => {
-            toggleSuggestionMode();
+          suggestionToggle.addEventListener('change', () => {
+            setSuggestionMode(suggestionToggle.checked ? 'next' : 'played');
+          });
+        }
+        const suggestionToggleOffLabel = byId('suggestionToggleOffLabel');
+        if (suggestionToggleOffLabel) {
+          const activatePlayed = () => setSuggestionMode('played');
+          suggestionToggleOffLabel.addEventListener('click', activatePlayed);
+          suggestionToggleOffLabel.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              activatePlayed();
+            }
+          });
+        }
+        const suggestionToggleOnLabel = byId('suggestionToggleOnLabel');
+        if (suggestionToggleOnLabel) {
+          const activateNext = () => setSuggestionMode('next');
+          suggestionToggleOnLabel.addEventListener('click', activateNext);
+          suggestionToggleOnLabel.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              activateNext();
+            }
           });
         }
         const cardsContainer = byId('explanationCards');
