@@ -320,6 +320,44 @@
       list-style: disc;
     }
 
+    .pv-continuation-label {
+      font-weight: 600;
+      color: var(--muted);
+      margin-right: 6px;
+    }
+
+    .pv-move-token {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      margin: 2px 6px 2px 0;
+      background: rgba(148, 163, 184, 0.16);
+      background-image: none;
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.2;
+      cursor: pointer;
+      pointer-events: auto;
+      box-shadow: none;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.12s ease;
+    }
+
+    .pv-move-token:hover,
+    .pv-move-token:focus-visible,
+    .pv-move-token.active {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: var(--accent);
+      outline: none;
+    }
+
+    .pv-move-token:focus-visible {
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+    }
+
     .explanation-actions {
       display: flex;
       justify-content: flex-end;
@@ -366,7 +404,7 @@
       fill: var(--arrow-label-text);
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 14px;
       letter-spacing: -0.01em;
       dominant-baseline: middle;
     }
@@ -837,6 +875,13 @@
       background: rgba(15, 23, 42, 0.75);
       padding: 1px 4px;
       border-radius: 4px;
+      border: 1px solid transparent;
+    }
+
+    [data-theme="light"] .move-row-eval {
+      color: var(--panel);
+      background: rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(0, 0, 0, 0.12);
     }
 
     .classification-icon {
@@ -1271,6 +1316,7 @@
         badgeRaf: null,
         headers: {},
         lineOverlay: [],
+        ghostPreview: null,
         nodeMap: new Map(),
         rootNodeId: null,
         currentNodeId: null,
@@ -1402,6 +1448,7 @@
         const nextPly = Math.min(state.ply, maxPly);
         goToPly(nextPly);
         renderMoves();
+        setSuggestionMode('played', { persist: false });
       }
       const pieceOrder = ['q', 'r', 'b', 'n', 'p'];
       const pieceLabels = { p: 'P', n: 'N', b: 'B', r: 'R', q: 'Q' };
@@ -1969,16 +2016,19 @@
         }
       }
 
-      function setSuggestionMode(mode) {
+      function setSuggestionMode(mode, options = {}) {
         const nextMode = suggestionModeOptions[mode] ? mode : 'played';
         state.suggestionMode = nextMode;
         updateSuggestionModeUI();
-        try {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('suggestionMode', nextMode);
+        const persist = options.persist !== false;
+        if (persist) {
+          try {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('suggestionMode', nextMode);
+            }
+          } catch (err) {
+            // ignore storage errors
           }
-        } catch (err) {
-          // ignore storage errors
         }
         clearLineOverlay();
         applyAnalysisForCurrentPly();
@@ -2059,8 +2109,15 @@
       }
 
       function setExploreMode(enabled) {
-        state.exploreMode = Boolean(enabled);
+        const nextMode = Boolean(enabled);
+        const prevMode = state.exploreMode;
+        state.exploreMode = nextMode;
         updateExploreControls();
+        if (nextMode && !prevMode) {
+          setSuggestionMode('next', { persist: false });
+        } else if (!nextMode && prevMode) {
+          setSuggestionMode('played', { persist: false });
+        }
       }
 
       function toggleExploreMode() {
@@ -2590,12 +2647,23 @@
         });
       }
 
+      function getAccentColor() {
+        try {
+          const computed = getComputedStyle(document.documentElement);
+          const value = computed.getPropertyValue('--accent');
+          return value && value.trim() ? value.trim() : '#38bdf8';
+        } catch (err) {
+          return '#38bdf8';
+        }
+      }
+
       function drawArrowOverlay(list) {
         const layers = ensureArrowLayer();
         if (!layers) return;
         const { overlayLayer } = layers;
         clearChildren(overlayLayer);
-        if (!Array.isArray(list) || !list.length) return;
+        const segments = Array.isArray(list) ? list : [];
+        if (!segments.length && !hasGhostPreview()) return;
 
         const boardEl = byId('board');
         if (!boardEl) return;
@@ -2604,7 +2672,7 @@
         const squareSize = boardRect.width / 8;
         if (!Number.isFinite(squareSize) || squareSize <= 0) return;
 
-        list.forEach((segment) => {
+        segments.forEach((segment) => {
           if (!segment || typeof segment.uci !== 'string' || segment.uci.length < 4) return;
           const fromSquare = segment.uci.slice(0, 2);
           const toSquare = segment.uci.slice(2, 4);
@@ -2616,12 +2684,15 @@
           const len = Math.hypot(dx, dy);
           if (!len) return;
 
+          const unitX = dx / len;
+          const unitY = dy / len;
+
           const shorten = Math.min(12, len * 0.15);
           const startOffset = Math.min(12, len * 0.1);
-          const sx = from.x + (dx / len) * startOffset;
-          const sy = from.y + (dy / len) * startOffset;
-          const ex = to.x - (dx / len) * shorten;
-          const ey = to.y - (dy / len) * shorten;
+          const sx = from.x + unitX * startOffset;
+          const sy = from.y + unitY * startOffset;
+          const ex = to.x - unitX * shorten;
+          const ey = to.y - unitY * shorten;
 
           const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
@@ -2645,12 +2716,20 @@
           group.appendChild(line);
 
           if (segment.showOrder && Number.isFinite(segment.order)) {
-            const ratioRaw = segment.labelPosition != null ? segment.labelPosition : 0.35;
-            const ratio = Math.min(0.85, Math.max(0.15, ratioRaw));
-            const lx = sx + (ex - sx) * ratio;
-            const ly = sy + (ey - sy) * ratio;
+            let lx = null;
+            let ly = null;
+            if (segment.labelPosition != null) {
+              const ratioRaw = segment.labelPosition;
+              const ratio = Math.min(0.85, Math.max(0.15, ratioRaw));
+              lx = sx + (ex - sx) * ratio;
+              ly = sy + (ey - sy) * ratio;
+            } else {
+              const offset = Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8;
+              lx = from.x + unitX * offset;
+              ly = from.y + unitY * offset;
+            }
             const isDoubleDigit = Math.abs(segment.order) >= 10;
-            const radius = segment.labelRadius != null ? segment.labelRadius : (isDoubleDigit ? 13 : 12);
+            const radius = segment.labelRadius != null ? segment.labelRadius : (isDoubleDigit ? 16 : 14);
 
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.classList.add('arrow-label-circle');
@@ -2665,7 +2744,7 @@
             text.setAttribute('y', ly);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dominant-baseline', 'middle');
-            const fontSize = segment.labelFontSize != null ? segment.labelFontSize : (isDoubleDigit ? 11 : 12);
+            const fontSize = segment.labelFontSize != null ? segment.labelFontSize : (isDoubleDigit ? 13 : 14);
             text.setAttribute('font-size', fontSize);
             text.textContent = String(segment.order);
             group.appendChild(text);
@@ -2673,6 +2752,54 @@
 
           overlayLayer.appendChild(group);
         });
+
+        if (hasGhostPreview()) {
+          const preview = state.ghostPreview;
+          const from = getSquareCenterCoords(preview.from, squareSize);
+          const to = getSquareCenterCoords(preview.to, squareSize);
+          if (from && to) {
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const unitX = dx / len;
+            const unitY = dy / len;
+            const shorten = Math.min(12, len * 0.15);
+            const startOffset = Math.min(12, len * 0.1);
+            const sx = from.x + unitX * startOffset;
+            const sy = from.y + unitY * startOffset;
+            const ex = to.x - unitX * shorten;
+            const ey = to.y - unitY * shorten;
+            const accent = getAccentColor();
+
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+            const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            highlight.setAttribute('x', to.x - squareSize / 2);
+            highlight.setAttribute('y', to.y - squareSize / 2);
+            highlight.setAttribute('width', squareSize);
+            highlight.setAttribute('height', squareSize);
+            const corner = Math.min(12, squareSize * 0.25);
+            highlight.setAttribute('rx', corner);
+            highlight.setAttribute('ry', corner);
+            highlight.setAttribute('fill', accent);
+            highlight.setAttribute('opacity', 0.28);
+            group.appendChild(highlight);
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', sx);
+            line.setAttribute('y1', sy);
+            line.setAttribute('x2', ex);
+            line.setAttribute('y2', ey);
+            line.setAttribute('stroke', accent);
+            line.setAttribute('stroke-width', 5);
+            line.setAttribute('stroke-linecap', 'round');
+            line.setAttribute('marker-end', 'url(#mOverlay)');
+            line.setAttribute('opacity', 0.45);
+            group.appendChild(line);
+
+            overlayLayer.appendChild(group);
+          }
+        }
       }
 
       function redrawAllArrows(baseList = null) {
@@ -2774,10 +2901,14 @@
         return Array.isArray(state.lineOverlay) && state.lineOverlay.length > 0;
       }
 
+      function hasGhostPreview() {
+        return Boolean(state.ghostPreview && state.ghostPreview.from && state.ghostPreview.to);
+      }
+
       function updateLineOverlayButton() {
         const actions = byId('explanationActions');
         const button = byId('clearLineOverlayBtn');
-        const active = hasLineOverlay();
+        const active = hasLineOverlay() || hasGhostPreview();
         if (actions) {
           actions.hidden = !active;
         }
@@ -2820,6 +2951,87 @@
         }
       }
 
+      function updateGhostTokenState() {
+        const activeSan = state.ghostPreview && state.ghostPreview.san ? state.ghostPreview.san : null;
+        const tokens = document.querySelectorAll('.pv-move-token');
+        tokens.forEach((token) => {
+          if (!token || !token.dataset) return;
+          const san = token.dataset.san || '';
+          token.classList.toggle('active', Boolean(activeSan) && san === activeSan);
+        });
+      }
+
+      function clearGhostPreview() {
+        if (!state.ghostPreview) return;
+        state.ghostPreview = null;
+        drawArrowOverlay(state.lineOverlay);
+        updateGhostTokenState();
+        updateLineOverlayButton();
+      }
+
+      function showGhostPreview(preview) {
+        if (!preview || !preview.from || !preview.to) return;
+        state.ghostPreview = {
+          from: preview.from,
+          to: preview.to,
+          san: preview.san || null
+        };
+        drawArrowOverlay(state.lineOverlay);
+        updateGhostTokenState();
+        updateLineOverlayButton();
+      }
+
+      function previewContinuationSan(san) {
+        if (!san) return;
+        if (state.ghostPreview && state.ghostPreview.san === san) {
+          clearGhostPreview();
+          return;
+        }
+        const baseFen = state.game ? state.game.fen() : effectiveInitialFen();
+        let game;
+        try {
+          game = new Chess(baseFen);
+        } catch (err) {
+          return;
+        }
+        let move = null;
+        try {
+          move = game.move(san);
+        } catch (err) {
+          move = null;
+        }
+        if (!move || !move.from || !move.to) return;
+        showGhostPreview({
+          from: move.from,
+          to: move.to,
+          san: move.san || san
+        });
+      }
+
+      function handleContinuationTokenInteraction(event) {
+        const token = event.target.closest('.pv-move-token');
+        if (!token) return false;
+        const san = token.dataset ? token.dataset.san : null;
+        if (!san) return false;
+        event.preventDefault();
+        previewContinuationSan(san);
+        token.focus();
+        return true;
+      }
+
+      function handleDocumentClickForGhost(event) {
+        if (!hasGhostPreview()) return;
+        const token = event.target.closest('.pv-move-token');
+        if (token) return;
+        clearGhostPreview();
+      }
+
+      function handleDocumentKeydown(event) {
+        if (event.key === 'Escape' && hasGhostPreview()) {
+          clearGhostPreview();
+        }
+      }
+
       function setLineOverlay(segments, options = {}) {
         const analysis = options && options.analysis ? options.analysis : null;
         if (!Array.isArray(segments) || !segments.length) {
@@ -2837,6 +3049,7 @@
               order: Number.isFinite(seg.order) ? seg.order : index + 1,
               showOrder: Boolean(seg.showOrder),
               labelPosition: typeof seg.labelPosition === 'number' ? seg.labelPosition : null,
+              labelOffset: Number.isFinite(seg.labelOffset) ? seg.labelOffset : null,
               labelRadius: Number.isFinite(seg.labelRadius) ? seg.labelRadius : null,
               labelFontSize: Number.isFinite(seg.labelFontSize) ? seg.labelFontSize : null
             }));
@@ -2847,15 +3060,21 @@
       }
 
       function clearLineOverlay(options = {}) {
-        if (!hasLineOverlay()) {
+        const hadOverlay = hasLineOverlay();
+        const hadGhost = hasGhostPreview();
+        if (hadOverlay) {
+          setLineOverlay([], options);
+        } else {
           updateLineOverlayButton();
           refreshShowLineButtons(options && options.analysis ? options.analysis : null);
-          return;
         }
-        setLineOverlay([], options);
+        if (hadGhost) {
+          clearGhostPreview();
+        }
       }
 
       function handleExplanationCardClick(event) {
+        if (handleContinuationTokenInteraction(event)) return;
         const btn = event.target.closest('button[data-action="show-line"]');
         if (!btn || btn.disabled) return;
         const kind = btn.dataset.kind;
@@ -3787,11 +4006,54 @@
         return Math.max(0, Math.min(100, epMover * 100));
       }
 
-      function formatLineSnippet(sanMoves, limit = 6) {
+      function buildContinuationEntry(label, sanMoves, limit = 6) {
         if (!Array.isArray(sanMoves) || !sanMoves.length) return null;
-        const clipped = sanMoves.slice(0, limit).filter(Boolean);
-        if (!clipped.length) return null;
-        return clipped.join(' ');
+        const moves = sanMoves.filter(Boolean).slice(0, limit);
+        if (!moves.length) return null;
+        return {
+          type: 'continuation',
+          label: label || null,
+          moves
+        };
+      }
+
+      function isContinuationEntry(value) {
+        return Boolean(value && typeof value === 'object' && value.type === 'continuation' && Array.isArray(value.moves));
+      }
+
+      function createMoveTokenButton(san) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pv-move-token';
+        button.dataset.san = san;
+        button.textContent = san;
+        button.setAttribute('aria-label', `Preview move ${san}`);
+        return button;
+      }
+
+      function createContinuationListItem(entry) {
+        if (!isContinuationEntry(entry)) return null;
+        const item = document.createElement('li');
+        if (entry.label) {
+          const label = document.createElement('span');
+          label.className = 'pv-continuation-label';
+          label.textContent = `${entry.label}:`;
+          item.appendChild(label);
+          if (entry.moves.length) {
+            item.appendChild(document.createTextNode(' '));
+          }
+        }
+        entry.moves.forEach((san, index) => {
+          if (!san) return;
+          const value = typeof san === 'string' ? san.trim() : String(san);
+          if (!value) return;
+          const token = createMoveTokenButton(value);
+          item.appendChild(token);
+          if (index < entry.moves.length - 1) {
+            item.appendChild(document.createTextNode(' '));
+          }
+        });
+        return item;
       }
 
       function buildMoveExplanation({
@@ -3938,8 +4200,10 @@
         }
 
         if (!planScenarios && bestEntry && Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
-          const snippet = bestEntry.pvSan.slice(0, 6).join(' ');
-          details.push(`Line: ${snippet}`);
+          const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6);
+          if (continuation) {
+            details.push(continuation);
+          }
         }
 
         const cards = [];
@@ -4006,9 +4270,9 @@
               bullets.push(`If ${opponentColorName.toLowerCase()} ignores it, you stay near ${ignore} instead of ${after}.`);
             }
           }
-          const snippet = formatLineSnippet(plan.snippet);
-          if (snippet) {
-            bullets.push(`Line: ${snippet}`);
+          const continuation = buildContinuationEntry('Line', plan.snippet, 6);
+          if (continuation) {
+            bullets.push(continuation);
           }
           return bullets;
         }
@@ -4041,9 +4305,9 @@
               bullets.push(`If ${opponentColorName.toLowerCase()} plays another move, you keep about ${ignore}.`);
             }
           }
-          const snippet = planActual.replySnippet ? formatLineSnippet(planActual.replySnippet) : null;
-          if (snippet) {
-            bullets.push(`Continuation: ${snippet}`);
+          const replyContinuation = buildContinuationEntry('Continuation', planActual.replySnippet, 6);
+          if (replyContinuation) {
+            bullets.push(replyContinuation);
           }
           cards.push({
             key: 'problem',
@@ -4076,9 +4340,9 @@
           } else if (planBest.replySan && planActual && planActual.replySan && planBest.replySan !== planActual.replySan) {
             bullets.push(`After ${planBest.moveSan || planBest.moveUci}, the best reply becomes ${planBest.replySan}.`);
           }
-          const snippet = formatLineSnippet(planBest.snippet);
-          if (snippet) {
-            bullets.push(`Line: ${snippet}`);
+          const continuation = buildContinuationEntry('Line', planBest.snippet, 6);
+          if (continuation) {
+            bullets.push(continuation);
           }
           cards.push({
             key: 'solution',
@@ -4309,9 +4573,9 @@
           bullets.push('The game move already follows this recommendation.');
         }
 
-        const snippet = formatLineSnippet(bestEntry.pvSan, 6);
-        if (snippet) {
-          bullets.push(`Line: ${snippet}`);
+        const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6);
+        if (continuation) {
+          bullets.push(continuation);
         }
 
         const cards = [{
@@ -5543,6 +5807,7 @@
           }
           if (cardsEl) cardsEl.innerHTML = '';
           detailsEl.innerHTML = '';
+          updateGhostTokenState();
           return;
         }
 
@@ -5584,6 +5849,11 @@
               listEl.className = 'explanation-card-list';
               card.bullets.forEach((text) => {
                 if (!text) return;
+                if (isContinuationEntry(text)) {
+                  const item = createContinuationListItem(text);
+                  if (item) listEl.appendChild(item);
+                  return;
+                }
                 const li = document.createElement('li');
                 li.textContent = text;
                 listEl.appendChild(li);
@@ -5601,6 +5871,11 @@
           const list = document.createElement('ul');
           payload.details.forEach((line) => {
             if (!line) return;
+            if (isContinuationEntry(line)) {
+              const item = createContinuationListItem(line);
+              if (item) list.appendChild(item);
+              return;
+            }
             const item = document.createElement('li');
             item.textContent = line;
             list.appendChild(item);
@@ -5609,6 +5884,7 @@
             detailsEl.appendChild(list);
           }
         }
+        updateGhostTokenState();
       }
 
       function applyAnalysisForCurrentPly() {
@@ -5925,12 +6201,20 @@
         if (cardsContainer) {
           cardsContainer.addEventListener('click', handleExplanationCardClick);
         }
+        const explanationDetails = byId('explanationDetails');
+        if (explanationDetails) {
+          explanationDetails.addEventListener('click', (event) => {
+            handleContinuationTokenInteraction(event);
+          });
+        }
         const clearOverlayBtn = byId('clearLineOverlayBtn');
         if (clearOverlayBtn) {
           clearOverlayBtn.addEventListener('click', () => clearLineOverlay());
         }
         updateLineOverlayButton();
         updateExploreControls();
+        document.addEventListener('keydown', handleDocumentKeydown);
+        document.addEventListener('click', handleDocumentClickForGhost);
       }
 
       function initCollapsiblePanels() {
