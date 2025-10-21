@@ -25,6 +25,9 @@
       --material-negative: #f87171;
       --input-bg: rgba(15, 23, 42, 0.75);
       --input-border: rgba(148, 163, 184, 0.3);
+      --arrow-label-fill: rgba(15, 23, 42, 0.9);
+      --arrow-label-stroke: rgba(148, 163, 184, 0.85);
+      --arrow-label-text: #f8fafc;
       --shadow: 0 18px 48px rgba(8, 15, 35, 0.55);
     }
 
@@ -46,6 +49,9 @@
       --material-negative: #dc2626;
       --input-bg: #f8fafc;
       --input-border: rgba(15, 23, 42, 0.12);
+      --arrow-label-fill: rgba(248, 250, 252, 0.92);
+      --arrow-label-stroke: rgba(148, 163, 184, 0.85);
+      --arrow-label-text: #0f172a;
       --shadow: 0 12px 32px rgba(15, 23, 42, 0.15);
     }
 
@@ -348,6 +354,21 @@
       height: 100%;
       pointer-events: none;
       display: block;
+    }
+
+    .arrow-label-circle {
+      fill: var(--arrow-label-fill);
+      stroke: var(--arrow-label-stroke);
+      stroke-width: 1.5;
+    }
+
+    .arrow-label-text {
+      fill: var(--arrow-label-text);
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: -0.01em;
+      dominant-baseline: middle;
     }
 
     .board-badge-layer {
@@ -2602,6 +2623,8 @@
           const ex = to.x - (dx / len) * shorten;
           const ey = to.y - (dy / len) * shorten;
 
+          const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
           const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
           line.setAttribute('x1', sx);
           line.setAttribute('y1', sy);
@@ -2619,7 +2642,36 @@
             line.setAttribute('opacity', 0.65);
           }
           line.setAttribute('marker-end', 'url(#mOverlay)');
-          overlayLayer.appendChild(line);
+          group.appendChild(line);
+
+          if (segment.showOrder && Number.isFinite(segment.order)) {
+            const ratioRaw = segment.labelPosition != null ? segment.labelPosition : 0.35;
+            const ratio = Math.min(0.85, Math.max(0.15, ratioRaw));
+            const lx = sx + (ex - sx) * ratio;
+            const ly = sy + (ey - sy) * ratio;
+            const isDoubleDigit = Math.abs(segment.order) >= 10;
+            const radius = segment.labelRadius != null ? segment.labelRadius : (isDoubleDigit ? 13 : 12);
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.classList.add('arrow-label-circle');
+            circle.setAttribute('cx', lx);
+            circle.setAttribute('cy', ly);
+            circle.setAttribute('r', radius);
+            group.appendChild(circle);
+
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.classList.add('arrow-label-text');
+            text.setAttribute('x', lx);
+            text.setAttribute('y', ly);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'middle');
+            const fontSize = segment.labelFontSize != null ? segment.labelFontSize : (isDoubleDigit ? 11 : 12);
+            text.setAttribute('font-size', fontSize);
+            text.textContent = String(segment.order);
+            group.appendChild(text);
+          }
+
+          overlayLayer.appendChild(group);
         });
       }
 
@@ -2658,7 +2710,9 @@
             uci: normalized,
             dashed: true,
             opacity,
-            width: 4
+            width: 4,
+            order: i + 1,
+            showOrder: true
           });
         }
         return segments;
@@ -2773,13 +2827,18 @@
         } else {
           state.lineOverlay = segments
             .filter((seg) => seg && typeof seg.uci === 'string' && seg.uci.length >= 4)
-            .map((seg) => ({
+            .map((seg, index) => ({
               uci: seg.uci.toLowerCase(),
               dashed: seg.dashed !== false,
               opacity: seg.opacity,
               width: seg.width,
               color: seg.color,
-              dashArray: seg.dashArray
+              dashArray: seg.dashArray,
+              order: Number.isFinite(seg.order) ? seg.order : index + 1,
+              showOrder: Boolean(seg.showOrder),
+              labelPosition: typeof seg.labelPosition === 'number' ? seg.labelPosition : null,
+              labelRadius: Number.isFinite(seg.labelRadius) ? seg.labelRadius : null,
+              labelFontSize: Number.isFinite(seg.labelFontSize) ? seg.labelFontSize : null
             }));
         }
         drawArrowOverlay(state.lineOverlay);
