@@ -4018,16 +4018,23 @@
 
               if (altMoves.length) {
                 let ignoreResult = null;
-                try {
-                  ignoreResult = await engineController.run({
-                    fen: afterFen,
-                    depth: replyDepth,
-                    movetime: replyMovetime,
-                    searchMoves: altMoves,
-                    ply: ply + 1
-                  });
-                } catch (err) {
-                  ignoreResult = null;
+                const controller = (window.engineController && typeof window.engineController.run === 'function')
+                  ? window.engineController
+                  : (typeof engineController !== 'undefined' && typeof engineController.run === 'function'
+                    ? engineController
+                    : null);
+                if (controller) {
+                  try {
+                    ignoreResult = await controller.run({
+                      fen: afterFen,
+                      depth: replyDepth,
+                      movetime: replyMovetime,
+                      searchMoves: altMoves,
+                      ply: ply + 1
+                    });
+                  } catch (err) {
+                    ignoreResult = null;
+                  }
                 }
                 if (token !== state.analysisToken) {
                   throw new Error('cancelled');
@@ -4609,8 +4616,6 @@
           }
         }
 
-        const baseline = classification;
-
         let legalMoveList = Array.isArray(legalMoves) ? legalMoves : [];
         if (!Array.isArray(legalMoves) && moveEntry && moveEntry.preFen) {
           try {
@@ -4726,11 +4731,6 @@
             }
           }
         });
-        const entryOverlayByMove = new Map();
-        entryEpByUci.forEach((ep, uci) => {
-          entryOverlayByMove.set(uci, { ep: Number.isFinite(ep) ? ep : null });
-        });
-
         const legalMoveEvaluations = [];
         legalMoveList.forEach((mv) => {
           const uci = `${mv.from}${mv.to}${mv.promotion || ''}`;
@@ -4765,105 +4765,45 @@
         const allowsGreatOverlay = suggestionTag === 'best' || suggestionTag === 'excellent';
         let greatOverlay = null;
         if (allowsGreatOverlay && !forcedMove && !trivialRecapture && actualId) {
-          const overlaySource = summaryByMove instanceof Map ? summaryByMove : entryOverlayByMove;
+          const legalMovesEp = legalMoveEvaluations.filter((m) => Number.isFinite(m.ep));
+          const onlyMoveSampleComplete = haveAllMovesEvaluated;
           greatOverlay = computeGreatOverlay({
             fen: baselineFen,
-            EP1: bestMoverEp,
-            epBefore: beforeMoverEp,
+            EP1: Number.isFinite(bestMoverEp) ? (moverIsWhite ? bestMoverEp : 1 - bestMoverEp) : null,
+            epBefore: beforeWhiteEp,
             playedUci: actualId,
-            byMove: overlaySource,
-            legalMovesEp: legalMoveEvaluations,
-            epPlayedOverride: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
-            onlyMoveSampleComplete: haveAllMovesEvaluated && !forcedMove,
+            byMove: summaryByMove || null,
+            legalMovesEp,
+            epPlayedOverride: Number.isFinite(actualMoverEp) ? (moverIsWhite ? actualMoverEp : 1 - actualMoverEp) : null,
+            onlyMoveSampleComplete,
             moverRating
           });
         }
 
-        const notAlreadyWinningThreshold = ratingLerp(moverRating, 1000, 2000, 0.80, 0.88);
-        const playableThreshold = ratingLerp(moverRating, 1000, 2000, 0.42, 0.48);
-        const nearBestSac = loss == null ? sameAsBest : loss <= (PV_KEEP_MARGIN + PV_EPSILON);
-        let nonSacBestMoverEp = Number.isFinite(nonSacBestOverride) ? nonSacBestOverride : null;
-        if (nonSacBestMoverEp == null) {
-          entryData.forEach((item) => {
-            if (item.isSac) return;
-            if (!Number.isFinite(item.epMover)) return;
-            if (nonSacBestMoverEp == null || item.epMover > nonSacBestMoverEp) {
-              nonSacBestMoverEp = item.epMover;
-            }
-          });
-        }
-        const nonSacAlreadyWinning = nonSacBestMoverEp != null && nonSacBestMoverEp >= notAlreadyWinningThreshold;
-        const keepsPlayable = moverWinAfter != null && moverWinAfter >= playableThreshold;
-
-        const mateDistanceLimit = 5;
-        const mateDistancesKnown = actualMateDistance != null && bestMateDistance != null;
-        const mateNotSlower = mateDistancesKnown && actualMateDistance <= bestMateDistance;
-        const mateDistancesReasonable = mateDistancesKnown && actualMateDistance <= mateDistanceLimit;
-        const mateSacBrilliant = (baseline === 'best' || baseline === 'excellent')
-          && actualMoveIsSac
-          && nearBestSac
-          && actualMateForMover
-          && bestMateForMover
-          && mateDistancesReasonable
-          && (mateNotSlower || onlyMatingMove);
-
-        const brilliantCandidate = ((baseline === 'best' || baseline === 'excellent')
-          && actualMoveIsSac
-          && nearBestSac
-          && keepsPlayable
-          && !nonSacAlreadyWinning)
-          || mateSacBrilliant;
-
-        const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
-        const missConversionThreshold = ratingLerp(moverRating, 1000, 2000, 0.78, 0.88);
-        const missDropThreshold = ratingLerp(moverRating, 1000, 2000, 0.58, 0.68);
-        const missGapThreshold = ratingLerp(moverRating, 1000, 2000, 0.14, 0.2);
-
-        const missCandidate = moverWinBefore != null
-          && moverWinAfter != null
-          && Number.isFinite(bestMoverEp)
-          && moverWinBefore >= missOpportunityThreshold
-          && bestMoverEp >= missConversionThreshold
-          && moverWinAfter <= missDropThreshold
-          && (bestMoverEp - moverWinAfter) >= missGapThreshold;
-
+        // Overlay classification (visual badges)
         let overlay = null;
-        if (brilliantCandidate) {
+        if (greatOverlay === 'great') overlay = 'great';
+
+        // Eye-catching sacs that are still engine-approved → “Brilliant”
+        if (!overlay && actualMoveIsSac && (classification === 'best' || classification === 'excellent')) {
           overlay = 'brilliant';
-        } else if (greatOverlay === 'great') {
-          overlay = 'great';
-        } else if (missCandidate && baseline !== 'blunder') {
+        }
+
+        // Missed forced win → “Miss”
+        if (!overlay && bestMateForMover && !actualMateForMover) {
           overlay = 'miss';
         }
 
-        const overlayCandidate = overlay;
-
-        if (overlay === 'great' && !(baseline === 'best' || baseline === 'excellent')) {
-          overlay = null;
+        // Very small change around equality → “Book”
+        if (
+          !overlay &&
+          cpGap != null && cpGap < 5 &&
+          Math.abs((moverWinAfter ?? bestMoverEp ?? 0.5) - (moverWinBefore ?? 0.5)) < 0.01
+        ) {
+          overlay = 'book';
         }
 
-        if (typeof console !== 'undefined' && console && typeof console.table === 'function') {
-          try {
-            console.table({
-              ply: moveEntry && Number.isFinite(moveEntry.ply) ? moveEntry.ply : null,
-              move: actualEntry && (actualEntry.san || actualEntry.uci) ? (actualEntry.san || actualEntry.uci) : null,
-              EP1_bestMoverEp: Number.isFinite(bestMoverEp) ? bestMoverEp.toFixed(3) : null,
-              EP_played: Number.isFinite(actualMoverEp) ? actualMoverEp.toFixed(3) : null,
-              gap: (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp))
-                ? (bestMoverEp - actualMoverEp).toFixed(3)
-                : null,
-              epBeforeMover: Number.isFinite(beforeMoverEp) ? beforeMoverEp.toFixed(3) : null,
-              suggestionTag,
-              baseline,
-              overlayCandidate,
-              overlayFinal: overlay
-            });
-          } catch (err) {
-            // ignore logging errors
-          }
-        }
-
-        return { classification: baseline, overlay, expectedLoss: loss, suggestionTag };
+        return { classification, overlay, expectedLoss: loss, suggestionTag };
       }
 
       const engineController = {
@@ -5175,15 +5115,23 @@
         const runPromise = (async () => {
           const token = opts.token != null ? opts.token : state.analysisToken;
 
-          const res = await engineController.run({
-            fen,
-            depth: DEFAULT_ANALYSIS_DEPTH,
-            movetime: DEFAULT_ANALYSIS_MOVETIME,
-            multipv: MULTIPV_MAX_CANDIDATES,
-            showWdl: true,
-            includeMoveUci: opts.includeMoveUci || null,
-            ply: opts.ply != null ? opts.ply : state.ply
-          });
+          const controller = (window.engineController && typeof window.engineController.run === 'function')
+            ? window.engineController
+            : (typeof engineController !== 'undefined' && typeof engineController.run === 'function'
+              ? engineController
+              : null);
+          let res = null;
+          if (controller) {
+            res = await controller.run({
+              fen,
+              depth: DEFAULT_ANALYSIS_DEPTH,
+              movetime: DEFAULT_ANALYSIS_MOVETIME,
+              multipv: MULTIPV_MAX_CANDIDATES,
+              showWdl: true,
+              includeMoveUci: opts.includeMoveUci || null,
+              ply: opts.ply != null ? opts.ply : state.ply
+            });
+          }
 
           if (token !== state.analysisToken) throw new Error('cancelled');
 
@@ -5229,9 +5177,9 @@
             const firstKey = state.analysisByFen.keys().next().value;
             state.analysisByFen.delete(firstKey);
           }
-          if (opts.includeMoveUci && !entriesByUci.has(opts.includeMoveUci)) {
+          if (controller && opts.includeMoveUci && !entriesByUci.has(opts.includeMoveUci)) {
             try {
-              const forced = await engineController.run({
+              const forced = await controller.run({
                 fen,
                 depth: DEFAULT_ANALYSIS_DEPTH,
                 movetime: DEFAULT_ANALYSIS_MOVETIME,
@@ -5715,11 +5663,6 @@
             applyAnalysisForCurrentPly();
           });
         }
-        byId('themeToggle').addEventListener('click', () => {
-          const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-          const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-          setTheme(newTheme);
-        });
         const suggestionToggle = byId('suggestionToggle');
         if (suggestionToggle) {
           suggestionToggle.addEventListener('click', () => {
@@ -5758,44 +5701,26 @@
         }
       }
 
-      function getSystemTheme() {
-        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-
-      function getSavedTheme() {
-        return localStorage.getItem('theme');
-      }
-
-      function setTheme(theme) {
+      function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
-        updateThemeButton(theme);
+        const t = byId('themeToggle');
+        if (t) t.textContent = theme === 'light' ? '🌚 Dark' : '☀️ Light';
       }
 
-      function updateThemeButton(theme) {
-        const button = byId('themeToggle');
-        if (theme === 'dark') {
-          button.textContent = '☀️ Light';
-          button.title = 'Switch to light theme';
-        } else {
-          button.textContent = '🌙 Dark';
-          button.title = 'Switch to dark theme';
-        }
-      }
-
-      function initTheme() {
-        const savedTheme = getSavedTheme();
-        const systemTheme = getSystemTheme();
-        const theme = savedTheme || systemTheme;
-        setTheme(theme);
-        if (window.matchMedia) {
-          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            if (!getSavedTheme()) {
-              setTheme(e.matches ? 'dark' : 'light');
-            }
+      (function initTheme() {
+        const saved = (() => { try { return localStorage.getItem('theme'); } catch { return null; } })();
+        const system = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        applyTheme(saved || system);
+        const btn = byId('themeToggle');
+        if (btn) {
+          btn.addEventListener('click', () => {
+            const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            const next = cur === 'light' ? 'dark' : 'light';
+            applyTheme(next);
+            try { localStorage.setItem('theme', next); } catch {}
           });
         }
-      }
+      })();
 
       async function loadFromQuery() {
         const params = new URLSearchParams(window.location.search);
@@ -5846,7 +5771,6 @@
           return;
         }
 
-        initTheme();
         initBoard();
         initMoveSummary();
         updateMoveSummary();
