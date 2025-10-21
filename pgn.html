@@ -32,6 +32,10 @@
       --shadow: 0 18px 48px rgba(8, 15, 35, 0.55);
       --layout-padding: clamp(16px, 2vw, 28px);
       --header-height: 64px;
+      --board-max-height: min(72vh, 720px);
+      --eval-score-bg: rgba(15, 23, 42, 0.88);
+      --eval-score-text: #f8fafc;
+      --eval-score-border: rgba(148, 163, 184, 0.4);
     }
 
     [data-theme="light"] {
@@ -56,6 +60,9 @@
       --arrow-label-stroke: rgba(148, 163, 184, 0.85);
       --arrow-label-text: #0f172a;
       --shadow: 0 12px 32px rgba(15, 23, 42, 0.15);
+      --eval-score-bg: rgba(248, 250, 252, 0.9);
+      --eval-score-text: #0f172a;
+      --eval-score-border: rgba(15, 23, 42, 0.15);
     }
 
     * {
@@ -114,7 +121,7 @@
       display: grid;
       gap: clamp(18px, 2vw, 28px);
       align-items: start;
-      grid-template-columns: minmax(0, 1.95fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
       max-width: 1480px;
       margin: 0 auto;
       position: relative;
@@ -180,6 +187,8 @@
     .board-shell {
       position: relative;
       width: 100%;
+      padding-bottom: clamp(68px, 10vh, 96px);
+      isolation: isolate;
     }
 
     .row {
@@ -440,11 +449,14 @@
       column-gap: 0;
       align-items: stretch;
       width: 100%;
+      max-height: var(--board-max-height);
     }
 
     .board-wrap {
       position: relative;
       width: 100%;
+      max-width: var(--board-max-height);
+      max-height: var(--board-max-height);
       aspect-ratio: 1 / 1;
       display: flex;
       align-items: stretch;
@@ -523,47 +535,22 @@
       flex: 0 0 var(--eval-bar-width);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 12px;
+      align-items: stretch;
+      justify-content: stretch;
+      gap: 0;
       height: 100%;
-    }
-
-    .eval-column[data-orientation="white"] #evalWhiteValue {
-      order: 2;
-    }
-
-    .eval-column[data-orientation="white"] #evalBlackValue {
-      order: 0;
-    }
-
-    .eval-column[data-orientation="white"] .eval-vertical {
-      order: 1;
-    }
-
-    .eval-column[data-orientation="black"] #evalWhiteValue {
-      order: 0;
-    }
-
-    .eval-column[data-orientation="black"] .eval-vertical {
-      order: 1;
-    }
-
-    .eval-column[data-orientation="black"] #evalBlackValue {
-      order: 2;
     }
 
     .eval-vertical {
       position: relative;
-      width: calc(var(--eval-bar-width) - 12px);
-      max-width: 56px;
-      flex: 1;
-      min-height: 260px;
+      width: 100%;
+      height: 100%;
+      min-height: clamp(260px, 60vh, var(--board-max-height));
       background: var(--eval-black);
-      border-radius: 18px;
+      border-radius: 0;
       border: 1px solid var(--eval-border);
       overflow: hidden;
-      box-shadow: inset 0 0 20px rgba(8, 15, 35, 0.4);
-      transition: background-color 0.25s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .eval-column[data-orientation="black"] .eval-vertical {
@@ -590,23 +577,29 @@
       right: 0;
       height: 2px;
       background: var(--accent);
-      box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.55);
       transition: top 0.25s ease;
       pointer-events: none;
+      z-index: 2;
     }
 
-    .eval-label {
+    .eval-score-label {
+      position: absolute;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 4px 10px;
+      border-radius: 999px;
       font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
-      letter-spacing: 0.2px;
-      min-height: 18px;
-      text-align: center;
-      width: 100%;
-    }
-
-    .eval-label-black {
-      opacity: 0.75;
+      background: var(--eval-score-bg);
+      color: var(--eval-score-text);
+      border: 1px solid var(--eval-score-border);
+      box-shadow: 0 6px 18px rgba(8, 15, 35, 0.35);
+      pointer-events: none;
+      white-space: nowrap;
+      transition: top 0.25s ease, background-color 0.25s ease, color 0.25s ease;
+      z-index: 3;
     }
 
     details.collapsible {
@@ -735,17 +728,22 @@
       color: var(--muted);
     }
 
-    .workspace-controls {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
+    .game-load {
+      display: grid;
+      gap: 12px;
+    }
+
+    .game-load-controls {
+      display: grid;
+      gap: 12px;
     }
 
     .load-affordances {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-bottom: 12px;
+      align-items: center;
+      justify-content: flex-start;
     }
 
     .chip-button,
@@ -779,17 +777,44 @@
       font-size: 12px;
     }
 
+    .board-toolbar {
+      position: absolute;
+      inset-inline: clamp(8px, 2vw, 18px);
+      inset-block-end: clamp(8px, 2vh, 18px);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 12px 18px;
+      border-radius: 16px;
+      background: rgba(8, 15, 35, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: 0 18px 42px rgba(8, 15, 35, 0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 4;
+    }
+
+    [data-theme="light"] .board-toolbar {
+      background: rgba(241, 245, 249, 0.92);
+      border-color: rgba(15, 23, 42, 0.12);
+      box-shadow: 0 16px 38px rgba(15, 23, 42, 0.25);
+    }
+
     .nav-toolbar {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
       gap: 12px;
+      width: 100%;
     }
 
     .nav-buttons {
       display: flex;
       flex-wrap: wrap;
+      justify-content: center;
       gap: 8px;
       align-items: center;
     }
@@ -797,11 +822,13 @@
     .nav-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
-      font-size: 12px;
+      gap: 12px;
+      font-size: 11px;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.12em;
+      margin-left: auto;
+      justify-content: flex-end;
     }
 
     .nav-meta-item {
@@ -840,6 +867,30 @@
       align-items: center;
       gap: 12px;
       justify-content: space-between;
+    }
+
+    .sticky-card {
+      padding-top: 18px;
+    }
+
+    .sticky-card .info-card-summary.sticky-summary {
+      position: sticky;
+      top: var(--sticky-offset, 0px);
+      background: var(--panel);
+      margin: calc(-1 * 18px) calc(-1 * 18px) 12px;
+      padding: 18px;
+      border-radius: 16px 16px 0 0;
+      border-bottom: 1px solid var(--panel-border);
+      z-index: 5;
+    }
+
+    .sticky-card .info-card-summary.sticky-summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    .sticky-card .info-card-body {
+      padding-top: 0;
     }
 
     .summary-scroll {
@@ -1291,6 +1342,10 @@
         gap: 18px;
       }
 
+      .board-shell {
+        padding-bottom: 0;
+      }
+
       .board-area {
         grid-template-columns: minmax(0, 1fr);
         justify-items: center;
@@ -1307,6 +1362,7 @@
 
       .eval-vertical {
         width: 18px;
+        max-width: none;
         min-height: 180px;
       }
 
@@ -1314,13 +1370,27 @@
         grid-template-columns: 1fr;
       }
 
+      .board-toolbar {
+        position: sticky;
+        inset-inline: 0;
+        inset-block-end: 0;
+        border-radius: 18px 18px 0 0;
+        margin: 12px 0 0;
+        box-shadow: 0 -10px 30px rgba(8, 15, 35, 0.45);
+      }
+
+      [data-theme="light"] .board-toolbar {
+        box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.2);
+      }
+
       .nav-toolbar {
-        flex-direction: column;
-        align-items: flex-start;
+        justify-content: center;
       }
 
       .nav-meta {
         width: 100%;
+        justify-content: center;
+        margin-left: 0;
       }
 
       .engine-toolbar {
@@ -1349,12 +1419,11 @@
           <div class="board-shell">
             <div class="board-area">
               <div class="eval-column" id="evalColumn" data-orientation="white">
-                <div class="eval-label eval-label-black" id="evalBlackValue"></div>
                 <div class="eval-vertical">
                   <div class="eval-fill" id="evalFill"></div>
                   <div class="eval-marker" id="evalMarker"></div>
+                  <div class="eval-score-label" id="evalScoreLabel" aria-live="polite">0.00</div>
                 </div>
-                <div class="eval-label" id="evalWhiteValue">0.00</div>
               </div>
               <div class="board-wrap">
                 <div id="board"></div>
@@ -1367,49 +1436,7 @@
                 </div>
               </div>
             </div>
-          </div>
-          <div class="material-panel">
-            <div class="material-card">
-              <div class="material-player">White</div>
-              <div class="material-score" id="materialWhite">0</div>
-              <div class="material-capture" id="materialWhiteCapture">—</div>
-            </div>
-            <div class="material-card">
-              <div class="material-player">Black</div>
-              <div class="material-score" id="materialBlack">0</div>
-              <div class="material-capture" id="materialBlackCapture">—</div>
-            </div>
-          </div>
-          <div class="workspace-controls">
-            <details id="loadPanel" class="collapsible" open>
-              <summary>
-                <span class="collapsible-title">Load Game</span>
-              </summary>
-              <div class="collapsible-body">
-                <div class="load-affordances" id="loadAffordanceGroup" role="group" aria-label="Load game options">
-                  <button type="button" class="chip-button active" data-load-action="paste">Paste</button>
-                  <button type="button" class="chip-button" data-load-action="upload">Upload</button>
-                  <button type="button" class="chip-button" data-load-action="fen">Import FEN</button>
-                </div>
-                <input type="file" id="pgnFileInput" accept=".pgn,.PGN,.txt,.fen,.FEN" hidden />
-                <div class="row input-controls">
-                  <select id="inputMode">
-                    <option value="pgn">PGN</option>
-                    <option value="lichess">Lichess URL / ID</option>
-                    <option value="fen">FEN</option>
-                  </select>
-                  <button id="loadBtn">Load</button>
-                </div>
-                <div class="row">
-                  <textarea id="gameInput" rows="8" placeholder="Paste PGN text" autocomplete="off" spellcheck="false" class="mono"></textarea>
-                </div>
-                <div class="row">
-                  <label id="inputHint" class="hint">Paste the full PGN for the game you want to analyze.</label>
-                </div>
-                <div id="loadStatus" class="status"></div>
-              </div>
-            </details>
-            <div class="nav-toolbar" aria-label="Move navigation">
+            <div class="board-toolbar nav-toolbar" role="toolbar" aria-label="Move navigation">
               <div class="nav-buttons">
                 <button id="firstBtn" class="secondary">⏮ First</button>
                 <button id="prevBtn" class="secondary">◀ Prev</button>
@@ -1426,22 +1453,30 @@
                 <span id="navEvalValue" class="nav-meta-item">Eval —</span>
               </div>
             </div>
-            <div id="navStatus" class="status"></div>
           </div>
+          <div class="material-panel">
+            <div class="material-card">
+              <div class="material-player">White</div>
+              <div class="material-score" id="materialWhite">0</div>
+              <div class="material-capture" id="materialWhiteCapture">—</div>
+            </div>
+            <div class="material-card">
+              <div class="material-player">Black</div>
+              <div class="material-score" id="materialBlack">0</div>
+              <div class="material-capture" id="materialBlackCapture">—</div>
+            </div>
+          </div>
+          <div id="navStatus" class="status"></div>
         </section>
       </div>
     </div>
     <div class="info-column" aria-label="Analysis details">
-      <details id="engineExplanationCard" class="info-card card collapsible" open>
-        <summary class="info-card-summary">
+      <details id="engineExplanationCard" class="info-card card collapsible sticky-card" open>
+        <summary class="info-card-summary sticky-summary" style="--sticky-offset: 0px;">
           <h2>Engine explanations</h2>
         </summary>
         <div class="info-card-body">
           <div class="engine-toolbar">
-            <div class="engine-mode-toggle" id="explanationModeToggle" role="group" aria-label="Explanation focus">
-              <button type="button" class="chip-button active" data-explanation-mode="current">Current move</button>
-              <button type="button" class="chip-button" data-explanation-mode="best">Best move</button>
-            </div>
             <div class="engine-chips" id="classificationChipGroup" role="group" aria-label="Jump to move classification">
               <button type="button" class="chip-pill" data-classification="blunder">Blunder</button>
               <button type="button" class="chip-pill" data-classification="mistake">Mistake</button>
@@ -1460,52 +1495,8 @@
         </div>
       </details>
 
-      <details id="gameInfoPanel" class="info-card card collapsible" open>
-        <summary class="info-card-summary">
-          <h2>Game info</h2>
-        </summary>
-        <div class="info-card-body">
-          <div class="kv" id="tagBox">
-            <div>White</div>
-            <div id="tagWhite">—</div>
-            <div>Black</div>
-            <div id="tagBlack">—</div>
-            <div>Event</div>
-            <div id="tagEvent">—</div>
-            <div>Site</div>
-            <div id="tagSite">—</div>
-            <div>Date</div>
-            <div id="tagDate">—</div>
-            <div>Result</div>
-            <div id="tagResult">—</div>
-            <div>Opening</div>
-            <div id="tagOpening">—</div>
-          </div>
-        </div>
-      </details>
-
-      <details id="movesPanel" class="info-card card collapsible" open>
-        <summary class="info-card-summary">
-          <h2>Moves</h2>
-        </summary>
-        <div class="info-card-body">
-          <div id="moves" class="moves"></div>
-        </div>
-      </details>
-
-      <details id="moveSummaryPanel" class="info-card card collapsible">
-        <summary class="info-card-summary">
-          <h2>Move summary</h2>
-        </summary>
-        <div class="info-card-body">
-          <div class="summary-scroll">
-            <div id="moveSummaryTable" class="summary-table"></div>
-          </div>
-        </div>
-      </details>
-
-      <details id="engineSuggestions" class="info-card card collapsible">
-        <summary class="info-card-summary">
+      <details id="engineSuggestions" class="info-card card collapsible sticky-card" open>
+        <summary class="info-card-summary sticky-summary" style="--sticky-offset: 74px;">
           <h2>Engine suggestions</h2>
           <span class="collapsible-meta">
             <span id="suggestionModeLabel" class="suggestion-mode-label">Current move</span>
@@ -1545,6 +1536,77 @@
           </div>
           <div class="pv-list" id="pvList"></div>
           <div id="engStatus" class="status"></div>
+        </div>
+      </details>
+
+      <details id="movesPanel" class="info-card card collapsible">
+        <summary class="info-card-summary">
+          <h2>Moves</h2>
+        </summary>
+        <div class="info-card-body">
+          <div id="moves" class="moves"></div>
+        </div>
+      </details>
+
+      <details id="gameInfoPanel" class="info-card card collapsible" open>
+        <summary class="info-card-summary">
+          <h2>Game info</h2>
+        </summary>
+        <div class="info-card-body">
+          <div class="game-load">
+            <div class="load-affordances" id="loadAffordanceGroup" role="group" aria-label="Game import and export options">
+              <button type="button" class="chip-button active" data-load-action="paste">Paste</button>
+              <button type="button" class="chip-button" data-load-action="upload">Upload</button>
+              <button type="button" class="chip-button" data-load-action="fen">Import FEN</button>
+              <button type="button" class="chip-button" data-load-action="lichess">From URL</button>
+              <button type="button" class="chip-button" data-load-action="export">Export</button>
+            </div>
+            <div class="game-load-controls">
+              <input type="file" id="pgnFileInput" accept=".pgn,.PGN,.txt,.fen,.FEN" hidden />
+              <div class="row input-controls">
+                <select id="inputMode">
+                  <option value="pgn">PGN</option>
+                  <option value="lichess">Lichess URL / ID</option>
+                  <option value="fen">FEN</option>
+                </select>
+                <button id="loadBtn">Load</button>
+              </div>
+              <div class="row">
+                <textarea id="gameInput" rows="8" placeholder="Paste PGN text" autocomplete="off" spellcheck="false" class="mono"></textarea>
+              </div>
+              <div class="row">
+                <label id="inputHint" class="hint">Paste the full PGN for the game you want to analyze.</label>
+              </div>
+              <div id="loadStatus" class="status"></div>
+            </div>
+          </div>
+          <div class="kv" id="tagBox">
+            <div>White</div>
+            <div id="tagWhite">—</div>
+            <div>Black</div>
+            <div id="tagBlack">—</div>
+            <div>Event</div>
+            <div id="tagEvent">—</div>
+            <div>Site</div>
+            <div id="tagSite">—</div>
+            <div>Date</div>
+            <div id="tagDate">—</div>
+            <div>Result</div>
+            <div id="tagResult">—</div>
+            <div>Opening</div>
+            <div id="tagOpening">—</div>
+          </div>
+        </div>
+      </details>
+
+      <details id="moveSummaryPanel" class="info-card card collapsible">
+        <summary class="info-card-summary">
+          <h2>Move summary</h2>
+        </summary>
+        <div class="info-card-body">
+          <div class="summary-scroll">
+            <div id="moveSummaryTable" class="summary-table"></div>
+          </div>
         </div>
       </details>
     </div>
@@ -2201,7 +2263,7 @@
         if (!group) return;
         const buttons = group.querySelectorAll('button[data-load-action]');
         buttons.forEach((btn) => btn.classList.remove('active'));
-        const normalized = mode === 'fen' ? 'fen' : 'paste';
+        const normalized = mode === 'fen' ? 'fen' : mode === 'lichess' ? 'lichess' : 'paste';
         const target = group.querySelector(`button[data-load-action="${normalized}"]`);
         if (target) {
           target.classList.add('active');
@@ -3524,10 +3586,9 @@
 
       function updateEvalBar(evalStr) {
         state.lastEval = evalStr || null;
-        const whiteEl = byId('evalWhiteValue');
-        const blackEl = byId('evalBlackValue');
         const fillEl = byId('evalFill');
         const markerEl = byId('evalMarker');
+        const scoreEl = byId('evalScoreLabel');
         const columnEl = byId('evalColumn');
         const orientation = state.orientation || 'white';
 
@@ -3536,7 +3597,7 @@
         }
 
         let normalized = 0.5;
-        let whiteDisplay = '0.00';
+        let whiteDisplay = '—';
 
         if (evalStr) {
           const parsed = parseEvalString(evalStr);
@@ -3563,8 +3624,10 @@
         const clampedWhite = Math.min(0.98, Math.max(0.02, normalized));
         const clampedBlack = Math.min(0.98, Math.max(0.02, 1 - normalized));
 
-        if (whiteEl) whiteEl.textContent = whiteDisplay;
-        if (blackEl) blackEl.textContent = '';
+        if (scoreEl) {
+          scoreEl.textContent = whiteDisplay;
+          scoreEl.setAttribute('aria-label', `Evaluation ${whiteDisplay}`);
+        }
 
         if (fillEl) {
           const fillPercent = orientation === 'white' ? clampedWhite : clampedBlack;
@@ -3579,6 +3642,13 @@
             : clampedWhite * 100;
           markerEl.style.top = `${markerPercent.toFixed(1)}%`;
           markerEl.style.bottom = 'auto';
+          if (scoreEl) {
+            const labelPercent = Math.min(96, Math.max(4, markerPercent));
+            scoreEl.style.top = `${labelPercent.toFixed(1)}%`;
+          }
+        } else if (scoreEl) {
+          const midpoint = orientation === 'white' ? 50 : 50;
+          scoreEl.style.top = `${midpoint}%`;
         }
         updateNavMeta();
       }
@@ -4895,66 +4965,6 @@
         return plans;
       }
 
-      function buildNextMoveExplanation(analysis) {
-        if (!analysis || !analysis.bestEntry) return null;
-        const moverTurn = state.game && typeof state.game.turn === 'function'
-          ? state.game.turn()
-          : ((state.ply % 2) === 0 ? 'w' : 'b');
-        const moverColorName = moverTurn === 'b' ? 'Black' : 'White';
-        const bestEntry = analysis.bestEntry;
-        const actualEntry = analysis.actualEntry || null;
-        const bestMoverEp = Number.isFinite(analysis.bestEp)
-          ? (moverTurn === 'w' ? analysis.bestEp : 1 - analysis.bestEp)
-          : null;
-        const actualMoverEp = Number.isFinite(analysis.actualEp)
-          ? (moverTurn === 'w' ? analysis.actualEp : 1 - analysis.actualEp)
-          : null;
-        const bestPercent = Number.isFinite(bestMoverEp) ? bestMoverEp * 100 : null;
-        const actualPercent = Number.isFinite(actualMoverEp) ? actualMoverEp * 100 : null;
-        const gain = (bestPercent != null && actualPercent != null)
-          ? bestPercent - actualPercent
-          : null;
-        const moveLabel = bestEntry.san || bestEntry.uci;
-
-        let summary = `Try ${moveLabel}`;
-        if (bestPercent != null) {
-          const approx = formatWinPercentDisplay(bestPercent);
-          if (approx) {
-            summary += ` — keeps ${moverColorName.toLowerCase()} around ${approx}.`;
-          } else {
-            summary += '.';
-          }
-        } else if (bestEntry.eval) {
-          summary += ` — evaluation ${bestEntry.eval}.`;
-        } else {
-          summary += '.';
-        }
-
-        const bullets = [];
-        if (gain != null && gain > 0.75 && actualEntry && actualEntry.uci !== bestEntry.uci) {
-          const approx = formatWinDeltaDisplay(gain);
-          if (approx) {
-            bullets.push(`${moveLabel} improves the position by about ${approx}.`);
-          }
-        } else if (actualEntry && actualEntry.uci === bestEntry.uci) {
-          bullets.push('The game move already follows this recommendation.');
-        }
-
-        const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6);
-        if (continuation) {
-          bullets.push(continuation);
-        }
-
-        const cards = [{
-          key: 'solution',
-          title: 'Suggested line',
-          headline: `Start with ${moveLabel}`,
-          bullets
-        }];
-
-        return { headline: summary, details: [], cards };
-      }
-
       function classifyPlayedMove({
         preFen,
         playedUci,
@@ -6155,25 +6165,6 @@
         });
       }
 
-      function updateExplanationModeUi() {
-        const toggle = byId('explanationModeToggle');
-        if (!toggle) return;
-        const buttons = toggle.querySelectorAll('button[data-explanation-mode]');
-        buttons.forEach((btn) => {
-          const value = btn.dataset.explanationMode;
-          btn.classList.toggle('active', value === state.explanationMode);
-        });
-      }
-
-      function setExplanationMode(mode) {
-        const next = mode === 'best' ? 'best' : 'current';
-        if (state.explanationMode === next) return;
-        state.explanationMode = next;
-        updateExplanationModeUi();
-        const analysis = getAnalysisForCurrentView();
-        updateExplanationPanel(analysis);
-      }
-
       function getEntryClassification(entry) {
         if (!entry) return null;
         const analysis = entry.analysis || (entry.id ? state.analysisCache.get(entry.id) : null);
@@ -6212,10 +6203,9 @@
         const cardsEl = byId('explanationCards');
         if (!summaryEl || !detailsEl) return;
 
-        const viewingBest = state.explanationMode === 'best' && state.suggestionMode === 'played';
         const defaultMessage = state.suggestionMode === 'next'
           ? 'Engine suggestion will appear after analysis finishes.'
-          : (viewingBest ? 'Select a move to see the engine’s best line.' : 'Select a move to see the engine’s commentary.');
+          : 'Select a move to see the engine’s commentary.';
 
         let payload = null;
         let activeClassification = null;
@@ -6223,27 +6213,23 @@
           if (state.suggestionMode === 'played') {
             activeClassification = analysis.overlay || analysis.classification || null;
           }
-          if (state.suggestionMode === 'next' || viewingBest) {
-            payload = buildNextMoveExplanation(analysis);
-          } else {
-            const moveEntry = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
-            if (moveEntry && analysis.explanation) {
-              payload = analysis.explanation;
-            } else if (moveEntry) {
-              payload = buildMoveExplanation({
-                moveEntry,
-                bestEntry: analysis.bestEntry,
-                actualEntry: analysis.actualEntry,
-                bestEval: parseEvalString(analysis.bestEntry ? analysis.bestEntry.eval : null),
-                actualEval: parseEvalString(analysis.actualEntry ? analysis.actualEntry.eval : null),
-                beforeEp: analysis.beforeEp,
-                bestEp: analysis.bestEp,
-                actualEp: analysis.actualEp,
-                cpLoss: analysis.cpLoss,
-                classification: analysis.classification,
-                overlay: analysis.overlay
-              });
-            }
+          const moveEntry = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
+          if (moveEntry && analysis.explanation) {
+            payload = analysis.explanation;
+          } else if (moveEntry) {
+            payload = buildMoveExplanation({
+              moveEntry,
+              bestEntry: analysis.bestEntry,
+              actualEntry: analysis.actualEntry,
+              bestEval: parseEvalString(analysis.bestEntry ? analysis.bestEntry.eval : null),
+              actualEval: parseEvalString(analysis.actualEntry ? analysis.actualEntry.eval : null),
+              beforeEp: analysis.beforeEp,
+              bestEp: analysis.bestEp,
+              actualEp: analysis.actualEp,
+              cpLoss: analysis.cpLoss,
+              classification: analysis.classification,
+              overlay: analysis.overlay
+            });
           }
         }
 
@@ -6255,9 +6241,7 @@
           } else if (state.ply === 0 && state.suggestionMode === 'played') {
             summaryEl.textContent = defaultMessage;
           } else if (!analysis && state.analysisStatus !== 'complete') {
-            summaryEl.textContent = viewingBest
-              ? 'Best move recommendation will appear when analysis is ready.'
-              : 'Engine explanation will appear when analysis is ready.';
+            summaryEl.textContent = 'Engine explanation will appear when analysis is ready.';
           } else {
             summaryEl.textContent = defaultMessage;
           }
@@ -6486,11 +6470,6 @@
         state.analysisStatus = 'queued';
         precomputeFullAnalysis();
         setStatus('loadStatus', 'Game ready.', 'ok');
-        const loadPanel = byId('loadPanel');
-        if (loadPanel) {
-          loadPanel.open = false;
-          persistPanelState('loadPanel', false);
-        }
         updateUrlState();
       }
 
@@ -6583,6 +6562,83 @@
         }
       }
 
+      function buildCurrentPgnString() {
+        const headers = { ...(state.headers || {}) };
+        if (state.initialFen && state.initialFen !== 'start') {
+          if (!headers.FEN) headers.FEN = state.initialFen;
+          if (!headers.SetUp) headers.SetUp = '1';
+        }
+
+        const headerLines = Object.entries(headers)
+          .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+          .map(([key, value]) => `[${key} "${value.replace(/"/g, '\\"')}"]`);
+
+        const moves = [];
+        const history = Array.isArray(state.verboseHistory) ? state.verboseHistory : [];
+        history.forEach((entry, index) => {
+          if (!entry || !entry.san) return;
+          const moveNumber = entry.moveNumber || Math.floor(index / 2) + 1;
+          const san = entry.san.trim();
+          const isWhiteMove = entry.color === 'w' || (entry.color !== 'b' && index % 2 === 0);
+          if (isWhiteMove) {
+            moves.push(`${moveNumber}. ${san}`);
+          } else if (moves.length) {
+            moves[moves.length - 1] = `${moves[moves.length - 1]} ${san}`;
+          } else {
+            moves.push(`${moveNumber}... ${san}`);
+          }
+        });
+
+        const result = headers.Result && headers.Result.trim() ? headers.Result.trim() : '*';
+        const moveSection = moves.length ? `${moves.join(' ')} ${result}`.trim() : result;
+        const sections = [];
+        if (headerLines.length) {
+          sections.push(headerLines.join('\n'));
+        }
+        sections.push(moveSection);
+        return sections.join('\n\n').trim();
+      }
+
+      function exportCurrentGame() {
+        const hasHistory = Array.isArray(state.verboseHistory) && state.verboseHistory.length > 0;
+        const hasHeaders = state.headers && Object.keys(state.headers).length > 0;
+        const hasRaw = typeof state.rawInput === 'string' && state.rawInput.trim().length > 0;
+        if (!hasHistory && !hasHeaders && !hasRaw) {
+          setStatus('loadStatus', 'Load a game before exporting.', 'error');
+          return;
+        }
+
+        try {
+          const pgn = buildCurrentPgnString();
+          if (!pgn) {
+            setStatus('loadStatus', 'Nothing to export yet.', 'error');
+            return;
+          }
+          const safeToken = (value) => (value || '')
+            .toString()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          const white = safeToken(state.headers && state.headers.White) || 'white';
+          const black = safeToken(state.headers && state.headers.Black) || 'black';
+          const slug = [white, 'vs', black].filter(Boolean).join('-').replace(/-+/g, '-');
+          const filename = slug ? `${slug}.pgn` : 'analysis.pgn';
+          const blob = new Blob([`${pgn}\n`], { type: 'application/x-chess-pgn' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          setStatus('loadStatus', `Exported ${filename}.`, 'ok');
+        } catch (err) {
+          console.error('Failed to export PGN', err);
+          setStatus('loadStatus', 'Unable to export PGN.', 'error');
+        }
+      }
+
       function handleLoadAffordanceClick(event) {
         const button = event.target.closest('button[data-load-action]');
         if (!button) return;
@@ -6598,6 +6654,12 @@
           setInputMode('fen');
           const input = byId('gameInput');
           if (input) input.focus();
+        } else if (action === 'lichess') {
+          setInputMode('lichess');
+          const input = byId('gameInput');
+          if (input) input.focus();
+        } else if (action === 'export') {
+          exportCurrentGame();
         }
       }
 
@@ -6719,15 +6781,6 @@
             event.target.value = '';
           });
         }
-        const explanationToggle = byId('explanationModeToggle');
-        if (explanationToggle) {
-          explanationToggle.addEventListener('click', (event) => {
-            const button = event.target.closest('button[data-explanation-mode]');
-            if (button) {
-              setExplanationMode(button.dataset.explanationMode);
-            }
-          });
-        }
         const classificationGroup = byId('classificationChipGroup');
         if (classificationGroup) {
           classificationGroup.addEventListener('click', (event) => {
@@ -6755,7 +6808,6 @@
         updateExploreControls();
         document.addEventListener('keydown', handleDocumentKeydown);
         document.addEventListener('click', handleDocumentClickForGhost);
-        updateExplanationModeUi();
         updateClassificationChips(null);
       }
 
@@ -6763,11 +6815,10 @@
         const compactLayout = shouldUseCompactInfoLayout();
         const panelDefaults = {
           engineExplanationCard: true,
-          loadPanel: true,
           gameInfoPanel: !compactLayout,
-          movesPanel: true,
+          movesPanel: false,
           moveSummaryPanel: false,
-          engineSuggestions: false
+          engineSuggestions: true
         };
 
         function setupPanel(id) {
@@ -6780,11 +6831,10 @@
         }
 
         setupPanel('engineExplanationCard');
-        setupPanel('loadPanel');
+        setupPanel('engineSuggestions');
         setupPanel('gameInfoPanel');
         setupPanel('movesPanel');
         setupPanel('moveSummaryPanel');
-        setupPanel('engineSuggestions');
 
         const media = window.matchMedia ? window.matchMedia('(max-width: 1199px)') : null;
         if (media) {
