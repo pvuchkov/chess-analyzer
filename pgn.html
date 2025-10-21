@@ -5209,7 +5209,7 @@
 
           const { entries: pvEntries, meta: shortlistMeta } = shortlistPvEntries(enriched, { fen });
           const bestEntry = pvEntries[0] || enriched[0] || null;
-          const summary = buildPositionSummary(fen, enriched);
+          let summary = buildPositionSummary(fen, enriched);
 
           const analysis = {
             fen,
@@ -5229,6 +5229,48 @@
             const firstKey = state.analysisByFen.keys().next().value;
             state.analysisByFen.delete(firstKey);
           }
+          if (opts.includeMoveUci && !entriesByUci.has(opts.includeMoveUci)) {
+            try {
+              const forced = await engineController.run({
+                fen,
+                depth: DEFAULT_ANALYSIS_DEPTH,
+                movetime: DEFAULT_ANALYSIS_MOVETIME,
+                multipv: 1,
+                showWdl: true,
+                searchMoves: [opts.includeMoveUci],
+                ply: opts.ply != null ? opts.ply : state.ply
+              });
+              if (token !== state.analysisToken) throw new Error('cancelled');
+              const fe = forced && Array.isArray(forced.entries)
+                ? forced.entries.find((e) => e && e.uci === opts.includeMoveUci) || forced.entries[0] || null
+                : null;
+              if (fe && fe.uci) {
+                const pvVerbose = convertPvToVerbose(fen, fe.pvMoves || fe.pv || fe.pvSan || fe.pvUci || fe.pv, 16);
+                const pvSan = pvVerbose.map((mv) => mv.san);
+                const injected = { ...fe, rank: (enriched.length + 1), pvVerbose, pvSan };
+                analysis.entriesByUci.set(injected.uci, injected);
+                const ep = expectedPointsForMover(injected, fen, sideToMoveFromFen(fen));
+                if (analysis.summary) {
+                  const byMove = analysis.summary.byMove instanceof Map ? analysis.summary.byMove : new Map();
+                  byMove.set(injected.uci, {
+                    ep,
+                    tag: null,
+                    eval: injected.eval || null,
+                    pvSan
+                  });
+                  analysis.summary = {
+                    ...analysis.summary,
+                    byMove
+                  };
+                } else {
+                  summary = buildPositionSummary(fen, [...enriched, injected]);
+                  analysis.summary = summary;
+                }
+              }
+            } catch (e) {
+              console.warn('Forced includeMove search failed', e);
+            }
+          }
           return analysis;
         })();
 
@@ -5247,6 +5289,10 @@
       }
 
       function getAnalysisForCurrentView() {
+        if (state.suggestionMode !== 'next' && state.ply > 0) {
+          const node = state.verboseHistory[state.ply - 1];
+          if (node && node.analysis) return node.analysis;
+        }
         const fen = (state.suggestionMode === 'next')
           ? (state.ply === 0 ? effectiveInitialFen() : state.verboseHistory[state.ply - 1]?.fen)
           : (state.ply === 0 ? effectiveInitialFen() : state.verboseHistory[state.ply - 1]?.preFen);
