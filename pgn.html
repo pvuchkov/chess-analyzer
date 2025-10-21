@@ -96,19 +96,6 @@
       .layout {
         grid-template-columns: 1fr;
       }
-
-      .board-expl-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .board-expl-resizer {
-        display: none;
-      }
-
-      .engine-expl-inner {
-        position: static;
-        max-height: none;
-      }
     }
 
     .card {
@@ -228,14 +215,13 @@
     }
 
     .explanation-panel {
-      margin-top: 0;
+      margin-top: 14px;
       border: 1px solid var(--panel-border);
       border-radius: 12px;
       padding: 14px 16px;
       background: rgba(148, 163, 184, 0.08);
       display: grid;
       gap: 10px;
-      min-height: 0;
     }
 
     [data-theme="light"] .explanation-panel {
@@ -378,95 +364,6 @@
     }
 
     .explanation-actions[hidden] {
-      display: none;
-    }
-
-    .board-expl-layout {
-      --expl-pane-min: 360px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(var(--expl-pane-min), var(--expl-pane-width, min(480px, 36vw)));
-      gap: 16px;
-      align-items: start;
-      position: relative;
-    }
-
-    .board-expl-board,
-    .board-expl-expl {
-      min-width: 0;
-    }
-
-    .engine-expl-inner {
-      position: sticky;
-      top: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: calc(100vh - 24px);
-      min-height: 0;
-    }
-
-    .engine-expl-title {
-      margin: 0;
-      font-size: 18px;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    #explanationBox {
-      flex: 1;
-      overflow-y: auto;
-      scrollbar-gutter: stable both-edges;
-    }
-
-    .board-expl-resizer {
-      grid-column: 2;
-      justify-self: start;
-      align-self: stretch;
-      width: 12px;
-      margin-left: -18px;
-      background: transparent;
-      border: none;
-      padding: 0;
-      cursor: col-resize;
-      position: relative;
-      border-radius: 999px;
-      transition: background-color 0.2s ease;
-    }
-
-    .board-expl-resizer:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    .board-expl-resizer::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      width: 2px;
-      margin: 0 auto;
-      background: var(--panel-border);
-      border-radius: 999px;
-      opacity: 0.7;
-      transition: opacity 0.2s ease;
-    }
-
-    .board-expl-resizer:hover::before,
-    .board-expl-resizer:focus-visible::before,
-    .board-expl-layout.board-expl-resizing .board-expl-resizer::before {
-      opacity: 1;
-    }
-
-    .board-expl-layout.board-expl-stacked {
-      grid-template-columns: 1fr;
-    }
-
-    .board-expl-layout.board-expl-stacked .engine-expl-inner {
-      position: static;
-      max-height: none;
-    }
-
-    .board-expl-layout.board-expl-stacked .board-expl-resizer {
       display: none;
     }
 
@@ -1248,74 +1145,59 @@
       </details>
 
       <h2>Board</h2>
-      <div class="board-expl-layout" id="boardExplLayout">
-        <div class="board-expl-board">
-          <div class="board-area">
-            <div class="eval-column" id="evalColumn" data-orientation="white">
-              <div class="eval-label eval-label-black" id="evalBlackValue"></div>
-              <div class="eval-vertical">
-                <div class="eval-fill" id="evalFill"></div>
-                <div class="eval-marker" id="evalMarker"></div>
-              </div>
-              <div class="eval-label" id="evalWhiteValue">0.00</div>
-            </div>
-            <div class="board-wrap">
-              <div id="board"></div>
-              <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
-              <div class="board-badge-layer">
-                <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
-                  <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
-                  <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
-                </div>
-              </div>
-            </div>
+      <div class="board-area">
+        <div class="eval-column" id="evalColumn" data-orientation="white">
+          <div class="eval-label eval-label-black" id="evalBlackValue"></div>
+          <div class="eval-vertical">
+            <div class="eval-fill" id="evalFill"></div>
+            <div class="eval-marker" id="evalMarker"></div>
           </div>
-          <div class="material-panel">
-            <div class="material-card">
-              <div class="material-player">White</div>
-              <div class="material-score" id="materialWhite">0</div>
-              <div class="material-capture" id="materialWhiteCapture">—</div>
-            </div>
-            <div class="material-card">
-              <div class="material-player">Black</div>
-              <div class="material-score" id="materialBlack">0</div>
-              <div class="material-capture" id="materialBlackCapture">—</div>
-            </div>
-          </div>
-          <div class="row" style="margin-top:14px; align-items:center;">
-            <button id="firstBtn" class="secondary">⏮ First</button>
-            <button id="prevBtn" class="secondary">◀ Prev</button>
-            <button id="nextBtn">Next ▶</button>
-            <button id="lastBtn">Last ⏭</button>
-            <button id="flipBtn" class="secondary">Flip</button>
-            <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
-            <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
-            <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
-          </div>
-          <div id="navStatus" class="status"></div>
+          <div class="eval-label" id="evalWhiteValue">0.00</div>
         </div>
-        <div class="board-expl-expl">
-          <div class="engine-expl">
-            <div class="engine-expl-inner">
-              <h2 class="engine-expl-title">Engine explanation</h2>
-              <div id="explanationBox" class="explanation-panel">
-                <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
-                <div id="explanationActions" class="explanation-actions" hidden>
-                  <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear preview</button>
-                </div>
-                <div id="explanationCards" class="explanation-cards"></div>
-                <div id="explanationDetails" class="explanation-details"></div>
-              </div>
+        <div class="board-wrap">
+          <div id="board"></div>
+          <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+          <div class="board-badge-layer">
+            <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
+              <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+              <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
             </div>
           </div>
         </div>
-        <button
-          id="explResizer"
-          class="board-expl-resizer"
-          type="button"
-          aria-label="Resize engine explanation panel"
-          aria-orientation="vertical"
-        ></button>
+      </div>
+      <div class="material-panel">
+        <div class="material-card">
+          <div class="material-player">White</div>
+          <div class="material-score" id="materialWhite">0</div>
+          <div class="material-capture" id="materialWhiteCapture">—</div>
+        </div>
+        <div class="material-card">
+          <div class="material-player">Black</div>
+          <div class="material-score" id="materialBlack">0</div>
+          <div class="material-capture" id="materialBlackCapture">—</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:14px; align-items:center;">
+        <button id="firstBtn" class="secondary">⏮ First</button>
+        <button id="prevBtn" class="secondary">◀ Prev</button>
+        <button id="nextBtn">Next ▶</button>
+        <button id="lastBtn">Last ⏭</button>
+        <button id="flipBtn" class="secondary">Flip</button>
+        <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
+        <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
+        <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
+      </div>
+      <div id="navStatus" class="status"></div>
+
+      <h2 style="margin-top:22px;">Engine explanation</h2>
+      <div id="explanationBox" class="explanation-panel">
+        <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
+        <div id="explanationActions" class="explanation-actions" hidden>
+          <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear shown line</button>
+        </div>
+        <div id="explanationCards" class="explanation-cards"></div>
+        <div id="explanationDetails" class="explanation-details"></div>
       </div>
     </div>
 
@@ -1435,18 +1317,13 @@
         headers: {},
         lineOverlay: [],
         ghostPreview: null,
-        continuationContexts: new Map(),
-        continuationSeq: 0,
         nodeMap: new Map(),
         rootNodeId: null,
         currentNodeId: null,
         lineSelections: new Map(),
         mainlineSelections: new Map(),
         nodeSeq: 0,
-        exploreMode: false,
-        explPaneWidth: null,
-        explPanePointerId: null,
-        explPaneResizing: false
+        exploreMode: false
       };
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -1458,183 +1335,6 @@
         q: 'queen',
         k: 'king'
       };
-
-      const EXPL_WIDTH_STORAGE_KEY = 'explainerPaneWidth';
-      const EXPL_WIDTH_MIN = 360;
-      const EXPL_WIDTH_MAX = 640;
-      const GHOST_BASE_OPACITY = 0.35;
-      const GHOST_ACTIVE_OPACITY = 0.55;
-      const GHOST_SINGLE_OPACITY = 0.45;
-
-      function getCssVarValue(name, fallback) {
-        try {
-          const computed = getComputedStyle(document.documentElement);
-          const value = computed.getPropertyValue(name);
-          return value && value.trim() ? value.trim() : fallback;
-        } catch (err) {
-          return fallback;
-        }
-      }
-
-      function getGhostStrokeColor() {
-        return getCssVarValue('--muted', '#94a3b8');
-      }
-
-      function getGhostHighlightColor() {
-        return getCssVarValue('--muted', '#94a3b8');
-      }
-
-      function getGhostTextColor() {
-        return getCssVarValue('--text', '#e2e8f0');
-      }
-
-      function escapeSelector(value) {
-        if (typeof value !== 'string') return '';
-        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
-          return CSS.escape(value);
-        }
-        return value.replace(/([!"#$%&'()*+,./:;<=>?@\[\]^`{|}~])/g, '\\$1');
-      }
-
-      function clampExplPaneWidth(value) {
-        if (!Number.isFinite(value)) return null;
-        return Math.min(EXPL_WIDTH_MAX, Math.max(EXPL_WIDTH_MIN, Math.round(value)));
-      }
-
-      function loadSavedExplWidth() {
-        try {
-          const raw = localStorage.getItem(EXPL_WIDTH_STORAGE_KEY);
-          const parsed = Number.parseInt(raw, 10);
-          return Number.isFinite(parsed) ? clampExplPaneWidth(parsed) : null;
-        } catch (err) {
-          return null;
-        }
-      }
-
-      function saveExplPaneWidth(width) {
-        try {
-          if (!Number.isFinite(width)) {
-            localStorage.removeItem(EXPL_WIDTH_STORAGE_KEY);
-          } else {
-            localStorage.setItem(EXPL_WIDTH_STORAGE_KEY, String(width));
-          }
-        } catch (err) {
-          // ignore storage issues
-        }
-      }
-
-      function applyExplPaneWidth(width) {
-        const container = byId('boardExplLayout');
-        if (!container) return;
-        const clamped = clampExplPaneWidth(width);
-        if (clamped == null) {
-          container.style.removeProperty('--expl-pane-width');
-          state.explPaneWidth = null;
-          return;
-        }
-        container.style.setProperty('--expl-pane-width', `${clamped}px`);
-        state.explPaneWidth = clamped;
-      }
-
-      function clearExplPaneWidth() {
-        const container = byId('boardExplLayout');
-        if (!container) return;
-        container.style.removeProperty('--expl-pane-width');
-      }
-
-      function updateExplLayoutMode() {
-        const container = byId('boardExplLayout');
-        if (!container) return;
-        const stacked = window.innerWidth <= 1024;
-        container.classList.toggle('board-expl-stacked', stacked);
-        if (stacked) {
-          container.classList.remove('board-expl-resizing');
-          clearExplPaneWidth();
-          document.body.style.cursor = '';
-          state.explPaneResizing = false;
-          state.explPanePointerId = null;
-          return;
-        }
-        const targetWidth = Number.isFinite(state.explPaneWidth)
-          ? state.explPaneWidth
-          : loadSavedExplWidth();
-        if (targetWidth != null) {
-          applyExplPaneWidth(targetWidth);
-        } else {
-          clearExplPaneWidth();
-        }
-      }
-
-      function handleExplPaneResizeMove(event) {
-        if (!state.explPaneResizing) return;
-        const container = byId('boardExplLayout');
-        if (!container) return;
-        const rect = container.getBoundingClientRect();
-        if (!rect || !rect.width) return;
-        const pointerX = event.clientX;
-        if (!Number.isFinite(pointerX)) return;
-        const width = rect.right - pointerX;
-        applyExplPaneWidth(width);
-      }
-
-      function endExplPaneResize(event) {
-        if (!state.explPaneResizing) return;
-        state.explPaneResizing = false;
-        const container = byId('boardExplLayout');
-        if (container) {
-          container.classList.remove('board-expl-resizing');
-        }
-        const resizer = byId('explResizer');
-        if (resizer && typeof state.explPanePointerId === 'number') {
-          try {
-            resizer.releasePointerCapture(state.explPanePointerId);
-          } catch (err) {
-            // ignore release errors
-          }
-        }
-        state.explPanePointerId = null;
-        document.body.style.cursor = '';
-        if (Number.isFinite(state.explPaneWidth)) {
-          saveExplPaneWidth(state.explPaneWidth);
-        }
-      }
-
-      function beginExplPaneResize(event) {
-        if (!event || typeof event.pointerId !== 'number') return;
-        if (window.innerWidth <= 1024) return;
-        const container = byId('boardExplLayout');
-        if (!container) return;
-        event.preventDefault();
-        state.explPaneResizing = true;
-        state.explPanePointerId = event.pointerId;
-        container.classList.add('board-expl-resizing');
-        document.body.style.cursor = 'col-resize';
-        if (event.currentTarget && typeof event.currentTarget.setPointerCapture === 'function') {
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }
-      }
-
-      function handleWindowResizeForExplLayout() {
-        updateExplLayoutMode();
-      }
-
-      function initExplanationLayout() {
-        const container = byId('boardExplLayout');
-        if (!container) return;
-        const savedWidth = loadSavedExplWidth();
-        if (savedWidth != null) {
-          applyExplPaneWidth(savedWidth);
-        }
-        updateExplLayoutMode();
-        const resizer = byId('explResizer');
-        if (resizer) {
-          resizer.addEventListener('pointerdown', beginExplPaneResize);
-        }
-        window.addEventListener('pointermove', handleExplPaneResizeMove);
-        window.addEventListener('pointerup', endExplPaneResize);
-        window.addEventListener('pointercancel', endExplPaneResize);
-        window.addEventListener('resize', handleWindowResizeForExplLayout);
-      }
 
       function resetMoveTree() {
         state.nodeMap = new Map();
@@ -3055,19 +2755,9 @@
 
         if (hasGhostPreview()) {
           const preview = state.ghostPreview;
-          const tokens = Array.isArray(preview.tokens) ? preview.tokens : [];
-          const mode = preview && preview.mode === 'line' ? 'line' : 'single';
-          const ghostColor = getGhostStrokeColor();
-          const ghostTextColor = getGhostTextColor();
-          const highlightColor = getGhostHighlightColor();
-          const activeIndex = Number.isFinite(preview.cursor) ? preview.cursor : -1;
-
-          tokens.forEach((token, index) => {
-            if (!token || !token.drawable) return;
-            if (mode !== 'line' && index !== activeIndex) return;
-            const from = getSquareCenterCoords(token.from, squareSize);
-            const to = getSquareCenterCoords(token.to, squareSize);
-            if (!from || !to) return;
+          const from = getSquareCenterCoords(preview.from, squareSize);
+          const to = getSquareCenterCoords(preview.to, squareSize);
+          if (from && to) {
             const dx = to.x - from.x;
             const dy = to.y - from.y;
             const len = Math.hypot(dx, dy) || 1;
@@ -3079,69 +2769,36 @@
             const sy = from.y + unitY * startOffset;
             const ex = to.x - unitX * shorten;
             const ey = to.y - unitY * shorten;
-            const isActive = index === activeIndex;
-            const opacity = mode === 'line'
-              ? (isActive ? GHOST_ACTIVE_OPACITY : GHOST_BASE_OPACITY)
-              : GHOST_SINGLE_OPACITY;
-            const width = isActive ? 5 : 4;
+            const accent = getAccentColor();
 
             const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            if (isActive) {
-              const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-              highlight.setAttribute('x', to.x - squareSize / 2);
-              highlight.setAttribute('y', to.y - squareSize / 2);
-              highlight.setAttribute('width', squareSize);
-              highlight.setAttribute('height', squareSize);
-              const corner = Math.min(12, squareSize * 0.25);
-              highlight.setAttribute('rx', corner);
-              highlight.setAttribute('ry', corner);
-              const highlightOpacity = mode === 'line' ? 0.22 : 0.28;
-              highlight.setAttribute('fill', highlightColor);
-              highlight.setAttribute('opacity', highlightOpacity);
-              group.appendChild(highlight);
-            }
+
+            const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            highlight.setAttribute('x', to.x - squareSize / 2);
+            highlight.setAttribute('y', to.y - squareSize / 2);
+            highlight.setAttribute('width', squareSize);
+            highlight.setAttribute('height', squareSize);
+            const corner = Math.min(12, squareSize * 0.25);
+            highlight.setAttribute('rx', corner);
+            highlight.setAttribute('ry', corner);
+            highlight.setAttribute('fill', accent);
+            highlight.setAttribute('opacity', 0.28);
+            group.appendChild(highlight);
+
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             line.setAttribute('x1', sx);
             line.setAttribute('y1', sy);
             line.setAttribute('x2', ex);
             line.setAttribute('y2', ey);
-            line.setAttribute('stroke', ghostColor);
-            line.setAttribute('stroke-width', width);
+            line.setAttribute('stroke', accent);
+            line.setAttribute('stroke-width', 5);
             line.setAttribute('stroke-linecap', 'round');
             line.setAttribute('marker-end', 'url(#mOverlay)');
-            line.setAttribute('opacity', opacity);
+            line.setAttribute('opacity', 0.45);
             group.appendChild(line);
 
-            if (mode === 'line') {
-              const ratio = Math.min(0.8, Math.max(0.2, 0.35));
-              const labelX = sx + (ex - sx) * ratio;
-              const labelY = sy + (ey - sy) * ratio;
-              const order = index + 1;
-              const radius = order >= 10 ? 16 : 14;
-
-              const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-              circle.setAttribute('cx', labelX);
-              circle.setAttribute('cy', labelY);
-              circle.setAttribute('r', radius);
-              circle.setAttribute('fill', ghostColor);
-              circle.setAttribute('stroke', ghostColor);
-              circle.setAttribute('stroke-width', 1.5);
-              circle.setAttribute('opacity', 0.25);
-              group.appendChild(circle);
-
-              const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-              text.setAttribute('x', labelX);
-              text.setAttribute('y', labelY);
-              text.setAttribute('text-anchor', 'middle');
-              text.setAttribute('dominant-baseline', 'middle');
-              text.setAttribute('font-size', order >= 10 ? 13 : 14);
-              text.setAttribute('fill', ghostTextColor);
-              text.textContent = String(order);
-              group.appendChild(text);
-            }
-
             overlayLayer.appendChild(group);
-          });
+          }
         }
       }
 
@@ -3245,17 +2902,13 @@
       }
 
       function hasGhostPreview() {
-        return Boolean(
-          state.ghostPreview &&
-          Array.isArray(state.ghostPreview.tokens) &&
-          state.ghostPreview.tokens.some((token) => token && token.drawable)
-        );
+        return Boolean(state.ghostPreview && state.ghostPreview.from && state.ghostPreview.to);
       }
 
       function updateLineOverlayButton() {
         const actions = byId('explanationActions');
         const button = byId('clearLineOverlayBtn');
-        const active = hasGhostPreview();
+        const active = hasLineOverlay() || hasGhostPreview();
         if (actions) {
           actions.hidden = !active;
         }
@@ -3299,21 +2952,12 @@
       }
 
       function updateGhostTokenState() {
-        const preview = state.ghostPreview || null;
-        const activeContext = preview && preview.contextId ? preview.contextId : null;
-        const activeIndex = preview && Number.isFinite(preview.cursor) ? preview.cursor : null;
+        const activeSan = state.ghostPreview && state.ghostPreview.san ? state.ghostPreview.san : null;
         const tokens = document.querySelectorAll('.pv-move-token');
         tokens.forEach((token) => {
           if (!token || !token.dataset) return;
-          const contextId = token.dataset.contextId || null;
-          const indexValue = token.dataset.index != null ? Number.parseInt(token.dataset.index, 10) : NaN;
-          const isActive = Boolean(
-            activeContext &&
-            contextId === activeContext &&
-            Number.isFinite(activeIndex) &&
-            indexValue === activeIndex
-          );
-          token.classList.toggle('active', isActive);
+          const san = token.dataset.san || '';
+          token.classList.toggle('active', Boolean(activeSan) && san === activeSan);
         });
       }
 
@@ -3325,48 +2969,13 @@
         updateLineOverlayButton();
       }
 
-      function findDrawableIndex(tokens, startIndex, step) {
-        if (!Array.isArray(tokens) || !tokens.length || !Number.isFinite(step)) return -1;
-        let index = startIndex;
-        while (true) {
-          index += step;
-          if (index < 0 || index >= tokens.length) break;
-          const candidate = tokens[index];
-          if (candidate && candidate.drawable) {
-            return index;
-          }
-        }
-        return -1;
-      }
-
-      function resolveDrawableCursor(tokens, index) {
-        if (!Array.isArray(tokens) || !tokens.length) return -1;
-        if (index >= 0 && index < tokens.length && tokens[index] && tokens[index].drawable) {
-          return index;
-        }
-        const forward = findDrawableIndex(tokens, index, 1);
-        if (forward >= 0) return forward;
-        const backward = findDrawableIndex(tokens, index, -1);
-        if (backward >= 0) return backward;
-        return -1;
-      }
-
-      function setGhostPreview({ contextId = null, tokens = [], cursor = 0, mode = 'single' } = {}) {
-        const list = Array.isArray(tokens) ? tokens : [];
-        if (!list.length) {
-          clearGhostPreview();
-          return;
-        }
-        let resolvedCursor = Number.isFinite(cursor) ? cursor : 0;
-        resolvedCursor = Math.max(0, Math.min(resolvedCursor, list.length - 1));
-        const drawableCursor = resolveDrawableCursor(list, resolvedCursor);
-        const preview = {
-          contextId,
-          tokens: list,
-          cursor: drawableCursor,
-          mode: mode === 'line' ? 'line' : 'single'
+      function showGhostPreview(preview) {
+        if (!preview || !preview.from || !preview.to) return;
+        state.ghostPreview = {
+          from: preview.from,
+          to: preview.to,
+          san: preview.san || null
         };
-        state.ghostPreview = preview;
         drawArrowOverlay(state.lineOverlay);
         updateGhostTokenState();
         updateLineOverlayButton();
@@ -3374,6 +2983,10 @@
 
       function previewContinuationSan(san) {
         if (!san) return;
+        if (state.ghostPreview && state.ghostPreview.san === san) {
+          clearGhostPreview();
+          return;
+        }
         const baseFen = state.game ? state.game.fen() : effectiveInitialFen();
         let game;
         try {
@@ -3383,84 +2996,24 @@
         }
         let move = null;
         try {
-          move = game.move(san, { sloppy: true });
+          move = game.move(san);
         } catch (err) {
           move = null;
         }
         if (!move || !move.from || !move.to) return;
-        const token = {
-          index: 0,
-          san: move.san || san,
+        showGhostPreview({
           from: move.from,
           to: move.to,
-          promotion: move.promotion || null,
-          uci: `${move.from}${move.to}${move.promotion || ''}`.toLowerCase(),
-          fenBefore: baseFen,
-          fenAfter: game.fen(),
-          drawable: true
-        };
-        const active = state.ghostPreview;
-        if (
-          active &&
-          !active.contextId &&
-          Array.isArray(active.tokens) &&
-          active.tokens.length === 1 &&
-          active.tokens[0] &&
-          active.tokens[0].san === token.san
-        ) {
-          clearGhostPreview();
-          return;
-        }
-        setGhostPreview({ contextId: null, tokens: [token], cursor: 0, mode: 'single' });
-      }
-
-      function previewContinuationToken(contextId, index, options = {}) {
-        const context = getContinuationContext(contextId);
-        if (!context || !Array.isArray(context.tokens) || !context.tokens.length) return;
-        const targetIndex = Number.isFinite(index) ? index : 0;
-        setGhostPreview({
-          contextId: context.id,
-          tokens: context.tokens,
-          cursor: targetIndex,
-          mode: options.mode === 'line' ? 'line' : 'single'
+          san: move.san || san
         });
-      }
-
-      function previewFullLine(contextId) {
-        previewContinuationToken(contextId, 0, { mode: 'line' });
-      }
-
-      function focusGhostToken(contextId, index) {
-        if (!contextId || !Number.isFinite(index)) return;
-        const selector = `.pv-move-token[data-context-id="${escapeSelector(contextId)}"][data-index="${index}"]`;
-        const element = document.querySelector(selector);
-        if (element && typeof element.focus === 'function') {
-          try {
-            element.focus({ preventScroll: true });
-          } catch (err) {
-            element.focus();
-          }
-        }
       }
 
       function handleContinuationTokenInteraction(event) {
         const token = event.target.closest('.pv-move-token');
         if (!token) return false;
         const san = token.dataset ? token.dataset.san : null;
-        const contextId = token.dataset ? token.dataset.contextId : null;
-        const indexValue = token.dataset && token.dataset.index != null ? Number.parseInt(token.dataset.index, 10) : null;
         if (!san) return false;
         event.preventDefault();
-        if (contextId && Number.isFinite(indexValue)) {
-          const preview = state.ghostPreview;
-          if (preview && preview.contextId === contextId && preview.mode === 'single' && preview.cursor === indexValue) {
-            clearGhostPreview();
-          } else {
-            previewContinuationToken(contextId, indexValue, { mode: 'single' });
-            token.focus();
-          }
-          return true;
-        }
         previewContinuationSan(san);
         token.focus();
         return true;
@@ -3468,50 +3021,14 @@
 
       function handleDocumentClickForGhost(event) {
         if (!hasGhostPreview()) return;
-        if (event.target.closest('.pv-move-token')) return;
-        if (event.target.closest('#explanationBox')) return;
-        if (event.target.closest('.board-expl-resizer')) return;
+        const token = event.target.closest('.pv-move-token');
+        if (token) return;
         clearGhostPreview();
       }
 
-      function stepGhostPreview(delta) {
-        if (!state.ghostPreview || !Number.isFinite(delta)) return;
-        const tokens = Array.isArray(state.ghostPreview.tokens) ? state.ghostPreview.tokens : [];
-        if (!tokens.length) return;
-        const direction = delta > 0 ? 1 : -1;
-        const current = Number.isFinite(state.ghostPreview.cursor) ? state.ghostPreview.cursor : -1;
-        let next = current;
-        while (true) {
-          next += direction;
-          if (next < 0 || next >= tokens.length) return;
-          const candidate = tokens[next];
-          if (candidate && candidate.drawable) break;
-        }
-        state.ghostPreview.cursor = next;
-        drawArrowOverlay(state.lineOverlay);
-        updateGhostTokenState();
-        focusGhostToken(state.ghostPreview.contextId, next);
-      }
-
       function handleDocumentKeydown(event) {
-        if (!hasGhostPreview()) {
-          return;
-        }
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && hasGhostPreview()) {
           clearGhostPreview();
-          return;
-        }
-        const target = event.target;
-        const isEditable = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-        if (isEditable) return;
-        if (event.metaKey || event.ctrlKey || event.altKey) return;
-        const key = event.key;
-        if (key === 'ArrowRight' || key === 'k' || key === 'K') {
-          event.preventDefault();
-          stepGhostPreview(1);
-        } else if (key === 'ArrowLeft' || key === 'j' || key === 'J') {
-          event.preventDefault();
-          stepGhostPreview(-1);
         }
       }
 
@@ -3543,24 +3060,16 @@
       }
 
       function clearLineOverlay(options = {}) {
-        const keepLine = Boolean(options && options.keepLine);
-        const analysis = options && options.analysis ? options.analysis : null;
         const hadOverlay = hasLineOverlay();
         const hadGhost = hasGhostPreview();
-        if (!keepLine) {
-          if (hadOverlay) {
-            setLineOverlay([], options);
-          } else {
-            updateLineOverlayButton();
-            refreshShowLineButtons(analysis);
-          }
-        } else if (analysis) {
-          refreshShowLineButtons(analysis);
+        if (hadOverlay) {
+          setLineOverlay([], options);
+        } else {
+          updateLineOverlayButton();
+          refreshShowLineButtons(options && options.analysis ? options.analysis : null);
         }
         if (hadGhost) {
           clearGhostPreview();
-        } else if (keepLine) {
-          updateLineOverlayButton();
         }
       }
 
@@ -3575,32 +3084,20 @@
           refreshShowLineButtons(null);
           return;
         }
-        const contextId = btn.dataset.contextId || null;
         const seq = getOverlaySequenceForKind(kind, analysis);
         if (!Array.isArray(seq) || !seq.length) {
-          if (contextId) {
-            previewFullLine(contextId);
-          }
           refreshShowLineButtons(analysis);
-          btn.blur();
           return;
         }
         const overlay = overlayFromSeq(seq);
         if (!overlay.length) {
-          if (contextId) {
-            previewFullLine(contextId);
-          }
           refreshShowLineButtons(analysis);
-          btn.blur();
           return;
         }
         if (overlaysEqual(state.lineOverlay, overlay)) {
           clearLineOverlay({ analysis });
         } else {
           setLineOverlay(overlay, { analysis });
-          if (contextId) {
-            previewFullLine(contextId);
-          }
         }
         btn.blur();
       }
@@ -4468,37 +3965,13 @@
               to: raw.slice(2, 4),
               promotion: raw.length > 4 ? raw.slice(4) : undefined
             };
-            const preFen = game.fen();
             const played = game.move(move);
             if (!played) break;
-            out.push({ ...played, uci: raw, fen: game.fen(), preFen });
+            out.push({ ...played, uci: raw, fen: game.fen() });
             if (out.length >= limit) break;
           }
         } catch (err) {
           console.warn('Failed to expand PV line', err);
-        }
-        return out;
-      }
-
-      function expandSanLine(fen, sanMoves, limit = 12) {
-        const out = [];
-        if (!fen || !Array.isArray(sanMoves) || sanMoves.length === 0) {
-          return out;
-        }
-        try {
-          const game = new Chess(fen);
-          const max = Math.min(limit, sanMoves.length);
-          for (let i = 0; i < max; i++) {
-            const rawSan = sanMoves[i];
-            if (!rawSan) continue;
-            const before = game.fen();
-            const played = game.move(rawSan, { sloppy: true });
-            if (!played) break;
-            const uci = `${played.from}${played.to}${played.promotion || ''}`;
-            out.push({ ...played, san: played.san || rawSan, uci, fen: game.fen(), preFen: before });
-          }
-        } catch (err) {
-          console.warn('Failed to expand SAN snippet', err);
         }
         return out;
       }
@@ -4533,131 +4006,14 @@
         return Math.max(0, Math.min(100, epMover * 100));
       }
 
-      function ensureContinuationContextMap() {
-        if (!(state.continuationContexts instanceof Map)) {
-          state.continuationContexts = new Map();
-        }
-        return state.continuationContexts;
-      }
-
-      function resetContinuationContexts() {
-        const map = ensureContinuationContextMap();
-        map.clear();
-        state.continuationSeq = 0;
-      }
-
-      function getContinuationContext(id) {
-        if (!id) return null;
-        const map = ensureContinuationContextMap();
-        return map.get(id) || null;
-      }
-
-      function registerContinuationContext({ sanMoves, rootFen = null, verbose = [], uci = [], limit = 6 }) {
-        const moves = Array.isArray(sanMoves)
-          ? sanMoves.filter((value) => typeof value === 'string' ? value.trim().length > 0 : Boolean(value)).slice(0, limit)
-          : [];
-        if (!moves.length) return null;
-        const map = ensureContinuationContextMap();
-        state.continuationSeq = (state.continuationSeq || 0) + 1;
-        const id = `ctx-${state.continuationSeq}`;
-        const verboseSeq = Array.isArray(verbose) ? verbose.slice(0, moves.length) : [];
-        const uciSeq = Array.isArray(uci) ? uci.slice(0, moves.length) : [];
-        const expanded = (!verboseSeq.length || verboseSeq.length < moves.length) && rootFen
-          ? expandSanLine(rootFen, moves, limit)
-          : verboseSeq;
-        const tokens = [];
-        let fallbackFen = rootFen || null;
-        for (let i = 0; i < moves.length; i++) {
-          const raw = moves[i];
-          const san = typeof raw === 'string' ? raw.trim() : String(raw || '');
-          if (!san) continue;
-          const verboseEntry = verboseSeq[i] || expanded[i] || null;
-          let from = verboseEntry && verboseEntry.from ? verboseEntry.from : null;
-          let to = verboseEntry && verboseEntry.to ? verboseEntry.to : null;
-          let promotion = verboseEntry && verboseEntry.promotion ? verboseEntry.promotion : null;
-          let fenAfter = verboseEntry && verboseEntry.fen ? verboseEntry.fen : null;
-          let fenBefore = verboseEntry && verboseEntry.preFen ? verboseEntry.preFen : (fallbackFen || null);
-          let uciValue = (uciSeq[i] && typeof uciSeq[i] === 'string' && uciSeq[i].length >= 4)
-            ? uciSeq[i].toLowerCase()
-            : (verboseEntry && typeof verboseEntry.uci === 'string' && verboseEntry.uci.length >= 4
-              ? verboseEntry.uci.toLowerCase()
-              : null);
-          if ((!from || !to) && fenBefore) {
-            try {
-              const game = new Chess(fenBefore);
-              const played = game.move(san, { sloppy: true });
-              if (played) {
-                from = played.from;
-                to = played.to;
-                promotion = played.promotion || promotion;
-                fenAfter = game.fen();
-                if (!uciValue) {
-                  uciValue = `${played.from}${played.to}${played.promotion || ''}`.toLowerCase();
-                }
-              }
-            } catch (err) {
-              // ignore fallback errors
-            }
-          }
-          if (!fenAfter && fenBefore && from && to) {
-            try {
-              const game = new Chess(fenBefore);
-              const played = game.move({ from, to, promotion });
-              if (played) {
-                fenAfter = game.fen();
-              }
-            } catch (err) {
-              // ignore
-            }
-          }
-          const token = {
-            index: tokens.length,
-            san,
-            uci: uciValue,
-            from,
-            to,
-            promotion: promotion || null,
-            fenBefore: fenBefore || null,
-            fenAfter: fenAfter || null,
-            drawable: Boolean(from && to)
-          };
-          tokens.push(token);
-          fallbackFen = token.fenAfter || fallbackFen;
-        }
-        if (!tokens.length) return null;
-        const context = { id, rootFen: rootFen || null, tokens };
-        map.set(id, context);
-        return context;
-      }
-
-      function buildContinuationEntry(label, sanMoves, limit = 6, options = {}) {
+      function buildContinuationEntry(label, sanMoves, limit = 6) {
         if (!Array.isArray(sanMoves) || !sanMoves.length) return null;
-        const trimmedMoves = sanMoves
-          .map((move) => (typeof move === 'string' ? move.trim() : String(move || '')))
-          .filter((move) => move.length > 0)
-          .slice(0, limit);
-        if (!trimmedMoves.length) return null;
-        const verboseSeq = Array.isArray(options.verbose) ? options.verbose.slice(0, trimmedMoves.length) : [];
-        const uciSeq = Array.isArray(options.uci) ? options.uci.slice(0, trimmedMoves.length) : [];
-        const context = registerContinuationContext({
-          sanMoves: trimmedMoves,
-          rootFen: options.rootFen || null,
-          verbose: verboseSeq,
-          uci: uciSeq,
-          limit
-        });
+        const moves = sanMoves.filter(Boolean).slice(0, limit);
+        if (!moves.length) return null;
         return {
           type: 'continuation',
           label: label || null,
-          moves: context ? context.tokens : trimmedMoves,
-          contextId: context ? context.id : null,
-          meta: {
-            sanMoves: trimmedMoves,
-            rootFen: options.rootFen || null,
-            verbose: verboseSeq,
-            uci: uciSeq,
-            limit
-          }
+          moves
         };
       }
 
@@ -4665,111 +4021,18 @@
         return Boolean(value && typeof value === 'object' && value.type === 'continuation' && Array.isArray(value.moves));
       }
 
-      function hydrateContinuationEntry(entry) {
-        if (!isContinuationEntry(entry)) return entry;
-        if (entry.contextId && getContinuationContext(entry.contextId)) {
-          return entry;
-        }
-        const meta = entry.meta && typeof entry.meta === 'object' ? entry.meta : {};
-        let sanMoves = Array.isArray(meta.sanMoves) ? meta.sanMoves.slice() : null;
-        if (!sanMoves || !sanMoves.length) {
-          sanMoves = Array.isArray(entry.moves)
-            ? entry.moves
-              .map((move) => {
-                if (!move) return null;
-                if (typeof move === 'string') return move.trim();
-                if (typeof move.san === 'string') return move.san.trim();
-                return null;
-              })
-              .filter((value) => value && value.length > 0)
-            : [];
-        }
-        if (!sanMoves.length) {
-          entry.contextId = null;
-          entry.moves = [];
-          entry.meta = { ...meta, sanMoves: [] };
-          return entry;
-        }
-        const limit = Number.isFinite(meta.limit) ? meta.limit : sanMoves.length;
-        const verboseSeq = Array.isArray(meta.verbose) ? meta.verbose.slice(0, limit) : [];
-        const uciSeq = Array.isArray(meta.uci) ? meta.uci.slice(0, limit) : [];
-        const fallbackRoot = Array.isArray(entry.moves)
-          && entry.moves.length
-          && entry.moves[0]
-          && typeof entry.moves[0].fenBefore === 'string'
-          ? entry.moves[0].fenBefore
-          : null;
-        const context = registerContinuationContext({
-          sanMoves,
-          rootFen: meta.rootFen || fallbackRoot || null,
-          verbose: verboseSeq,
-          uci: uciSeq,
-          limit
-        });
-        if (context) {
-          entry.contextId = context.id;
-          entry.moves = context.tokens;
-          entry.meta = {
-            sanMoves,
-            rootFen: meta.rootFen || context.rootFen || fallbackRoot || null,
-            verbose: verboseSeq,
-            uci: uciSeq,
-            limit
-          };
-        } else {
-          entry.contextId = null;
-          entry.moves = sanMoves;
-          entry.meta = {
-            sanMoves,
-            rootFen: meta.rootFen || fallbackRoot || null,
-            verbose: verboseSeq,
-            uci: uciSeq,
-            limit
-          };
-        }
-        return entry;
-      }
-
-      function normalizeListWithContext(value) {
-        if (Array.isArray(value)) {
-          return { items: value, contextId: null };
-        }
-        if (value && typeof value === 'object') {
-          const items = Array.isArray(value.items) ? value.items : [];
-          const contextId = value.contextId || null;
-          return { items, contextId };
-        }
-        return { items: [], contextId: null };
-      }
-
-      function createMoveTokenButton(move, contextId = null, index = null) {
-        const san = typeof move === 'string'
-          ? move
-          : (move && typeof move.san === 'string' ? move.san : String(move || ''));
-        const trimmed = san.trim();
-        if (!trimmed) return null;
+      function createMoveTokenButton(san) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'pv-move-token';
-        button.dataset.san = trimmed;
-        button.textContent = trimmed;
-        button.setAttribute('aria-label', `Preview move ${trimmed}`);
-        if (contextId) {
-          button.dataset.contextId = contextId;
-        }
-        if (Number.isFinite(index)) {
-          button.dataset.index = String(index);
-        }
-        const uci = move && typeof move.uci === 'string' && move.uci.length >= 4 ? move.uci.toLowerCase() : null;
-        if (uci) {
-          button.dataset.uci = uci;
-        }
+        button.dataset.san = san;
+        button.textContent = san;
+        button.setAttribute('aria-label', `Preview move ${san}`);
         return button;
       }
 
       function createContinuationListItem(entry) {
         if (!isContinuationEntry(entry)) return null;
-        hydrateContinuationEntry(entry);
         const item = document.createElement('li');
         if (entry.label) {
           const label = document.createElement('span');
@@ -4780,14 +4043,13 @@
             item.appendChild(document.createTextNode(' '));
           }
         }
-        const contextId = entry.contextId || null;
-        entry.moves.forEach((move, rawIndex) => {
-          if (!move) return;
-          const index = (move && typeof move.index === 'number') ? move.index : rawIndex;
-          const token = createMoveTokenButton(move, contextId, index);
-          if (!token) return;
+        entry.moves.forEach((san, index) => {
+          if (!san) return;
+          const value = typeof san === 'string' ? san.trim() : String(san);
+          if (!value) return;
+          const token = createMoveTokenButton(value);
           item.appendChild(token);
-          if (rawIndex < entry.moves.length - 1) {
+          if (index < entry.moves.length - 1) {
             item.appendChild(document.createTextNode(' '));
           }
         });
@@ -4875,7 +4137,6 @@
         const summary = summaryClause ? `${labelText} — ${summaryClause}.` : `${labelText}.`;
 
         const details = [];
-        let detailsContextId = null;
         const actualLine = actualEntry && Array.isArray(actualEntry.pvVerbose)
           ? actualEntry.pvVerbose
           : [];
@@ -4938,18 +4199,10 @@
           details.push('Matches the engine’s first choice.');
         }
 
-        const continuationOptions = {
-          rootFen: moveEntry && moveEntry.preFen ? moveEntry.preFen : effectiveInitialFen(),
-          verbose: bestEntry && Array.isArray(bestEntry.pvVerbose) ? bestEntry.pvVerbose : [],
-          uci: bestEntry && Array.isArray(bestEntry.pvMoves) ? bestEntry.pvMoves : []
-        };
         if (!planScenarios && bestEntry && Array.isArray(bestEntry.pvSan) && bestEntry.pvSan.length > 0) {
-          const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6, continuationOptions);
+          const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6);
           if (continuation) {
             details.push(continuation);
-            if (!detailsContextId && continuation.contextId) {
-              detailsContextId = continuation.contextId;
-            }
           }
         }
 
@@ -4982,8 +4235,7 @@
 
         function buildPlanBullets(plan, opts = {}) {
           const bullets = [];
-          let contextId = null;
-          if (!plan) return { items: bullets, contextId };
+          if (!plan) return bullets;
           if (plan.delta != null && plan.moverWinPercent != null && plan.beforeWinPercent != null && Math.abs(plan.delta) >= 0.75) {
             const approx = formatWinDeltaDisplay(plan.delta);
             if (approx) {
@@ -5018,36 +4270,27 @@
               bullets.push(`If ${opponentColorName.toLowerCase()} ignores it, you stay near ${ignore} instead of ${after}.`);
             }
           }
-          const continuation = buildContinuationEntry('Line', plan.snippet, 6, {
-            rootFen: plan.rootFen || (moveEntry && moveEntry.preFen) || effectiveInitialFen(),
-            verbose: Array.isArray(plan.pvVerbose) ? plan.pvVerbose : [],
-            uci: Array.isArray(plan.pvMoves) ? plan.pvMoves : []
-          });
+          const continuation = buildContinuationEntry('Line', plan.snippet, 6);
           if (continuation) {
             bullets.push(continuation);
-            if (!contextId && continuation.contextId) {
-              contextId = continuation.contextId;
-            }
           }
-          return { items: bullets, contextId };
+          return bullets;
         }
 
         if (ideaPlan) {
           const ideaHeadline = makePlanHeadline(ideaPlan);
-          const ideaBullets = buildPlanBullets(ideaPlan, { showReply: Boolean(planActual && planActual === ideaPlan) });
+          const bullets = buildPlanBullets(ideaPlan, { showReply: Boolean(planActual && planActual === ideaPlan) });
           cards.push({
             key: 'idea',
             title: 'Idea',
             headline: ideaHeadline,
-            bullets: ideaBullets.items,
-            lineContextId: ideaBullets.contextId || null
+            bullets
           });
         }
 
         if (planActual && planActual.replySan) {
           const headline = `${opponentColorName} can meet it with ${planActual.replySan}`;
           const bullets = [];
-          let contextId = null;
           const after = formatWinPercentDisplay(planActual.replyWinPercent);
           if (after) {
             bullets.push(`Your chances drop to about ${after}.`);
@@ -5062,30 +4305,21 @@
               bullets.push(`If ${opponentColorName.toLowerCase()} plays another move, you keep about ${ignore}.`);
             }
           }
-          const replyContinuation = buildContinuationEntry('Continuation', planActual.replySnippet, 6, {
-            rootFen: planActual.afterFen || planActual.rootFen || (moveEntry && moveEntry.preFen) || effectiveInitialFen(),
-            verbose: Array.isArray(planActual.replyVerbose) ? planActual.replyVerbose : [],
-            uci: Array.isArray(planActual.replyUcis) ? planActual.replyUcis : []
-          });
+          const replyContinuation = buildContinuationEntry('Continuation', planActual.replySnippet, 6);
           if (replyContinuation) {
             bullets.push(replyContinuation);
-            if (replyContinuation.contextId) {
-              contextId = replyContinuation.contextId;
-            }
           }
           cards.push({
             key: 'problem',
             title: 'Problem',
             headline,
-            bullets,
-            lineContextId: contextId || null
+            bullets
           });
         }
 
         if (planBest && (!planActual || planBest.moveUci !== planActual.moveUci)) {
           const headline = `Solution — start with ${planBest.moveSan || planBest.moveUci}`;
           const bullets = [];
-          let contextId = null;
           if (planBest.moverWinPercent != null) {
             const approx = formatWinPercentDisplay(planBest.moverWinPercent);
             if (approx) {
@@ -5106,31 +4340,19 @@
           } else if (planBest.replySan && planActual && planActual.replySan && planBest.replySan !== planActual.replySan) {
             bullets.push(`After ${planBest.moveSan || planBest.moveUci}, the best reply becomes ${planBest.replySan}.`);
           }
-          const continuation = buildContinuationEntry('Line', planBest.snippet, 6, {
-            rootFen: planBest.rootFen || (moveEntry && moveEntry.preFen) || effectiveInitialFen(),
-            verbose: Array.isArray(planBest.pvVerbose) ? planBest.pvVerbose : [],
-            uci: Array.isArray(planBest.pvMoves) ? planBest.pvMoves : []
-          });
+          const continuation = buildContinuationEntry('Line', planBest.snippet, 6);
           if (continuation) {
             bullets.push(continuation);
-            if (!contextId && continuation.contextId) {
-              contextId = continuation.contextId;
-            }
           }
           cards.push({
             key: 'solution',
             title: 'Solution',
             headline,
-            bullets,
-            lineContextId: contextId || null
+            bullets
           });
         }
 
-        return {
-          headline: summary,
-          details: { items: details, contextId: detailsContextId },
-          cards
-        };
+        return { headline: summary, details, cards };
       }
 
       async function computePlanScenarios({
@@ -5172,10 +4394,6 @@
             moveUci: entry.uci,
             moveSan: first.san || entry.san || entry.uci,
             snippet: Array.isArray(entry.pvSan) ? [...entry.pvSan] : [],
-            rootFen: fen,
-            afterFen: first.fen || null,
-            pvVerbose: verbose.slice(0, 12),
-            pvMoves: Array.isArray(entry.pvMoves) ? entry.pvMoves.slice(0, 12) : [],
             beforeWinPercent,
             moverWinPercent: winPercentForEntry(entry, moverColor, fen),
             delta: null,
@@ -5189,8 +4407,6 @@
             replyCaptures: verbose[1] && verbose[1].captured ? describePiece(verbose[1].captured) : null,
             replyWinPercent: null,
             replySnippet: null,
-            replyVerbose: verbose.slice(1, Math.min(verbose.length, 7)),
-            replyUcis: verbose.slice(1, Math.min(verbose.length, 7)).map((mv) => (mv && mv.from && mv.to) ? `${mv.from}${mv.to}${mv.promotion || ''}` : null).filter(Boolean),
             ignoreWinPercent: null,
             ignoreSnippet: null,
             legalReplyUcis: null
@@ -5273,13 +4489,6 @@
             plan.replySnippet = entry.pvSan.slice(1, Math.min(entry.pvSan.length, 6));
           }
 
-          if ((!plan.replyVerbose || !plan.replyVerbose.length) && verbose.length > 1) {
-            plan.replyVerbose = verbose.slice(1, Math.min(verbose.length, 7));
-            plan.replyUcis = plan.replyVerbose
-              .map((mv) => (mv && mv.from && mv.to) ? `${mv.from}${mv.to}${mv.promotion || ''}` : null)
-              .filter(Boolean);
-          }
-
           return plan;
         }
 
@@ -5355,7 +4564,6 @@
         }
 
         const bullets = [];
-        let lineContextId = null;
         if (gain != null && gain > 0.75 && actualEntry && actualEntry.uci !== bestEntry.uci) {
           const approx = formatWinDeltaDisplay(gain);
           if (approx) {
@@ -5365,33 +4573,19 @@
           bullets.push('The game move already follows this recommendation.');
         }
 
-        const rootFen = (analysis.postAnalysis && analysis.postAnalysis.fen)
-          || (state.game && typeof state.game.fen === 'function' ? state.game.fen() : effectiveInitialFen());
-        const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6, {
-          rootFen,
-          verbose: Array.isArray(bestEntry.pvVerbose) ? bestEntry.pvVerbose : [],
-          uci: Array.isArray(bestEntry.pvMoves) ? bestEntry.pvMoves : []
-        });
+        const continuation = buildContinuationEntry('Line', bestEntry.pvSan, 6);
         if (continuation) {
           bullets.push(continuation);
-          if (continuation.contextId) {
-            lineContextId = continuation.contextId;
-          }
         }
 
         const cards = [{
           key: 'solution',
           title: 'Suggested line',
           headline: `Start with ${moveLabel}`,
-          bullets,
-          lineContextId
+          bullets
         }];
 
-        return {
-          headline: summary,
-          details: { items: [], contextId: null },
-          cards
-        };
+        return { headline: summary, details: [], cards };
       }
 
       function classifyPlayedMove({
@@ -6567,10 +5761,6 @@
         const summaryEl = byId('explanationSummary');
         const detailsEl = byId('explanationDetails');
         const cardsEl = byId('explanationCards');
-        if (hasGhostPreview()) {
-          clearGhostPreview();
-        }
-        resetContinuationContexts();
         if (!summaryEl || !detailsEl) return;
 
         const defaultMessage = state.suggestionMode === 'next'
@@ -6618,7 +5808,6 @@
           if (cardsEl) cardsEl.innerHTML = '';
           detailsEl.innerHTML = '';
           updateGhostTokenState();
-          updateExplLayoutMode();
           return;
         }
 
@@ -6626,13 +5815,9 @@
         if (cardsEl) cardsEl.innerHTML = '';
         if (cardsEl && Array.isArray(payload.cards) && payload.cards.length) {
           payload.cards.forEach((card) => {
-            if (!card) return;
-            const bulletData = normalizeListWithContext(card.bullets);
-            const hasBulletItems = Array.isArray(bulletData.items) && bulletData.items.some(Boolean);
-            if (!card.headline && !hasBulletItems) return;
+            if (!card || (!card.headline && (!Array.isArray(card.bullets) || !card.bullets.length))) return;
             const cardEl = document.createElement('div');
             cardEl.className = 'explanation-card';
-            let showLineBtn = null;
             if (card.title) {
               const titleEl = document.createElement('div');
               titleEl.className = 'explanation-card-title';
@@ -6647,30 +5832,26 @@
               headEl.textContent = card.headline;
               headlineRow.appendChild(headEl);
               if (card.key && SHOW_LINE_CARD_KEYS.has(card.key)) {
-                showLineBtn = document.createElement('button');
-                showLineBtn.type = 'button';
-                showLineBtn.className = 'secondary compact';
-                showLineBtn.dataset.action = 'show-line';
-                showLineBtn.dataset.kind = card.key;
-                showLineBtn.setAttribute('aria-pressed', 'false');
-                showLineBtn.disabled = true;
-                showLineBtn.textContent = card.key === 'problem' ? 'Show reply' : 'Show line';
-                headlineRow.appendChild(showLineBtn);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'secondary compact';
+                btn.dataset.action = 'show-line';
+                btn.dataset.kind = card.key;
+                btn.setAttribute('aria-pressed', 'false');
+                btn.disabled = true;
+                btn.textContent = card.key === 'problem' ? 'Show reply' : 'Show line';
+                headlineRow.appendChild(btn);
               }
               cardEl.appendChild(headlineRow);
             }
-            let cardLineContextId = card.lineContextId || bulletData.contextId || null;
-            if (Array.isArray(bulletData.items) && bulletData.items.length) {
+            if (Array.isArray(card.bullets) && card.bullets.length) {
               const listEl = document.createElement('ul');
               listEl.className = 'explanation-card-list';
-              bulletData.items.forEach((text) => {
+              card.bullets.forEach((text) => {
                 if (!text) return;
                 if (isContinuationEntry(text)) {
                   const item = createContinuationListItem(text);
                   if (item) listEl.appendChild(item);
-                  if (!cardLineContextId && text.contextId) {
-                    cardLineContextId = text.contextId;
-                  }
                   return;
                 }
                 const li = document.createElement('li');
@@ -6681,34 +5862,18 @@
                 cardEl.appendChild(listEl);
               }
             }
-            card.lineContextId = cardLineContextId || null;
-            if (showLineBtn) {
-              if (cardLineContextId) {
-                showLineBtn.dataset.contextId = cardLineContextId;
-              } else {
-                showLineBtn.removeAttribute('data-context-id');
-              }
-            }
-            if (card.bullets && typeof card.bullets === 'object' && !Array.isArray(card.bullets)) {
-              card.bullets.contextId = card.lineContextId;
-            }
             cardsEl.appendChild(cardEl);
           });
         }
         refreshShowLineButtons(analysis);
         detailsEl.innerHTML = '';
-        const detailsData = normalizeListWithContext(payload.details);
-        if (Array.isArray(detailsData.items) && detailsData.items.length) {
+        if (Array.isArray(payload.details) && payload.details.length) {
           const list = document.createElement('ul');
-          let detailsContextId = detailsData.contextId || null;
-          detailsData.items.forEach((line) => {
+          payload.details.forEach((line) => {
             if (!line) return;
             if (isContinuationEntry(line)) {
               const item = createContinuationListItem(line);
               if (item) list.appendChild(item);
-              if (!detailsContextId && line.contextId) {
-                detailsContextId = line.contextId;
-              }
               return;
             }
             const item = document.createElement('li');
@@ -6718,12 +5883,8 @@
           if (list.childNodes.length) {
             detailsEl.appendChild(list);
           }
-          if (payload.details && typeof payload.details === 'object' && !Array.isArray(payload.details)) {
-            payload.details.contextId = detailsContextId || null;
-          }
         }
         updateGhostTokenState();
-        updateExplLayoutMode();
       }
 
       function applyAnalysisForCurrentPly() {
@@ -7048,7 +6209,7 @@
         }
         const clearOverlayBtn = byId('clearLineOverlayBtn');
         if (clearOverlayBtn) {
-          clearOverlayBtn.addEventListener('click', () => clearLineOverlay({ keepLine: true }));
+          clearOverlayBtn.addEventListener('click', () => clearLineOverlay());
         }
         updateLineOverlayButton();
         updateExploreControls();
@@ -7163,7 +6324,6 @@
 
         initTheme();
         initBoard();
-        initExplanationLayout();
         initMoveSummary();
         updateMoveSummary();
         setInputMode('pgn');
