@@ -21,6 +21,7 @@
       --eval-white: #f8fafc;
       --eval-black: #0b1220;
       --eval-border: rgba(148, 163, 184, 0.28);
+      --eval-bar-width: clamp(48px, 4vw, 64px);
       --material-positive: #4ade80;
       --material-negative: #f87171;
       --input-bg: rgba(15, 23, 42, 0.75);
@@ -29,6 +30,8 @@
       --arrow-label-stroke: rgba(148, 163, 184, 0.85);
       --arrow-label-text: #f8fafc;
       --shadow: 0 18px 48px rgba(8, 15, 35, 0.55);
+      --layout-padding: clamp(16px, 2vw, 28px);
+      --header-height: 64px;
     }
 
     [data-theme="light"] {
@@ -66,7 +69,7 @@
 
     body {
       margin: 0;
-      padding: 24px;
+      padding: var(--layout-padding);
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
       color: var(--text);
       background: var(--bg);
@@ -83,19 +86,72 @@
       color: var(--accent);
     }
 
-    .layout {
-      display: grid;
-      gap: 18px;
-      align-items: start;
-      grid-template-columns: minmax(360px, 700px) minmax(360px, 1fr);
-      max-width: 1380px;
-      margin: 0 auto;
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+      min-height: var(--header-height);
+      position: relative;
+      z-index: 2;
     }
 
-    @media (max-width: 1024px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
+    .app-header h1 {
+      margin: 0;
+    }
+
+    .header-toggle {
+      padding: 8px 14px;
+      font-size: 14px;
+    }
+
+    .layout {
+      display: grid;
+      gap: clamp(18px, 2vw, 28px);
+      align-items: start;
+      grid-template-columns: minmax(0, 1.95fr) minmax(0, 1fr);
+      max-width: 1480px;
+      margin: 0 auto;
+      position: relative;
+      width: 100%;
+    }
+
+    .workspace-column {
+      position: relative;
+      min-width: 0;
+    }
+
+    .workspace-sticky {
+      position: sticky;
+      top: calc(var(--layout-padding) + var(--header-height));
+      display: flex;
+      flex-direction: column;
+      gap: clamp(18px, 2vw, 24px);
+    }
+
+    .info-column {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      max-height: calc(100vh - (var(--header-height) + (var(--layout-padding) * 2)));
+      overflow-y: auto;
+      padding-right: 8px;
+      scrollbar-gutter: stable both-edges;
+      min-width: 0;
+    }
+
+    .info-column::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .info-column::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
     }
 
     .card {
@@ -113,6 +169,17 @@
       letter-spacing: 0.3px;
       text-transform: uppercase;
       color: var(--muted);
+    }
+
+    .board-card {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .board-shell {
+      position: relative;
+      width: 100%;
     }
 
     .row {
@@ -368,20 +435,26 @@
     }
 
     .board-area {
-      display: flex;
-      gap: 18px;
+      display: grid;
+      grid-template-columns: var(--eval-bar-width) minmax(0, 1fr);
+      column-gap: 0;
       align-items: stretch;
+      width: 100%;
     }
 
     .board-wrap {
       position: relative;
-      flex: 1;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: stretch;
     }
 
     #board {
       width: 100%;
-      max-width: 640px;
-      margin: 0 auto;
+      height: 100%;
+      max-width: none;
+      display: block;
     }
 
     #arrowLayer {
@@ -446,12 +519,13 @@
     }
 
     .eval-column {
-      width: 60px;
-      flex: 0 0 60px;
+      width: var(--eval-bar-width);
+      flex: 0 0 var(--eval-bar-width);
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 12px;
+      height: 100%;
     }
 
     .eval-column[data-orientation="white"] #evalWhiteValue {
@@ -480,7 +554,8 @@
 
     .eval-vertical {
       position: relative;
-      width: 36px;
+      width: calc(var(--eval-bar-width) - 12px);
+      max-width: 56px;
       flex: 1;
       min-height: 260px;
       background: var(--eval-black);
@@ -587,6 +662,11 @@
 
     .collapsible-title {
       flex: 1;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
 
     .collapsible-meta {
@@ -604,8 +684,7 @@
     }
 
     .collapsible-body {
-      padding: 16px;
-      border-top: 1px solid var(--panel-border);
+      padding: 0 0 18px;
       display: grid;
       gap: 14px;
     }
@@ -654,6 +733,113 @@
     .material-capture {
       font-size: 12px;
       color: var(--muted);
+    }
+
+    .workspace-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .load-affordances {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .chip-button,
+    .chip-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: rgba(148, 163, 184, 0.14);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .chip-button.active,
+    .chip-pill.active,
+    .chip-button:hover,
+    .chip-pill:hover {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+    }
+
+    .chip-pill {
+      padding: 4px 12px;
+      font-size: 12px;
+    }
+
+    .nav-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .nav-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .nav-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .nav-meta-item {
+      white-space: nowrap;
+    }
+
+    .engine-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .engine-mode-toggle {
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .engine-chips {
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .info-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .info-card-summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: space-between;
     }
 
     .summary-scroll {
@@ -778,7 +964,7 @@
       object-fit: contain;
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 768px) {
       .summary-player-metrics {
         grid-template-columns: 1fr;
       }
@@ -1074,31 +1260,49 @@
       font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
     }
 
-    @media (max-width: 860px) {
-      body {
-        padding: 16px;
+    @media (max-width: 1199px) {
+      .layout {
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        gap: clamp(16px, 2vw, 22px);
       }
 
-      .board-area {
-        flex-direction: row;
-        justify-content: center;
-      }
-
-      #board {
-        max-width: 400px;
+      .info-column {
+        max-height: calc(100vh - (var(--header-height) + (var(--layout-padding) * 1.5)));
       }
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 1024px) {
+      body {
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --eval-bar-width: 40px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace-sticky {
+        position: static;
+        gap: 18px;
+      }
+
       .board-area {
-        flex-direction: column;
-        align-items: center;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        row-gap: 16px;
       }
 
       .eval-column {
+        flex-direction: row;
+        justify-content: center;
         width: auto;
-        min-height: 220px;
-        flex: 0 0 auto;
+        min-height: 0;
+        gap: 16px;
       }
 
       .eval-vertical {
@@ -1109,137 +1313,206 @@
       .material-panel {
         grid-template-columns: 1fr;
       }
+
+      .nav-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .nav-meta {
+        width: 100%;
+      }
+
+      .engine-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .info-column {
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+  <header class="app-header">
     <h1>Lichess PGN Analyzer</h1>
-    <button id="themeToggle" class="secondary" style="padding: 8px 12px; font-size: 14px;">🌙 Dark</button>
-  </div>
-  <div class="layout">
-    <div class="card">
-      <details id="loadPanel" class="collapsible">
-        <summary>
-          <span class="collapsible-title">Load game</span>
+    <button id="themeToggle" class="secondary header-toggle">🌙 Dark</button>
+  </header>
+  <main class="layout">
+    <div class="workspace-column">
+      <div class="workspace-sticky" aria-live="polite">
+        <section class="card board-card">
+          <div class="board-shell">
+            <div class="board-area">
+              <div class="eval-column" id="evalColumn" data-orientation="white">
+                <div class="eval-label eval-label-black" id="evalBlackValue"></div>
+                <div class="eval-vertical">
+                  <div class="eval-fill" id="evalFill"></div>
+                  <div class="eval-marker" id="evalMarker"></div>
+                </div>
+                <div class="eval-label" id="evalWhiteValue">0.00</div>
+              </div>
+              <div class="board-wrap">
+                <div id="board"></div>
+                <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
+                <div class="board-badge-layer">
+                  <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
+                    <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
+                    <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="material-panel">
+            <div class="material-card">
+              <div class="material-player">White</div>
+              <div class="material-score" id="materialWhite">0</div>
+              <div class="material-capture" id="materialWhiteCapture">—</div>
+            </div>
+            <div class="material-card">
+              <div class="material-player">Black</div>
+              <div class="material-score" id="materialBlack">0</div>
+              <div class="material-capture" id="materialBlackCapture">—</div>
+            </div>
+          </div>
+          <div class="workspace-controls">
+            <details id="loadPanel" class="collapsible" open>
+              <summary>
+                <span class="collapsible-title">Load Game</span>
+              </summary>
+              <div class="collapsible-body">
+                <div class="load-affordances" id="loadAffordanceGroup" role="group" aria-label="Load game options">
+                  <button type="button" class="chip-button active" data-load-action="paste">Paste</button>
+                  <button type="button" class="chip-button" data-load-action="upload">Upload</button>
+                  <button type="button" class="chip-button" data-load-action="fen">Import FEN</button>
+                </div>
+                <input type="file" id="pgnFileInput" accept=".pgn,.PGN,.txt,.fen,.FEN" hidden />
+                <div class="row input-controls">
+                  <select id="inputMode">
+                    <option value="pgn">PGN</option>
+                    <option value="lichess">Lichess URL / ID</option>
+                    <option value="fen">FEN</option>
+                  </select>
+                  <button id="loadBtn">Load</button>
+                </div>
+                <div class="row">
+                  <textarea id="gameInput" rows="8" placeholder="Paste PGN text" autocomplete="off" spellcheck="false" class="mono"></textarea>
+                </div>
+                <div class="row">
+                  <label id="inputHint" class="hint">Paste the full PGN for the game you want to analyze.</label>
+                </div>
+                <div id="loadStatus" class="status"></div>
+              </div>
+            </details>
+            <div class="nav-toolbar" aria-label="Move navigation">
+              <div class="nav-buttons">
+                <button id="firstBtn" class="secondary">⏮ First</button>
+                <button id="prevBtn" class="secondary">◀ Prev</button>
+                <button id="nextBtn">Next ▶</button>
+                <button id="lastBtn">Last ⏭</button>
+                <button id="flipBtn" class="secondary">Flip</button>
+                <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
+                <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
+                <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
+              </div>
+              <div class="nav-meta" role="status" aria-live="polite">
+                <span id="navMoveCount" class="nav-meta-item">Move 0 / 0</span>
+                <span id="navSideToMove" class="nav-meta-item">White to move</span>
+                <span id="navEvalValue" class="nav-meta-item">Eval —</span>
+              </div>
+            </div>
+            <div id="navStatus" class="status"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="info-column" aria-label="Analysis details">
+      <details id="engineExplanationCard" class="info-card card collapsible" open>
+        <summary class="info-card-summary">
+          <h2>Engine explanations</h2>
         </summary>
-        <div class="collapsible-body">
-          <div class="row input-controls">
-            <select id="inputMode">
-              <option value="pgn">PGN</option>
-              <option value="lichess">Lichess URL / ID</option>
-              <option value="fen">FEN</option>
-            </select>
-            <button id="loadBtn">Load</button>
+        <div class="info-card-body">
+          <div class="engine-toolbar">
+            <div class="engine-mode-toggle" id="explanationModeToggle" role="group" aria-label="Explanation focus">
+              <button type="button" class="chip-button active" data-explanation-mode="current">Current move</button>
+              <button type="button" class="chip-button" data-explanation-mode="best">Best move</button>
+            </div>
+            <div class="engine-chips" id="classificationChipGroup" role="group" aria-label="Jump to move classification">
+              <button type="button" class="chip-pill" data-classification="blunder">Blunder</button>
+              <button type="button" class="chip-pill" data-classification="mistake">Mistake</button>
+              <button type="button" class="chip-pill" data-classification="inaccuracy">Inaccuracy</button>
+              <button type="button" class="chip-pill" data-classification="book">Book</button>
+            </div>
           </div>
-          <div class="row">
-            <textarea id="gameInput" rows="8" placeholder="Paste PGN text" autocomplete="off" spellcheck="false"
-              class="mono"></textarea>
+          <div id="explanationBox" class="explanation-panel">
+            <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
+            <div id="explanationActions" class="explanation-actions" hidden>
+              <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear shown line</button>
+            </div>
+            <div id="explanationCards" class="explanation-cards"></div>
+            <div id="explanationDetails" class="explanation-details"></div>
           </div>
-          <div class="row">
-            <label id="inputHint" class="hint">Paste the full PGN for the game you want to analyze.</label>
-          </div>
-          <div id="loadStatus" class="status"></div>
         </div>
       </details>
 
-      <h2>Board</h2>
-      <div class="board-area">
-        <div class="eval-column" id="evalColumn" data-orientation="white">
-          <div class="eval-label eval-label-black" id="evalBlackValue"></div>
-          <div class="eval-vertical">
-            <div class="eval-fill" id="evalFill"></div>
-            <div class="eval-marker" id="evalMarker"></div>
-          </div>
-          <div class="eval-label" id="evalWhiteValue">0.00</div>
-        </div>
-        <div class="board-wrap">
-          <div id="board"></div>
-          <svg id="arrowLayer" viewBox="0 0 800 800" preserveAspectRatio="none"></svg>
-          <div class="board-badge-layer">
-            <div id="boardMoveBadge" class="board-move-badge" aria-hidden="true">
-              <img id="boardMoveBadgeIcon" class="board-move-badge-icon" alt="" />
-              <img id="boardMoveBadgeOverlay" class="board-move-badge-overlay" alt="" />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="material-panel">
-        <div class="material-card">
-          <div class="material-player">White</div>
-          <div class="material-score" id="materialWhite">0</div>
-          <div class="material-capture" id="materialWhiteCapture">—</div>
-        </div>
-        <div class="material-card">
-          <div class="material-player">Black</div>
-          <div class="material-score" id="materialBlack">0</div>
-          <div class="material-capture" id="materialBlackCapture">—</div>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:14px; align-items:center;">
-        <button id="firstBtn" class="secondary">⏮ First</button>
-        <button id="prevBtn" class="secondary">◀ Prev</button>
-        <button id="nextBtn">Next ▶</button>
-        <button id="lastBtn">Last ⏭</button>
-        <button id="flipBtn" class="secondary">Flip</button>
-        <button id="exploreToggle" class="secondary" title="Toggle explore mode">Enable explore</button>
-        <button id="exploreResetBtn" class="secondary" title="Reset explore branch" hidden>Reset to game</button>
-        <button id="rejoinBtn" class="secondary" title="Return to the main line" hidden>Rejoin main line</button>
-      </div>
-      <div id="navStatus" class="status"></div>
-
-      <h2 style="margin-top:22px;">Engine explanation</h2>
-      <div id="explanationBox" class="explanation-panel">
-        <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
-        <div id="explanationActions" class="explanation-actions" hidden>
-          <button id="clearLineOverlayBtn" type="button" class="secondary compact">Clear shown line</button>
-        </div>
-        <div id="explanationCards" class="explanation-cards"></div>
-        <div id="explanationDetails" class="explanation-details"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Game info</h2>
-      <div class="kv" id="tagBox">
-        <div>White</div>
-        <div id="tagWhite">—</div>
-        <div>Black</div>
-        <div id="tagBlack">—</div>
-        <div>Event</div>
-        <div id="tagEvent">—</div>
-        <div>Site</div>
-        <div id="tagSite">—</div>
-        <div>Date</div>
-        <div id="tagDate">—</div>
-        <div>Result</div>
-        <div id="tagResult">—</div>
-        <div>Opening</div>
-        <div id="tagOpening">—</div>
-      </div>
-
-      <details id="moveSummaryPanel" class="collapsible">
-        <summary>
-          <span class="collapsible-title">Move summary</span>
+      <details id="gameInfoPanel" class="info-card card collapsible" open>
+        <summary class="info-card-summary">
+          <h2>Game info</h2>
         </summary>
-        <div class="collapsible-body">
+        <div class="info-card-body">
+          <div class="kv" id="tagBox">
+            <div>White</div>
+            <div id="tagWhite">—</div>
+            <div>Black</div>
+            <div id="tagBlack">—</div>
+            <div>Event</div>
+            <div id="tagEvent">—</div>
+            <div>Site</div>
+            <div id="tagSite">—</div>
+            <div>Date</div>
+            <div id="tagDate">—</div>
+            <div>Result</div>
+            <div id="tagResult">—</div>
+            <div>Opening</div>
+            <div id="tagOpening">—</div>
+          </div>
+        </div>
+      </details>
+
+      <details id="movesPanel" class="info-card card collapsible" open>
+        <summary class="info-card-summary">
+          <h2>Moves</h2>
+        </summary>
+        <div class="info-card-body">
+          <div id="moves" class="moves"></div>
+        </div>
+      </details>
+
+      <details id="moveSummaryPanel" class="info-card card collapsible">
+        <summary class="info-card-summary">
+          <h2>Move summary</h2>
+        </summary>
+        <div class="info-card-body">
           <div class="summary-scroll">
             <div id="moveSummaryTable" class="summary-table"></div>
           </div>
         </div>
       </details>
 
-      <details id="engineSuggestions" class="collapsible">
-        <summary>
-          <span class="collapsible-title">Engine suggestions</span>
+      <details id="engineSuggestions" class="info-card card collapsible">
+        <summary class="info-card-summary">
+          <h2>Engine suggestions</h2>
           <span class="collapsible-meta">
             <span id="suggestionModeLabel" class="suggestion-mode-label">Current move</span>
             <span>(eval ± rating change vs best)</span>
           </span>
         </summary>
-        <div class="collapsible-body">
+        <div class="info-card-body">
           <div class="row" style="margin:0; justify-content:flex-end;">
             <div class="mode-toggle" role="group" aria-label="Suggestion mode">
               <span
@@ -1274,11 +1547,8 @@
           <div id="engStatus" class="status"></div>
         </div>
       </details>
-
-      <h2 style="margin-top:22px;">Moves</h2>
-      <div id="moves" class="moves"></div>
     </div>
-  </div>
+  </main>
 
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
@@ -1313,6 +1583,8 @@
         currentRequest: null,
         analysisToken: 0,
         suggestionMode: 'played',
+        explanationMode: 'current',
+        enginePaused: false,
         badgeRaf: null,
         headers: {},
         lineOverlay: [],
@@ -1921,6 +2193,19 @@
           select.value = mode;
         }
         updateInputModeUI(mode);
+        updateLoadAffordanceState(mode);
+      }
+
+      function updateLoadAffordanceState(mode) {
+        const group = byId('loadAffordanceGroup');
+        if (!group) return;
+        const buttons = group.querySelectorAll('button[data-load-action]');
+        buttons.forEach((btn) => btn.classList.remove('active'));
+        const normalized = mode === 'fen' ? 'fen' : 'paste';
+        const target = group.querySelector(`button[data-load-action="${normalized}"]`);
+        if (target) {
+          target.classList.add('active');
+        }
       }
 
       function updateInputModeUI(mode) {
@@ -1971,6 +2256,22 @@
           // ignore read failures
         }
         return !!defaultOpen;
+      }
+
+      function hasStoredPanelState(id) {
+        if (typeof localStorage === 'undefined') {
+          return false;
+        }
+        try {
+          return localStorage.getItem(`panel:${id}`) != null;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      function shouldUseCompactInfoLayout() {
+        if (!window.matchMedia) return false;
+        return window.matchMedia('(max-width: 1199px)').matches;
       }
 
       function getSavedSuggestionMode() {
@@ -2240,6 +2541,26 @@
         el.classList.remove('error', 'ok');
         if (type === 'error') el.classList.add('error');
         if (type === 'ok') el.classList.add('ok');
+      }
+
+      function updateNavMeta() {
+        const moveCountEl = byId('navMoveCount');
+        const sideEl = byId('navSideToMove');
+        const evalEl = byId('navEvalValue');
+        const total = state.verboseHistory.length;
+        if (moveCountEl) {
+          moveCountEl.textContent = `Move ${state.ply} / ${total}`;
+        }
+        const fen = state.ply === 0
+          ? effectiveInitialFen()
+          : ((state.verboseHistory[state.ply - 1] && state.verboseHistory[state.ply - 1].fen) || effectiveInitialFen());
+        const side = sideToMoveFromFen(fen);
+        if (sideEl) {
+          sideEl.textContent = side === 'b' ? 'Black to move' : 'White to move';
+        }
+        if (evalEl) {
+          evalEl.textContent = `Eval ${formatEvalLabelFromString(state.lastEval)}`;
+        }
       }
 
       function extractGameId(input) {
@@ -2525,7 +2846,8 @@
         updateMaterialDiff();
         applyAnalysisForCurrentPly();
 
-        setStatus('navStatus', `Move ${state.ply} / ${max}`);
+        setStatus('navStatus', '');
+        updateNavMeta();
         updateUrlState();
         updateExploreControls();
       }
@@ -3029,6 +3351,39 @@
       function handleDocumentKeydown(event) {
         if (event.key === 'Escape' && hasGhostPreview()) {
           clearGhostPreview();
+          return;
+        }
+        const target = event.target;
+        const tag = target && target.tagName ? target.tagName.toLowerCase() : '';
+        const type = target && target.type ? target.type.toLowerCase() : '';
+        const isEditable = target && (target.isContentEditable
+          || tag === 'textarea'
+          || tag === 'select'
+          || (tag === 'input' && !['button', 'checkbox', 'radio', 'range', 'color'].includes(type)));
+        if (isEditable) return;
+        const isButtonLike = target && (tag === 'button' || target.closest('button, [role="button"]'));
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          goToPly(state.ply - 1);
+          return;
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          goToPly(state.ply + 1);
+          return;
+        }
+        if (event.key === ' ' && !isButtonLike) {
+          event.preventDefault();
+          setEnginePaused(!state.enginePaused);
+          return;
+        }
+        if ((event.key === 'e' || event.key === 'E') && !isButtonLike) {
+          event.preventDefault();
+          const card = byId('engineExplanationCard');
+          if (card) {
+            card.open = !card.open;
+            persistPanelState('engineExplanationCard', card.open);
+          }
         }
       }
 
@@ -3144,6 +3499,17 @@
         return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
       }
 
+      function formatEvalLabelFromString(evalStr) {
+        if (!evalStr) return '—';
+        const parsed = parseEvalString(evalStr);
+        if (!parsed) return '—';
+        if (parsed.type === 'mate') {
+          const prefix = parsed.value >= 0 ? '+' : '-';
+          return `${prefix}M${Math.abs(parsed.value)}`;
+        }
+        return formatEval(parsed.pawns);
+      }
+
       function sideToMoveFromFen(fen) {
         if (typeof fen !== 'string') return 'w';
         const parts = fen.trim().split(/\s+/);
@@ -3214,6 +3580,7 @@
           markerEl.style.top = `${markerPercent.toFixed(1)}%`;
           markerEl.style.bottom = 'auto';
         }
+        updateNavMeta();
       }
 
       function updatePVDisplay(entries) {
@@ -5558,8 +5925,29 @@
         state.analysisByFen = new Map();
         state.analysisPromises = new Map();
         state.analysisStatus = 'idle';
+        state.enginePaused = false;
         engineController.reset();
         clearLineOverlay();
+      }
+
+      function setEnginePaused(paused) {
+        const nextPaused = Boolean(paused);
+        if (state.enginePaused === nextPaused) return;
+        state.enginePaused = nextPaused;
+        if (nextPaused) {
+          nextAnalysisToken();
+          engineController.reset();
+          state.analysisStatus = 'paused';
+          setStatus('engStatus', 'Analysis paused.');
+        } else {
+          if (state.verboseHistory.length) {
+            state.analysisStatus = 'queued';
+            setStatus('engStatus', 'Resuming analysis…');
+            precomputeFullAnalysis();
+          } else {
+            setStatus('engStatus', 'Analysis ready.');
+          }
+        }
       }
 
       function engineSignature() {
@@ -5757,19 +6145,85 @@
         return currentNode.analysis || state.analysisCache.get(currentNode.id) || null;
       }
 
+      function updateClassificationChips(classification) {
+        const container = byId('classificationChipGroup');
+        if (!container) return;
+        const normalized = classification ? classification.toLowerCase() : '';
+        Array.from(container.querySelectorAll('button[data-classification]')).forEach((btn) => {
+          const value = (btn.dataset.classification || '').toLowerCase();
+          btn.classList.toggle('active', normalized && value === normalized);
+        });
+      }
+
+      function updateExplanationModeUi() {
+        const toggle = byId('explanationModeToggle');
+        if (!toggle) return;
+        const buttons = toggle.querySelectorAll('button[data-explanation-mode]');
+        buttons.forEach((btn) => {
+          const value = btn.dataset.explanationMode;
+          btn.classList.toggle('active', value === state.explanationMode);
+        });
+      }
+
+      function setExplanationMode(mode) {
+        const next = mode === 'best' ? 'best' : 'current';
+        if (state.explanationMode === next) return;
+        state.explanationMode = next;
+        updateExplanationModeUi();
+        const analysis = getAnalysisForCurrentView();
+        updateExplanationPanel(analysis);
+      }
+
+      function getEntryClassification(entry) {
+        if (!entry) return null;
+        const analysis = entry.analysis || (entry.id ? state.analysisCache.get(entry.id) : null);
+        if (analysis && (analysis.overlay || analysis.classification)) {
+          return (analysis.overlay || analysis.classification || '').toLowerCase();
+        }
+        return null;
+      }
+
+      function jumpToClassification(kind) {
+        const normalized = typeof kind === 'string' ? kind.toLowerCase() : '';
+        if (!normalized) return;
+        const label = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        const total = state.verboseHistory.length;
+        if (!total) {
+          setStatus('navStatus', `No ${label} moves available.`, 'error');
+          return;
+        }
+        const start = state.ply > 0 ? state.ply - 1 : -1;
+        for (let offset = 1; offset <= total; offset++) {
+          const idx = (start + offset) % total;
+          const entry = state.verboseHistory[idx];
+          const classification = getEntryClassification(entry);
+          if (classification === normalized) {
+            setStatus('navStatus', '');
+            goToPly(idx + 1);
+            return;
+          }
+        }
+        setStatus('navStatus', `No ${label} moves found.`, 'error');
+      }
+
       function updateExplanationPanel(analysis) {
         const summaryEl = byId('explanationSummary');
         const detailsEl = byId('explanationDetails');
         const cardsEl = byId('explanationCards');
         if (!summaryEl || !detailsEl) return;
 
+        const viewingBest = state.explanationMode === 'best' && state.suggestionMode === 'played';
         const defaultMessage = state.suggestionMode === 'next'
           ? 'Engine suggestion will appear after analysis finishes.'
-          : 'Select a move to see the engine’s commentary.';
+          : (viewingBest ? 'Select a move to see the engine’s best line.' : 'Select a move to see the engine’s commentary.');
 
         let payload = null;
+        let activeClassification = null;
         if (analysis) {
-          if (state.suggestionMode === 'next') {
+          if (state.suggestionMode === 'played') {
+            activeClassification = analysis.overlay || analysis.classification || null;
+          }
+          if (state.suggestionMode === 'next' || viewingBest) {
             payload = buildNextMoveExplanation(analysis);
           } else {
             const moveEntry = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
@@ -5799,15 +6253,18 @@
           } else if (state.suggestionMode === 'next' && state.analysisStatus === 'running') {
             summaryEl.textContent = 'Analyzing next move…';
           } else if (state.ply === 0 && state.suggestionMode === 'played') {
-            summaryEl.textContent = 'Select a move to see the engine’s commentary.';
+            summaryEl.textContent = defaultMessage;
           } else if (!analysis && state.analysisStatus !== 'complete') {
-            summaryEl.textContent = 'Engine explanation will appear when analysis is ready.';
+            summaryEl.textContent = viewingBest
+              ? 'Best move recommendation will appear when analysis is ready.'
+              : 'Engine explanation will appear when analysis is ready.';
           } else {
             summaryEl.textContent = defaultMessage;
           }
           if (cardsEl) cardsEl.innerHTML = '';
           detailsEl.innerHTML = '';
           updateGhostTokenState();
+          updateClassificationChips(null);
           return;
         }
 
@@ -5885,6 +6342,7 @@
           }
         }
         updateGhostTokenState();
+        updateClassificationChips(activeClassification);
       }
 
       function applyAnalysisForCurrentPly() {
@@ -5978,6 +6436,11 @@
         ensureEngine();
         await waitForEngineReady();
         if (token !== state.analysisToken) return;
+        if (state.enginePaused) {
+          state.analysisStatus = 'paused';
+          setStatus('engStatus', 'Analysis paused.');
+          return;
+        }
         if (state.engine) {
           state.engine.postMessage('ucinewgame');
         }
@@ -6120,6 +6583,52 @@
         }
       }
 
+      function handleLoadAffordanceClick(event) {
+        const button = event.target.closest('button[data-load-action]');
+        if (!button) return;
+        const action = button.dataset.loadAction;
+        if (action === 'paste') {
+          setInputMode('pgn');
+          const input = byId('gameInput');
+          if (input) input.focus();
+        } else if (action === 'upload') {
+          const fileInput = byId('pgnFileInput');
+          if (fileInput) fileInput.click();
+        } else if (action === 'fen') {
+          setInputMode('fen');
+          const input = byId('gameInput');
+          if (input) input.focus();
+        }
+      }
+
+      function handleFileUpload(fileList) {
+        if (!fileList || fileList.length === 0) return;
+        const [file] = fileList;
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const text = typeof event.target.result === 'string' ? event.target.result : '';
+          const trimmed = (text || '').trim();
+          if (!trimmed) {
+            setStatus('loadStatus', 'File was empty.', 'error');
+            return;
+          }
+          const words = trimmed.split(/\s+/);
+          const looksLikeFen = trimmed.includes('/') && words.length >= 6 && words.length <= 8;
+          setInputMode(looksLikeFen ? 'fen' : 'pgn');
+          const input = byId('gameInput');
+          if (input) {
+            input.value = trimmed;
+            input.focus();
+          }
+          setStatus('loadStatus', `${file.name} loaded. Press Load to analyze.`, 'ok');
+        };
+        reader.onerror = () => {
+          setStatus('loadStatus', 'Failed to read file.', 'error');
+        };
+        reader.readAsText(file);
+      }
+
       function bindUi() {
         byId('loadBtn').addEventListener('click', () => handleUserLoad());
         byId('inputMode').addEventListener('change', (event) => {
@@ -6197,6 +6706,37 @@
             }
           });
         }
+        const loadAffordanceGroup = byId('loadAffordanceGroup');
+        if (loadAffordanceGroup) {
+          loadAffordanceGroup.addEventListener('click', (event) => {
+            handleLoadAffordanceClick(event);
+          });
+        }
+        const fileInput = byId('pgnFileInput');
+        if (fileInput) {
+          fileInput.addEventListener('change', (event) => {
+            handleFileUpload(event.target.files);
+            event.target.value = '';
+          });
+        }
+        const explanationToggle = byId('explanationModeToggle');
+        if (explanationToggle) {
+          explanationToggle.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-explanation-mode]');
+            if (button) {
+              setExplanationMode(button.dataset.explanationMode);
+            }
+          });
+        }
+        const classificationGroup = byId('classificationChipGroup');
+        if (classificationGroup) {
+          classificationGroup.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-classification]');
+            if (button) {
+              jumpToClassification(button.dataset.classification);
+            }
+          });
+        }
         const cardsContainer = byId('explanationCards');
         if (cardsContainer) {
           cardsContainer.addEventListener('click', handleExplanationCardClick);
@@ -6215,22 +6755,57 @@
         updateExploreControls();
         document.addEventListener('keydown', handleDocumentKeydown);
         document.addEventListener('click', handleDocumentClickForGhost);
+        updateExplanationModeUi();
+        updateClassificationChips(null);
       }
 
       function initCollapsiblePanels() {
-        const loadPanel = byId('loadPanel');
-        if (loadPanel) {
-          loadPanel.open = restorePanelState('loadPanel', false);
-          loadPanel.addEventListener('toggle', () => {
-            persistPanelState('loadPanel', loadPanel.open);
+        const compactLayout = shouldUseCompactInfoLayout();
+        const panelDefaults = {
+          engineExplanationCard: true,
+          loadPanel: true,
+          gameInfoPanel: !compactLayout,
+          movesPanel: true,
+          moveSummaryPanel: false,
+          engineSuggestions: false
+        };
+
+        function setupPanel(id) {
+          const el = byId(id);
+          if (!el) return;
+          el.open = restorePanelState(id, panelDefaults[id] ?? false);
+          el.addEventListener('toggle', () => {
+            persistPanelState(id, el.open);
           });
         }
-        const summaryPanel = byId('moveSummaryPanel');
-        if (summaryPanel) {
-          summaryPanel.open = restorePanelState('moveSummaryPanel', false);
-          summaryPanel.addEventListener('toggle', () => {
-            persistPanelState('moveSummaryPanel', summaryPanel.open);
-          });
+
+        setupPanel('engineExplanationCard');
+        setupPanel('loadPanel');
+        setupPanel('gameInfoPanel');
+        setupPanel('movesPanel');
+        setupPanel('moveSummaryPanel');
+        setupPanel('engineSuggestions');
+
+        const media = window.matchMedia ? window.matchMedia('(max-width: 1199px)') : null;
+        if (media) {
+          const applyGameInfoDefault = (matches) => {
+            if (hasStoredPanelState('gameInfoPanel')) return;
+            const panel = byId('gameInfoPanel');
+            if (!panel) return;
+            panel.open = !matches;
+          };
+
+          applyGameInfoDefault(compactLayout);
+
+          if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', (event) => {
+              applyGameInfoDefault(event.matches);
+            });
+          } else if (typeof media.addListener === 'function') {
+            media.addListener((event) => {
+              applyGameInfoDefault(event.matches);
+            });
+          }
         }
       }
 
