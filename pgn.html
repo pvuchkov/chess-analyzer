@@ -1908,12 +1908,14 @@
       const enableSpecialPromotions = true;
       const NEAR_BEST_CP = 50;
       const ONLY_MOVE_GAP_CP = 150;
+      const ONLY_MOVE_GAP_EP = 0.20;
       const SWING_TO_EQUAL_CP = 80;
       const SWING_TO_WIN_CP = 150;
       const ALREADY_WINNING_CP = 300;
       const NOT_BAD_TOLERANCE_CP = 50;
       const SAC_MIN_LOSS_POINTS = 2;
       const SAC_PIECE_LOSS_THRESHOLD = 3;
+      const SAC_TWO_PLY_MIN_NET = 2;
       const BRILLIANT_MATE_SAC_MAX_DEPTH = 6;
       const isMate = (ev) => ev && typeof ev === 'object' && Object.prototype.hasOwnProperty.call(ev, 'mate');
       const mateForUs = (ev) => isMate(ev) && ev.mate > 0;
@@ -4522,6 +4524,8 @@
         const pvSan = actualEntry && Array.isArray(actualEntry.pvSan) ? actualEntry.pvSan : null;
         const replyUci = pvMoves && pvMoves.length > 1 && typeof pvMoves[1] === 'string' ? pvMoves[1] : null;
         const replySan = pvSan && pvSan.length > 1 && typeof pvSan[1] === 'string' ? pvSan[1] : null;
+        const reReplyUci = pvMoves && pvMoves.length > 2 && typeof pvMoves[2] === 'string' ? pvMoves[2] : null;
+        const reReplySan = pvSan && pvSan.length > 2 && typeof pvSan[2] === 'string' ? pvSan[2] : null;
         if (!replyUci && !replySan) {
           return null;
         }
@@ -4573,6 +4577,39 @@
           const replyCapturedValue = replyCapturedType ? (pieceValues[replyCapturedType] || 0) : 0;
           const replyCapturedSquare = captureSquareFromMove(replyResult);
           const capturedMovedPiece = Boolean(replyCapturedSquare && movedTo && replyCapturedSquare === movedTo);
+          let reReplyApplied = false;
+          let reReplyResult = null;
+          if (reReplyUci && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(reReplyUci)) {
+            const followMove = {
+              from: reReplyUci.slice(0, 2),
+              to: reReplyUci.slice(2, 4)
+            };
+            if (reReplyUci.length > 4) {
+              followMove.promotion = reReplyUci.slice(4);
+            }
+            reReplyResult = game.move(followMove);
+            if (reReplyResult) {
+              reReplyApplied = true;
+            }
+          }
+          if (!reReplyApplied && reReplySan) {
+            try {
+              reReplyResult = game.move(reReplySan);
+              if (reReplyResult) {
+                reReplyApplied = true;
+              }
+            } catch (err) {
+              // ignore SAN parsing failures
+            }
+          }
+          let afterReReplyCounts = null;
+          let afterReReplyMoverMaterial = null;
+          let afterReReplyDiff = null;
+          if (reReplyApplied) {
+            afterReReplyCounts = countPiecesOnBoard(game.board());
+            afterReReplyMoverMaterial = sumMaterial(afterReReplyCounts[mover]);
+            afterReReplyDiff = afterReReplyMoverMaterial - sumMaterial(afterReReplyCounts[opponent]);
+          }
           return {
             before: beforeDiff,
             after: afterDiff,
@@ -4588,7 +4625,17 @@
               square: replyCapturedSquare,
               pieceId: capturedMovedPiece ? movedPieceId : null,
               isMovedPiece: capturedMovedPiece
-            }
+            },
+            reReplyUci: reReplyApplied && reReplyUci ? reReplyUci : null,
+            reReplySan: reReplyApplied && reReplySan ? reReplySan : null,
+            afterReReply: reReplyApplied && Number.isFinite(afterReReplyDiff) ? afterReReplyDiff : null,
+            afterUsReReply: reReplyApplied && Number.isFinite(afterReReplyMoverMaterial) ? afterReReplyMoverMaterial : null,
+            deltaAfterReReply: reReplyApplied && Number.isFinite(afterReReplyDiff)
+              ? afterReReplyDiff - beforeDiff
+              : null,
+            deltaUsAfterReReply: reReplyApplied && Number.isFinite(afterReReplyMoverMaterial)
+              ? afterReReplyMoverMaterial - beforeMoverMaterial
+              : null
           };
         } catch (err) {
           console.warn('Failed to compute material delta after reply', err);
@@ -4609,7 +4656,10 @@
         phase = null,
         moveSan = null,
         sacrificeInfo = null,
-        epBeforeMover = null
+        epBeforeMover = null,
+        postEvalCpAfterReReply = null,
+        bestMoverEp = null,
+        secondBestMoverEp = null
       }) {
         if (!enableSpecialPromotions) {
           return null;
@@ -4633,16 +4683,18 @@
         const sacLostValue = Number.isFinite(sacInfo.lostAfterReplyValue) ? sacInfo.lostAfterReplyValue : 0;
         const sacLostSquare = sacInfo.lostAfterReplySquare || null;
         const sacLostPieceId = sacInfo.lostAfterReplyPieceId || null;
-        const isDirectSacrifice = sacInfo.isDirectSacrifice === true
-          || (sacLostIsMovedPiece && Number.isFinite(sacNetLoss) && sacNetLoss >= SAC_MIN_LOSS_POINTS);
-        const epBeforeMoverNorm = Number.isFinite(epBeforeMover) ? epBeforeMover : null;
-
+        const sacNetAfterReReply = Number.isFinite(sacInfo.deltaAfterReReplyNet) ? sacInfo.deltaAfterReReplyNet : null;
+        const sacTwoPly = sacInfo.isDirectSacrifice2Ply === true
+          || (sacLostIsMovedPiece && Number.isFinite(sacNetAfterReReply) && sacNetAfterReReply <= -SAC_TWO_PLY_MIN_NET);
         const comparisonPreCp = Number.isFinite(preEvalCp)
           ? preEvalCp
           : (preBestEval && Number.isFinite(preBestEval.cp) ? preBestEval.cp : null);
         const comparisonPostCp = Number.isFinite(postEvalCp)
           ? postEvalCp
           : (postEvalObj && Number.isFinite(postEvalObj.cp) ? postEvalObj.cp : null);
+        const comparisonPostReReplyCp = Number.isFinite(postEvalCpAfterReReply)
+          ? postEvalCpAfterReReply
+          : comparisonPostCp;
 
         const cpNearBest = Number.isFinite(bestLineEvalCp)
           && Number.isFinite(comparisonPostCp)
@@ -4654,7 +4706,7 @@
           ? Math.abs(postEvalObj.mate)
           : null;
         const mateSacOverride = (normalizedBase === 'best' || nearBest)
-          && isDirectSacrifice
+          && sacTwoPly
           && isMateAfter
           && mateDepthAfter != null
           && mateDepthAfter <= BRILLIANT_MATE_SAC_MAX_DEPTH;
@@ -4688,19 +4740,10 @@
         }
 
         const cpKeepsGood = Number.isFinite(comparisonPreCp)
-          && Number.isFinite(comparisonPostCp)
-          && comparisonPostCp >= (comparisonPreCp - NOT_BAD_TOLERANCE_CP);
+          && Number.isFinite(comparisonPostReReplyCp)
+          && comparisonPostReReplyCp >= (comparisonPreCp - NOT_BAD_TOLERANCE_CP);
         const keepsGood = isMateAfter || cpKeepsGood;
 
-        const secondKeepsWinning = mateForUs(preSecondEval)
-          || (preSecondEval && Number.isFinite(preSecondEval.cp) && preSecondEval.cp >= ALREADY_WINNING_CP);
-        const mateOnlyIfYouFindIt = mateForUs(preBestEval) && !secondKeepsWinning;
-
-        const alreadyWinningByCp = Number.isFinite(comparisonPreCp)
-          && comparisonPreCp >= ALREADY_WINNING_CP;
-        const alreadyCompletelyWinning = mateForUs(preBestEval)
-          ? secondKeepsWinning
-          : alreadyWinningByCp;
         const endgameOnlyMove = phase === 'endgame'
           ? (Number.isFinite(bestLineEvalCp)
             && Number.isFinite(secondBestEvalCp)
@@ -4711,17 +4754,22 @@
           && Number.isFinite(secondBestEvalCp)
           ? (bestLineEvalCp - secondBestEvalCp)
           : null;
+        const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(secondBestMoverEp)
+          ? (bestMoverEp - secondBestMoverEp)
+          : null;
+        const meetsOnlyMoveGap = (!Number.isFinite(secondBestEvalCp) && !Number.isFinite(secondBestMoverEp))
+          || (Number.isFinite(bestVsSecondGap) && bestVsSecondGap >= ONLY_MOVE_GAP_CP)
+          || (Number.isFinite(epGapToSecond) && epGapToSecond >= (ONLY_MOVE_GAP_EP - PV_EPSILON));
 
         if ((normalizedBase === 'best' || nearBest)
-          && isDirectSacrifice
+          && sacTwoPly
           && nearBest
           && keepsGood
-          && (mateOnlyIfYouFindIt || !alreadyCompletelyWinning)
+          && meetsOnlyMoveGap
           && endgameOnlyMove
-          && (!isMateAfter)
-          && (epBeforeMoverNorm == null || epBeforeMoverNorm < 0.90)) {
+          && (!isMateAfter)) {
           const gapText = formatNegativeCpGap(bestVsSecondGap);
-          const evalText = formatCpAsPawnString(postEvalCp, { forceSign: true });
+          const evalText = formatCpAsPawnString(postEvalCpAfterReReply, { forceSign: true });
           const tooltipParts = ['Promoted to Brilliant: sacrifice kept the evaluation on track.'];
           if (evalText) {
             tooltipParts.push(`Eval ≈ ${evalText}.`);
@@ -4745,12 +4793,14 @@
               secondBestEvalCp,
               materialDeltaAfterMove,
               materialDeltaAfterReply,
-              mateOnlyIfYouFindIt,
               sacCapturedValue,
               sacLostValue,
               sacNetLoss,
+              sacNetAfterReReply,
               sacLostSquare,
-              sacLostPieceId
+              sacLostPieceId,
+              sacTwoPly,
+              postEvalCpAfterReReply
             }
           };
         }
@@ -6090,6 +6140,12 @@
         const materialAfterReply = materialReplyInfo ? materialReplyInfo.afterUs : null;
         const materialDeltaAfterReply = materialReplyInfo ? materialReplyInfo.deltaUs : null;
         const materialDeltaAfterReplyNet = materialReplyInfo ? materialReplyInfo.delta : null;
+        const materialAfterReReply = materialReplyInfo ? materialReplyInfo.afterUsReReply : null;
+        const materialDeltaAfterReReply = materialReplyInfo ? materialReplyInfo.deltaUsAfterReReply : null;
+        const materialDeltaAfterReReplyNet = materialReplyInfo ? materialReplyInfo.deltaAfterReReply : null;
+        const ourBestReReplyUci = materialReplyInfo && materialReplyInfo.reReplyUci
+          ? materialReplyInfo.reReplyUci
+          : null;
         const captureInfo = materialAfterMoveInfo && materialAfterMoveInfo.captured
           ? materialAfterMoveInfo.captured
           : null;
@@ -6123,6 +6179,11 @@
           && Number.isFinite(netLostAfterReplyValue)
           && netLostAfterReplyValue >= SAC_MIN_LOSS_POINTS
         );
+        const isDirectSacrifice2Ply = Boolean(
+          lostAfterReplyIsMovedPiece
+          && Number.isFinite(materialDeltaAfterReReplyNet)
+          && materialDeltaAfterReReplyNet <= -SAC_TWO_PLY_MIN_NET
+        );
         const directSacrificeInfo = {
           capturedOnMoveValue: Number.isFinite(capturedOnMoveValue) ? capturedOnMoveValue : 0,
           lostAfterReplyValue: Number.isFinite(lostAfterReplyValue) ? lostAfterReplyValue : 0,
@@ -6132,7 +6193,12 @@
           lostIsMovedPiece: lostAfterReplyIsMovedPiece,
           movedPieceId,
           movedTo: movedToSquare,
-          isDirectSacrifice
+          isDirectSacrifice,
+          isDirectSacrifice2Ply,
+          materialAfterReReply: Number.isFinite(materialAfterReReply) ? materialAfterReReply : null,
+          materialDeltaAfterReReply: Number.isFinite(materialDeltaAfterReReply) ? materialDeltaAfterReReply : null,
+          deltaAfterReReplyNet: Number.isFinite(materialDeltaAfterReReplyNet) ? materialDeltaAfterReReplyNet : null,
+          reReplyUci: ourBestReReplyUci
         };
 
         const missOpportunityThreshold = ratingLerp(moverRating, 1000, 2000, 0.72, 0.82);
@@ -6200,23 +6266,31 @@
           mateDistanceTest = allLoseOrSlow;
         }
 
-        const isOnlyWinningMove = (Number.isFinite(EP_secondBest) && EP_secondBest < 0.90) || mateDistanceTest;
+        const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(EP_secondBest)
+          ? bestMoverEp - EP_secondBest
+          : null;
+        const sacTwoPly = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice2Ply === true;
+        const meetsOnlyMoveGap = (!Number.isFinite(secondBestEvalCp) && !Number.isFinite(EP_secondBest))
+          || (Number.isFinite(onlyMoveGapCp) && onlyMoveGapCp >= ONLY_MOVE_GAP_CP)
+          || (Number.isFinite(epGapToSecond) && epGapToSecond >= (ONLY_MOVE_GAP_EP - PV_EPSILON));
+        const isOnlyWinningMove = mateDistanceTest || meetsOnlyMoveGap;
 
         const mateSacDepthLimit = BRILLIANT_MATE_SAC_MAX_DEPTH;
         const mateSacBrilliant = (baseline === 'best' || nearBest)
-          && isSacrificeWithin1Ply
+          && sacTwoPly
           && actualMateForMover
           && Number.isFinite(actualMateDistance)
           && actualMateDistance <= mateSacDepthLimit;
 
-        const brilliantCandidate = baseline === 'best'
-          && isSacrifice
+        const cpKeepsEval = Number.isFinite(preEvalCp)
+          && Number.isFinite(postEvalCpAfterReReply)
+          && postEvalCpAfterReReply >= (preEvalCp - NOT_BAD_TOLERANCE_CP);
+        const nonMateBrilliant = (baseline === 'best' || nearBest)
+          && !actualMateForMover
+          && sacTwoPly
           && nearBest
-          && isOnlyWinningMove;
-
-        const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(EP_secondBest)
-          ? bestMoverEp - EP_secondBest
-          : null;
+          && cpKeepsEval
+          && meetsOnlyMoveGap;
         const greatCandidate = nearBest
           && Number.isFinite(epGapToSecond)
           && epGapToSecond >= (0.20 - PV_EPSILON);
@@ -6226,9 +6300,9 @@
         if (mateSacBrilliant) {
           overlay = 'brilliant';
           brilliantReason = 'mateSac';
-        } else if (brilliantCandidate) {
+        } else if (nonMateBrilliant) {
           overlay = 'brilliant';
-          brilliantReason = 'onlyWinningMoveSac';
+          brilliantReason = 'sacrifice2Ply';
         } else if (greatCandidate) {
           overlay = 'great';
         } else if (missCandidate && baseline !== 'blunder') {
@@ -6251,6 +6325,7 @@
         };
 
         const evalByUci = new Map();
+        const cpByUci = new Map();
         const candidateCps = [];
         let bestLineEvalCp = toMoverCp(bestCp);
         let secondBestEvalCp = null;
@@ -6266,7 +6341,16 @@
               }
             }
             if (!Number.isFinite(normalizedCp)) return;
-            candidateCps.push({ cp: normalizedCp, uci: entry.uci });
+            if (entry.uci) {
+              if (!cpByUci.has(entry.uci) || normalizedCp > cpByUci.get(entry.uci)) {
+                cpByUci.set(entry.uci, normalizedCp);
+              }
+            } else {
+              candidateCps.push({ cp: normalizedCp, uci: entry.uci || null });
+            }
+          });
+          cpByUci.forEach((cp, uci) => {
+            candidateCps.push({ cp, uci });
           });
           candidateCps.sort((a, b) => b.cp - a.cp);
           if (candidateCps.length > 0 && Number.isFinite(candidateCps[0].cp)) {
@@ -6279,6 +6363,9 @@
 
         const preEvalCp = bestLineEvalCp;
         const postEvalCp = toMoverCp(actualCp);
+        const onlyMoveGapCp = Number.isFinite(bestLineEvalCp) && Number.isFinite(secondBestEvalCp)
+          ? (bestLineEvalCp - secondBestEvalCp)
+          : null;
         let preBestEval = null;
         if (candidateCps.length > 0) {
           const bestCandidate = candidateCps[0];
@@ -6301,6 +6388,7 @@
         }
         const postEval = normalizeEvalForMover(actualEntry ? actualEntry.eval : null, moverIsWhite)
           || (Number.isFinite(postEvalCp) ? { cp: postEvalCp } : null);
+        const postEvalCpAfterReReply = Number.isFinite(postEvalCp) ? postEvalCp : null;
 
         let promotion = null;
         try {
@@ -6318,7 +6406,10 @@
               ? (actualEntry.san || actualEntry.uci)
               : null,
             sacrificeInfo: directSacrificeInfo,
-            epBeforeMover: Number.isFinite(beforeMoverEp) ? beforeMoverEp : null
+            epBeforeMover: Number.isFinite(beforeMoverEp) ? beforeMoverEp : null,
+            postEvalCpAfterReReply,
+            bestMoverEp: Number.isFinite(bestMoverEp) ? bestMoverEp : null,
+            secondBestMoverEp: Number.isFinite(EP_secondBest) ? EP_secondBest : null
           });
         } catch (err) {
           console.warn('Failed to apply special promotions', err);
@@ -6392,10 +6483,13 @@
               materialBefore,
               materialAfterMove,
               materialAfterReply,
+              materialAfterReReply,
               deltaAfterMove: materialDeltaAfterMoveUs,
               deltaAfterReply: materialDeltaAfterReply,
               materialDeltaAfterReply,
               materialDeltaAfterReplyNet,
+              deltaAfterReReply: materialDeltaAfterReReplyNet,
+              materialDeltaAfterReReply,
               sacrificeValue,
               sacPlyOffset,
               isSacrificeWithin1Ply,
@@ -6403,7 +6497,7 @@
               isOnlyWinningMove,
               nearBest,
               mateSacBrilliant,
-              brilliantCandidate,
+              nonMateBrilliant,
               brilliantReason,
               greatCandidate,
               suggestionTag,
@@ -6417,6 +6511,10 @@
               'lostAfterReply.pieceId': lostAfterReplyPieceId,
               lostIsMovedPiece: lostAfterReplyIsMovedPiece,
               isDirectSacrifice,
+              isDirectSacrifice2Ply,
+              ourBestReReplyUci,
+              postEvalCpAfterReReply,
+              onlyMoveGapCp: Number.isFinite(onlyMoveGapCp) ? onlyMoveGapCp : null,
               promotionPath
             });
           } catch (err) {
