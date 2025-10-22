@@ -44,6 +44,15 @@
       --move-great-fg: #fbbf24;
       --move-brilliant-bg: rgba(20, 184, 166, 0.22);
       --move-brilliant-fg: #2dd4bf;
+      --sgn-top: #7C3AED;
+      --sgn-best: #10B981;
+      --sgn-excellent: #3B82F6;
+      --sgn-great: #F59E0B;
+      --sgn-brilliant: #14B8A6;
+      --sgn-muted: #94A3B8;
+      --row-radius: 12px;
+      --row-pad-y: 10px;
+      --row-pad-x: 12px;
     }
 
     [data-theme="light"] {
@@ -79,6 +88,15 @@
       --move-great-fg: #b45309;
       --move-brilliant-bg: rgba(45, 212, 191, 0.2);
       --move-brilliant-fg: #0f766e;
+      --sgn-top: #7C3AED;
+      --sgn-best: #10B981;
+      --sgn-excellent: #3B82F6;
+      --sgn-great: #F59E0B;
+      --sgn-brilliant: #14B8A6;
+      --sgn-muted: #94A3B8;
+      --row-radius: 12px;
+      --row-pad-y: 10px;
+      --row-pad-x: 12px;
     }
 
     * {
@@ -848,14 +866,6 @@
       white-space: nowrap;
     }
 
-    .engine-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      justify-content: space-between;
-      align-items: center;
-    }
-
     .engine-mode-toggle {
       display: inline-flex;
       gap: 8px;
@@ -1054,18 +1064,11 @@
     }
 
     .moves {
-      --gap: 8px;
       display: grid;
-      gap: var(--gap);
+      grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr);
+      gap: 10px 14px;
       font-size: 14px;
-    }
-
-    .moves__hdr,
-    .moves__row {
-      display: grid;
-      grid-template-columns: 48px 1fr 1fr;
-      gap: var(--gap);
-      align-items: center;
+      align-items: start;
     }
 
     .moves__hdr {
@@ -1074,50 +1077,49 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--muted);
-    }
-
-    .moves__list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: grid;
-      gap: var(--gap);
+      align-self: end;
     }
 
     .moves__no {
-      text-align: right;
-      opacity: 0.7;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--muted);
+      padding-top: 4px;
     }
 
     .moves__cell {
+      position: relative;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-radius: 12px;
-      padding: 8px 10px;
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
+      flex-direction: column;
+      gap: 6px;
+      border-radius: var(--row-radius);
+      padding: var(--row-pad-y) var(--row-pad-x);
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.18);
       color: inherit;
       font: inherit;
       cursor: pointer;
-      transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
       text-align: left;
-      gap: 10px;
+      transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+      min-height: 56px;
     }
 
     .moves__cell:hover,
     .moves__cell:focus-visible {
+      outline: none;
+      background: rgba(148, 163, 184, 0.14);
       border-color: rgba(56, 189, 248, 0.35);
       box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
-      outline: none;
     }
 
     .moves__cell[disabled] {
-      opacity: 0.5;
+      background: transparent;
+      border: 1px dashed rgba(148, 163, 184, 0.28);
+      color: var(--sgn-muted);
       cursor: default;
-      border-style: dashed;
+      align-items: center;
+      justify-content: center;
     }
 
     .moves__cell--active {
@@ -1139,6 +1141,12 @@
       font-weight: 600;
     }
 
+    .moves__meta {
+      font-size: 12px;
+      color: var(--sgn-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
     .moves__icon {
       width: 20px;
       height: 20px;
@@ -1146,25 +1154,30 @@
       filter: drop-shadow(0 1px 2px rgba(8, 15, 35, 0.45));
     }
 
-    .moves__eval {
-      font-size: 11px;
-      font-weight: 600;
-      background: rgba(148, 163, 184, 0.16);
-      padding: 2px 6px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      white-space: nowrap;
+    .moves__placeholder {
+      display: inline-flex;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--sgn-muted);
     }
 
     @media (max-width: 720px) {
-      .moves__hdr,
-      .moves__row {
-        grid-template-columns: 36px 1fr;
+      .moves {
+        grid-template-columns: 24px 1fr;
       }
 
-      .moves__cell--black {
+      .moves__hdr:nth-child(3) {
+        display: none;
+      }
+
+      .moves__cell:nth-of-type(3n) {
         grid-column: 2 / -1;
-        margin-top: 6px;
+      }
+
+      .moves__cell[disabled] {
+        min-height: auto;
       }
     }
 
@@ -1181,43 +1194,95 @@
     }
 
     .suggestion {
+      position: relative;
       display: grid;
-      grid-template-columns: 32px minmax(0, 1fr) auto auto;
-      gap: 12px;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      background: rgba(148, 163, 184, 0.12);
+      gap: 14px;
+      padding: var(--row-pad-y) var(--row-pad-x);
+      border-radius: var(--row-radius);
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.18);
       color: inherit;
       font: inherit;
       cursor: pointer;
-      transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
       text-align: left;
+      transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+      --suggestion-accent: var(--sgn-muted);
+    }
+
+    .suggestion::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 2px var(--suggestion-accent);
+      opacity: 0.32;
+      pointer-events: none;
+      transition: opacity 0.16s ease;
     }
 
     .suggestion:hover,
     .suggestion:focus-visible {
-      border-color: rgba(56, 189, 248, 0.35);
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
       outline: none;
+      background: rgba(148, 163, 184, 0.14);
+    }
+
+    .suggestion:hover::before,
+    .suggestion:focus-visible::before {
+      opacity: 0.56;
     }
 
     .suggestion--active {
-      border-color: rgba(56, 189, 248, 0.55);
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.32);
+      background: rgba(148, 163, 184, 0.16);
+    }
+
+    .suggestion--active::before {
+      opacity: 0.72;
+    }
+
+    .suggestion[data-tone="top"] {
+      --suggestion-accent: var(--sgn-top);
+    }
+
+    .suggestion[data-tone="best"] {
+      --suggestion-accent: var(--sgn-best);
+    }
+
+    .suggestion[data-tone="excellent"] {
+      --suggestion-accent: var(--sgn-excellent);
+    }
+
+    .suggestion[data-tone="great"] {
+      --suggestion-accent: var(--sgn-great);
+    }
+
+    .suggestion[data-tone="brilliant"] {
+      --suggestion-accent: var(--sgn-brilliant);
+    }
+
+    .suggestion__badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-variant-numeric: tabular-nums;
     }
 
     .suggestion__rank {
       font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      color: var(--muted);
+      color: var(--sgn-muted);
     }
 
-    .suggestion__move {
+    .suggestion__icon {
+      font-size: 16px;
+      line-height: 1;
+      color: var(--suggestion-accent);
+    }
+
+    .suggestion__text {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 4px;
       min-width: 0;
     }
 
@@ -1228,45 +1293,26 @@
       text-overflow: ellipsis;
     }
 
-    .suggestion__pill {
-      justify-self: start;
-    }
-
-    .suggestion__delta {
-      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    .suggestion__meta {
       font-size: 12px;
-      text-align: right;
+      color: var(--sgn-muted);
+      font-variant-numeric: tabular-nums;
       white-space: nowrap;
-      color: var(--muted);
     }
 
-    .pill {
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-weight: 600;
+    .suggestion__gap {
       font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      font-variant-numeric: tabular-nums;
+      color: var(--sgn-muted);
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
     }
 
-    .pill--best {
-      background: var(--move-best-bg);
-      color: var(--move-best-fg);
-    }
-
-    .pill--excellent {
-      background: var(--move-excellent-bg);
-      color: var(--move-excellent-fg);
-    }
-
-    .pill--great {
-      background: var(--move-great-bg);
-      color: var(--move-great-fg);
-    }
-
-    .pill--brilliant {
-      background: var(--move-brilliant-bg);
-      color: var(--move-brilliant-fg);
+    .suggestion:hover .suggestion__move-main,
+    .suggestion:focus-visible .suggestion__move-main,
+    .suggestion--active .suggestion__move-main {
+      font-weight: 700;
     }
 
     .suggestion-mode-label {
@@ -1448,11 +1494,6 @@
         flex: 0 0 100%;
       }
 
-      .engine-toolbar {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
       .info-column {
         padding-right: 0;
       }
@@ -1549,7 +1590,6 @@
           <h2>Engine explanations</h2>
         </summary>
         <div class="info-card-body">
-          <div class="engine-toolbar"></div>
           <div id="explanationBox" class="explanation-panel">
             <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
             <div id="explanationActions" class="explanation-actions" hidden>
@@ -1712,6 +1752,9 @@
         currentRequest: null,
         analysisToken: 0,
         suggestionMode: 'played',
+        suggestionData: [],
+        activeSuggestion: null,
+        hoverSuggestion: null,
         explanationMode: 'current',
         enginePaused: false,
         badgeRaf: null,
@@ -2645,6 +2688,10 @@
             // ignore storage errors
           }
         }
+        state.activeSuggestion = null;
+        state.hoverSuggestion = null;
+        state.suggestionData = [];
+        redrawAllArrows([]);
         clearLineOverlay();
         applyAnalysisForCurrentPly();
       }
@@ -3019,26 +3066,49 @@
         return analysis.overlay || analysis.classification || null;
       }
 
+      function computeMoveDelta(entry, analysis) {
+        if (!analysis) {
+          return null;
+        }
+        const postCp = Number.isFinite(analysis.actualCp) ? analysis.actualCp : null;
+        const beforeEp = analysis.beforeEp;
+        const preCp = Number.isFinite(beforeEp) ? expectedPointsToCentipawns(beforeEp, getAverageGameRating()) : null;
+        if (Number.isFinite(postCp) && Number.isFinite(preCp) && Math.abs(postCp) < 9000 && Math.abs(preCp) < 9000) {
+          const diff = (postCp - preCp) / 100;
+          const sign = diff >= 0 ? '+' : '−';
+          return `${sign}${Math.abs(diff).toFixed(2)}`;
+        }
+        const record = entry && Number.isFinite(entry.ply)
+          ? classifyMoveReadonly(entry.ply, entry.uci || null)
+          : null;
+        if (record && Number.isFinite(record.deltaVsBestCp)) {
+          const diff = record.deltaVsBestCp / 100;
+          const sign = diff >= 0 ? '+' : '−';
+          return `${sign}${Math.abs(diff).toFixed(2)}`;
+        }
+        return null;
+      }
+
       function renderMoves() {
         const container = byId('moves');
         if (!container) return;
         container.innerHTML = '';
-        const header = document.createElement('header');
-        header.className = 'moves__hdr';
-        const numberHeader = document.createElement('span');
-        numberHeader.textContent = '#';
-        header.appendChild(numberHeader);
-        const whiteHeader = document.createElement('span');
-        whiteHeader.textContent = getPlayerDisplayName('w');
-        header.appendChild(whiteHeader);
-        const blackHeader = document.createElement('span');
-        blackHeader.textContent = getPlayerDisplayName('b');
-        header.appendChild(blackHeader);
-        container.appendChild(header);
+        container.className = 'moves';
 
-        const list = document.createElement('ol');
-        list.className = 'moves__list';
-        container.appendChild(list);
+        const numberHeader = document.createElement('span');
+        numberHeader.className = 'moves__hdr';
+        numberHeader.textContent = '#';
+        container.appendChild(numberHeader);
+
+        const whiteHeader = document.createElement('span');
+        whiteHeader.className = 'moves__hdr';
+        whiteHeader.textContent = getPlayerDisplayName('w');
+        container.appendChild(whiteHeader);
+
+        const blackHeader = document.createElement('span');
+        blackHeader.className = 'moves__hdr';
+        blackHeader.textContent = getPlayerDisplayName('b');
+        container.appendChild(blackHeader);
 
         const rows = [];
         state.verboseHistory.forEach((entry, index) => {
@@ -3055,15 +3125,25 @@
         });
 
         const createCell = (entry, color) => {
+          if (!entry) {
+            const placeholder = document.createElement('button');
+            placeholder.type = 'button';
+            placeholder.className = 'moves__cell';
+            placeholder.disabled = true;
+            placeholder.setAttribute('aria-hidden', 'true');
+            const dash = document.createElement('span');
+            dash.className = 'moves__placeholder';
+            dash.textContent = '—';
+            placeholder.appendChild(dash);
+            return placeholder;
+          }
+
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = `moves__cell moves__cell--${color}`;
-          if (!entry) {
-            btn.disabled = true;
-            btn.setAttribute('aria-hidden', 'true');
-            return btn;
+          if (entry.id) {
+            btn.dataset.nodeId = entry.id;
           }
-          btn.dataset.nodeId = entry.id;
           btn.dataset.ply = Number.isFinite(entry.ply) ? String(entry.ply) : '';
 
           const label = document.createElement('span');
@@ -3093,12 +3173,14 @@
           btn.appendChild(label);
 
           const evalText = entry.eval || (analysis && analysis.eval) || null;
-          if (evalText) {
-            const evalEl = document.createElement('span');
-            evalEl.className = 'moves__eval';
-            evalEl.textContent = evalText;
-            btn.appendChild(evalEl);
-          }
+          const evalDisplay = evalText ? formatEvalLabelFromString(evalText) : '—';
+          const deltaDisplay = computeMoveDelta(entry, analysis);
+          const metaEl = document.createElement('span');
+          metaEl.className = 'moves__meta';
+          metaEl.textContent = deltaDisplay
+            ? `Eval → ${evalDisplay} · Δ ${deltaDisplay}`
+            : `Eval → ${evalDisplay}`;
+          btn.appendChild(metaEl);
 
           btn.addEventListener('click', () => {
             if (entry.id) {
@@ -3112,15 +3194,12 @@
         };
 
         rows.forEach((row) => {
-          const item = document.createElement('li');
-          item.className = 'moves__row';
-          const no = document.createElement('span');
-          no.className = 'moves__no';
-          no.textContent = `${row.number}.`;
-          item.appendChild(no);
-          item.appendChild(createCell(row.white, 'white'));
-          item.appendChild(createCell(row.black, 'black'));
-          list.appendChild(item);
+          const numberCell = document.createElement('span');
+          numberCell.className = 'moves__no';
+          numberCell.textContent = `${row.number}.`;
+          container.appendChild(numberCell);
+          container.appendChild(createCell(row.white, 'white'));
+          container.appendChild(createCell(row.black, 'black'));
         });
 
         highlightActive();
@@ -3232,12 +3311,116 @@
         };
       }
 
-      function drawArrows(list) {
+      function buildArrowGeometry(fromSquare, toSquare, squareSize, options = {}) {
+        const from = getSquareCenterCoords(fromSquare, squareSize);
+        const to = getSquareCenterCoords(toSquare, squareSize);
+        if (!from || !to) return null;
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const len = Math.hypot(dx, dy);
+        if (!len) return null;
+        const unitX = dx / len;
+        const unitY = dy / len;
+        const perpX = -unitY;
+        const perpY = unitX;
+        const defaultHeadLength = Number.isFinite(options.headLength) ? options.headLength : 18;
+        const headLength = Math.min(defaultHeadLength, len * 0.6);
+        const headWidth = Number.isFinite(options.headWidth) ? options.headWidth : 12;
+        const startOffset = Math.min(len * 0.1, squareSize * 0.35);
+        const endOffset = Math.min(len * 0.15, headLength);
+        const sx = from.x + unitX * startOffset;
+        const sy = from.y + unitY * startOffset;
+        const ex = to.x - unitX * endOffset;
+        const ey = to.y - unitY * endOffset;
+        const curvature = Number.isFinite(options.curvature) ? options.curvature : 0.28;
+        const curveOffset = curvature * len;
+        const cx1 = sx + unitX * (len / 3) + perpX * curveOffset;
+        const cy1 = sy + unitY * (len / 3) + perpY * curveOffset;
+        const cx2 = sx + unitX * (2 * len / 3) + perpX * curveOffset;
+        const cy2 = sy + unitY * (2 * len / 3) + perpY * curveOffset;
+        return {
+          start: { x: sx, y: sy },
+          end: { x: ex, y: ey },
+          c1: { x: cx1, y: cy1 },
+          c2: { x: cx2, y: cy2 },
+          headLength,
+          headWidth,
+          unit: { x: unitX, y: unitY },
+          length: len
+        };
+      }
+
+      function renderArrowWithGeometry(layer, geometry, options = {}) {
+        if (!layer || !geometry) return null;
+        const stroke = options.stroke || 'var(--sgn-muted)';
+        const strokeWidth = Number.isFinite(options.strokeWidth) ? options.strokeWidth : 8;
+        const alpha = options.alpha != null ? options.alpha : 0.85;
+        const dashed = options.dashed === true;
+        const dashArray = options.dashArray || '8 8';
+
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        group.setAttribute('opacity', alpha);
+        if (options.zIndex != null) {
+          group.style.zIndex = String(options.zIndex);
+        }
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${geometry.start.x} ${geometry.start.y} C ${geometry.c1.x} ${geometry.c1.y} ${geometry.c2.x} ${geometry.c2.y} ${geometry.end.x} ${geometry.end.y}`);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', stroke);
+        path.setAttribute('stroke-width', strokeWidth);
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+        if (dashed) {
+          path.setAttribute('stroke-dasharray', dashArray);
+        }
+        group.appendChild(path);
+
+        const tangentX = geometry.end.x - geometry.c2.x;
+        const tangentY = geometry.end.y - geometry.c2.y;
+        let tangentLength = Math.hypot(tangentX, tangentY);
+        if (!tangentLength) {
+          tangentLength = Math.hypot(geometry.end.x - geometry.start.x, geometry.end.y - geometry.start.y) || 1;
+        }
+        const ux = tangentX / tangentLength;
+        const uy = tangentY / tangentLength;
+        const baseX = geometry.end.x - ux * geometry.headLength;
+        const baseY = geometry.end.y - uy * geometry.headLength;
+        const perpX = -uy;
+        const perpY = ux;
+        const halfWidth = geometry.headWidth / 2;
+        const leftX = baseX + perpX * halfWidth;
+        const leftY = baseY + perpY * halfWidth;
+        const rightX = baseX - perpX * halfWidth;
+        const rightY = baseY - perpY * halfWidth;
+        const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        head.setAttribute('points', `${geometry.end.x},${geometry.end.y} ${leftX},${leftY} ${rightX},${rightY}`);
+        head.setAttribute('fill', stroke);
+        group.appendChild(head);
+
+        layer.appendChild(group);
+        return { group, geometry };
+      }
+
+      function pointOnCubicBezier(geometry, t) {
+        const mt = 1 - t;
+        const a = mt * mt * mt;
+        const b = 3 * mt * mt * t;
+        const c = 3 * mt * t * t;
+        const d = t * t * t;
+        return {
+          x: a * geometry.start.x + b * geometry.c1.x + c * geometry.c2.x + d * geometry.end.x,
+          y: a * geometry.start.y + b * geometry.c1.y + c * geometry.c2.y + d * geometry.end.y
+        };
+      }
+
+      function renderSuggestionArrows(suggestions = []) {
         const layers = ensureArrowLayer();
         if (!layers) return;
         const { baseLayer } = layers;
         clearChildren(baseLayer);
-        if (!Array.isArray(list) || !list.length) return;
+        const list = Array.isArray(suggestions) ? suggestions : [];
+        if (!list.length) return;
 
         const boardEl = byId('board');
         if (!boardEl) return;
@@ -3246,40 +3429,30 @@
         const squareSize = boardRect.width / 8;
         if (!Number.isFinite(squareSize) || squareSize <= 0) return;
 
-        const colors = ['#22c55e', '#38bdf8', '#f87171'];
-        const opacities = [1.0, 0.25, 0.25];
-
-        list.forEach((entry, i) => {
-          if (!entry || typeof entry.uci !== 'string' || entry.uci.length < 4) return;
-          const fromSquare = entry.uci.slice(0, 2);
-          const toSquare = entry.uci.slice(2, 4);
-          const from = getSquareCenterCoords(fromSquare, squareSize);
-          const to = getSquareCenterCoords(toSquare, squareSize);
-          if (!from || !to) return;
-          const dx = to.x - from.x;
-          const dy = to.y - from.y;
-          const len = Math.hypot(dx, dy);
-          if (!len) return;
-
-          const shorten = Math.min(12, len * 0.15);
-          const startOffset = Math.min(12, len * 0.1);
-          const sx = from.x + (dx / len) * startOffset;
-          const sy = from.y + (dy / len) * startOffset;
-          const ex = to.x - (dx / len) * shorten;
-          const ey = to.y - (dy / len) * shorten;
-
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', sx);
-          line.setAttribute('y1', sy);
-          line.setAttribute('x2', ex);
-          line.setAttribute('y2', ey);
-          line.setAttribute('stroke', colors[i] || colors[2]);
-          line.setAttribute('stroke-width', Math.max(4, 6 - i * 0.8));
-          line.setAttribute('stroke-linecap', 'round');
-          const markerId = i + 1;
-          line.setAttribute('marker-end', `url(#m${markerId <= 3 ? markerId : 3})`);
-          line.setAttribute('opacity', opacities[i] || opacities[2]);
-          baseLayer.appendChild(line);
+        list.forEach((item) => {
+          if (!item || typeof item.uci !== 'string' || item.uci.length < 4) return;
+          const fromSquare = item.uci.slice(0, 2);
+          const toSquare = item.uci.slice(2, 4);
+          const geometry = buildArrowGeometry(fromSquare, toSquare, squareSize, { curvature: 0.28, headLength: 18, headWidth: 12 });
+          if (!geometry) return;
+          const tone = getSuggestionTone(item);
+          const stroke = colorForTone(tone);
+          const alpha = (() => {
+            if (state.hoverSuggestion) {
+              return state.hoverSuggestion === item.uci ? 0.95 : 0.3;
+            }
+            if (state.activeSuggestion) {
+              return state.activeSuggestion === item.uci ? 0.95 : 0.45;
+            }
+            return item.rank === 1 ? 0.9 : 0.65;
+          })();
+          renderArrowWithGeometry(baseLayer, geometry, {
+            stroke,
+            strokeWidth: 8,
+            alpha,
+            dashed: false,
+            zIndex: 2
+          });
         });
       }
 
@@ -3312,140 +3485,92 @@
           if (!segment || typeof segment.uci !== 'string' || segment.uci.length < 4) return;
           const fromSquare = segment.uci.slice(0, 2);
           const toSquare = segment.uci.slice(2, 4);
-          const from = getSquareCenterCoords(fromSquare, squareSize);
-          const to = getSquareCenterCoords(toSquare, squareSize);
-          if (!from || !to) return;
-          const dx = to.x - from.x;
-          const dy = to.y - from.y;
-          const len = Math.hypot(dx, dy);
-          if (!len) return;
-
-          const unitX = dx / len;
-          const unitY = dy / len;
-
-          const shorten = Math.min(12, len * 0.15);
-          const startOffset = Math.min(12, len * 0.1);
-          const sx = from.x + unitX * startOffset;
-          const sy = from.y + unitY * startOffset;
-          const ex = to.x - unitX * shorten;
-          const ey = to.y - unitY * shorten;
-
-          const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', sx);
-          line.setAttribute('y1', sy);
-          line.setAttribute('x2', ex);
-          line.setAttribute('y2', ey);
-          line.setAttribute('stroke', segment.color || '#94a3b8');
-          line.setAttribute('stroke-width', Number.isFinite(segment.width) ? segment.width : 4);
-          line.setAttribute('stroke-linecap', 'round');
-          if (segment.dashed !== false) {
-            line.setAttribute('stroke-dasharray', segment.dashArray || '8 8');
-          }
-          if (segment.opacity != null) {
-            line.setAttribute('opacity', segment.opacity);
-          } else {
-            line.setAttribute('opacity', 0.65);
-          }
-          line.setAttribute('marker-end', 'url(#mOverlay)');
-          group.appendChild(line);
+          const geometry = buildArrowGeometry(fromSquare, toSquare, squareSize, {
+            curvature: segment.curvature != null ? segment.curvature : 0.28,
+            headLength: 18,
+            headWidth: 12
+          });
+          if (!geometry) return;
+          const stroke = segment.color || '#94a3b8';
+          const strokeWidth = Number.isFinite(segment.width) ? segment.width : 4;
+          const alpha = segment.opacity != null ? segment.opacity : 0.65;
+          const arrow = renderArrowWithGeometry(overlayLayer, geometry, {
+            stroke,
+            strokeWidth,
+            alpha,
+            dashed: segment.dashed !== false,
+            dashArray: segment.dashArray || '8 8',
+            zIndex: segment.zIndex != null ? segment.zIndex : 2
+          });
+          if (!arrow) return;
 
           if (segment.showOrder && Number.isFinite(segment.order)) {
-            let lx = null;
-            let ly = null;
-            if (segment.labelPosition != null) {
-              const ratioRaw = segment.labelPosition;
-              const ratio = Math.min(0.85, Math.max(0.15, ratioRaw));
-              lx = sx + (ex - sx) * ratio;
-              ly = sy + (ey - sy) * ratio;
-            } else {
-              const offset = Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8;
-              lx = from.x + unitX * offset;
-              ly = from.y + unitY * offset;
-            }
+            const ratioRaw = segment.labelPosition != null ? segment.labelPosition : null;
+            const ratio = ratioRaw != null ? Math.min(0.85, Math.max(0.15, ratioRaw)) : null;
+            const point = ratio != null
+              ? pointOnCubicBezier(geometry, ratio)
+              : {
+                  x: geometry.start.x + geometry.unit.x * (Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8),
+                  y: geometry.start.y + geometry.unit.y * (Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8)
+                };
             const isDoubleDigit = Math.abs(segment.order) >= 10;
             const radius = segment.labelRadius != null ? segment.labelRadius : (isDoubleDigit ? 16 : 14);
 
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.classList.add('arrow-label-circle');
-            circle.setAttribute('cx', lx);
-            circle.setAttribute('cy', ly);
+            circle.setAttribute('cx', point.x);
+            circle.setAttribute('cy', point.y);
             circle.setAttribute('r', radius);
-            group.appendChild(circle);
+            overlayLayer.appendChild(circle);
 
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.classList.add('arrow-label-text');
-            text.setAttribute('x', lx);
-            text.setAttribute('y', ly);
+            text.setAttribute('x', point.x);
+            text.setAttribute('y', point.y);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dominant-baseline', 'middle');
             const fontSize = segment.labelFontSize != null ? segment.labelFontSize : (isDoubleDigit ? 13 : 14);
             text.setAttribute('font-size', fontSize);
             text.textContent = String(segment.order);
-            group.appendChild(text);
+            overlayLayer.appendChild(text);
           }
-
-          overlayLayer.appendChild(group);
         });
 
         if (hasGhostPreview()) {
           const preview = state.ghostPreview;
-          const from = getSquareCenterCoords(preview.from, squareSize);
-          const to = getSquareCenterCoords(preview.to, squareSize);
-          if (from && to) {
-            const dx = to.x - from.x;
-            const dy = to.y - from.y;
-            const len = Math.hypot(dx, dy) || 1;
-            const unitX = dx / len;
-            const unitY = dy / len;
-            const shorten = Math.min(12, len * 0.15);
-            const startOffset = Math.min(12, len * 0.1);
-            const sx = from.x + unitX * startOffset;
-            const sy = from.y + unitY * startOffset;
-            const ex = to.x - unitX * shorten;
-            const ey = to.y - unitY * shorten;
+          const geometry = buildArrowGeometry(preview.from, preview.to, squareSize, { curvature: 0.18, headLength: 16, headWidth: 10 });
+          if (geometry) {
             const accent = getAccentColor();
-
-            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-
             const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            highlight.setAttribute('x', to.x - squareSize / 2);
-            highlight.setAttribute('y', to.y - squareSize / 2);
-            highlight.setAttribute('width', squareSize);
-            highlight.setAttribute('height', squareSize);
-            const corner = Math.min(12, squareSize * 0.25);
-            highlight.setAttribute('rx', corner);
-            highlight.setAttribute('ry', corner);
-            highlight.setAttribute('fill', accent);
-            highlight.setAttribute('opacity', 0.28);
-            group.appendChild(highlight);
-
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', sx);
-            line.setAttribute('y1', sy);
-            line.setAttribute('x2', ex);
-            line.setAttribute('y2', ey);
-            line.setAttribute('stroke', accent);
-            line.setAttribute('stroke-width', 5);
-            line.setAttribute('stroke-linecap', 'round');
-            line.setAttribute('marker-end', 'url(#mOverlay)');
-            line.setAttribute('opacity', 0.45);
-            group.appendChild(line);
-
-            overlayLayer.appendChild(group);
+            const to = getSquareCenterCoords(preview.to, squareSize);
+            if (to) {
+              highlight.setAttribute('x', to.x - squareSize / 2);
+              highlight.setAttribute('y', to.y - squareSize / 2);
+              highlight.setAttribute('width', squareSize);
+              highlight.setAttribute('height', squareSize);
+              const corner = Math.min(12, squareSize * 0.25);
+              highlight.setAttribute('rx', corner);
+              highlight.setAttribute('ry', corner);
+              highlight.setAttribute('fill', accent);
+              highlight.setAttribute('opacity', 0.28);
+              overlayLayer.appendChild(highlight);
+            }
+            renderArrowWithGeometry(overlayLayer, geometry, {
+              stroke: accent,
+              strokeWidth: 5,
+              alpha: 0.45,
+              dashed: false,
+              zIndex: 3
+            });
           }
         }
       }
 
-      function redrawAllArrows(baseList = null) {
-        const activeList = baseList != null
-          ? baseList
-          : (() => {
-            const analysis = getAnalysisForCurrentView();
-            return analysis ? analysis.pvEntries || [] : [];
-          })();
-        drawArrows(activeList);
+      function redrawAllArrows(suggestions = null) {
+        const activeSuggestions = Array.isArray(suggestions)
+          ? suggestions
+          : (Array.isArray(state.suggestionData) ? state.suggestionData : []);
+        renderSuggestionArrows(activeSuggestions);
         drawArrowOverlay(state.lineOverlay);
       }
 
@@ -3916,17 +4041,223 @@
         updateNavMeta();
       }
 
+      function getSuggestionIcon(baseline, overlayFinal) {
+        const overlay = overlayFinal ? overlayFinal.toLowerCase() : null;
+        if (overlay === 'brilliant') return '!!';
+        if (overlay === 'great') return '!';
+        const base = baseline ? baseline.toLowerCase() : null;
+        if (base === 'best') return '★';
+        if (base === 'excellent') return '👍';
+        return null;
+      }
+
+      function getSuggestionTone(suggestion) {
+        if (!suggestion) return 'best';
+        if (suggestion.rank === 1) return 'top';
+        if (suggestion.overlayFinal === 'brilliant') return 'brilliant';
+        if (suggestion.overlayFinal === 'great') return 'great';
+        if (suggestion.baseline === 'best') return 'best';
+        if (suggestion.baseline === 'excellent') return 'excellent';
+        return 'best';
+      }
+
+      function colorForTone(tone) {
+        const style = getComputedStyle(document.documentElement);
+        const varName = (() => {
+          switch (tone) {
+            case 'top':
+              return '--sgn-top';
+            case 'best':
+              return '--sgn-best';
+            case 'excellent':
+              return '--sgn-excellent';
+            case 'great':
+              return '--sgn-great';
+            case 'brilliant':
+              return '--sgn-brilliant';
+            default:
+              return '--sgn-best';
+          }
+        })();
+        const value = style.getPropertyValue(varName);
+        return value && value.trim() ? value.trim() : '#10B981';
+      }
+
+      function formatEpGapPercent(value) {
+        if (!Number.isFinite(value)) return '—';
+        const percent = value * 100;
+        const sign = percent > 0 ? '+' : (percent < 0 ? '−' : '+');
+        return `(${sign}${Math.abs(percent).toFixed(1)}%)`;
+      }
+
+      function formatDeltaText(suggestion) {
+        if (!suggestion) return 'Δ —';
+        const { postEvalCp, preEvalCp, deltaLabel } = suggestion;
+        const hasNumeric = Number.isFinite(postEvalCp)
+          && Number.isFinite(preEvalCp)
+          && Math.abs(postEvalCp) < 9000
+          && Math.abs(preEvalCp) < 9000;
+        if (hasNumeric) {
+          const diff = (postEvalCp - preEvalCp) / 100;
+          const sign = diff >= 0 ? '+' : '−';
+          return `Δ ${sign}${Math.abs(diff).toFixed(2)}`;
+        }
+        if (deltaLabel) {
+          return `Δ ${deltaLabel}`;
+        }
+        return 'Δ —';
+      }
+
+      function buildSuggestionDisplay({ classification, record }) {
+        if (!classification || !record) {
+          return { evalLabel: record && record.evalLabel ? record.evalLabel : '—', deltaLabel: null };
+        }
+        const actualEntry = classification.actualEntry || null;
+        const bestEntry = classification.bestEntry || null;
+        const evalLabel = record.evalLabel || (actualEntry && actualEntry.eval) || '—';
+        let deltaLabel = record.deltaLabel || null;
+        const bestParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
+        const actualParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
+        if (bestParsed && bestParsed.type === 'mate' && actualParsed && actualParsed.type === 'mate'
+          && Math.sign(bestParsed.value) === Math.sign(actualParsed.value)) {
+          const diff = Math.abs(actualParsed.value) - Math.abs(bestParsed.value);
+          if (diff === 0) {
+            deltaLabel = '#0';
+          } else if (diff > 0) {
+            deltaLabel = `#-${diff}`;
+          } else {
+            deltaLabel = `#+${Math.abs(diff)}`;
+          }
+        } else if (bestParsed && bestParsed.type === 'mate' && (!actualParsed || actualParsed.type !== 'mate')) {
+          deltaLabel = '#-∞';
+        } else if (actualParsed && actualParsed.type === 'mate' && (!bestParsed || bestParsed.type !== 'mate')) {
+          deltaLabel = '#+∞';
+        } else if (Number.isFinite(classification.bestEp) && Number.isFinite(classification.actualEp)) {
+          const dropPercent = (classification.bestEp - classification.actualEp) * 100;
+          if (Math.abs(dropPercent) >= 0.05) {
+            const approx = formatWinDeltaDisplay(Math.abs(dropPercent));
+            const prefix = dropPercent > 0 ? '−' : '+';
+            deltaLabel = `${prefix}${approx || Math.abs(dropPercent).toFixed(1)}%`;
+          }
+        } else if (Number.isFinite(classification.bestCp) && Number.isFinite(classification.actualCp)) {
+          const diffCp = classification.actualCp - classification.bestCp;
+          if (Math.abs(diffCp) >= 1) {
+            const pawns = diffCp / 100;
+            deltaLabel = `${diffCp > 0 ? '+' : '−'}${Math.abs(pawns).toFixed(2)}`;
+          }
+        }
+        return { evalLabel, deltaLabel };
+      }
+
+      function useMoveClassification({
+        entries = [],
+        analysis,
+        baseFen,
+        moverColor,
+        basePly,
+        beforeEpOverride = null,
+        previousMoveEntry = null
+      }) {
+        if (!analysis || !baseFen || !Number.isFinite(basePly)) {
+          return [];
+        }
+        const rawList = Array.isArray(entries) ? entries : [];
+        if (!rawList.length) {
+          return [];
+        }
+        const seen = new Set();
+        const normalizedEntries = [];
+        rawList.forEach((entry, index) => {
+          if (!entry || !entry.uci) return;
+          const key = entry.uci.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          normalizedEntries.push({
+            ...entry,
+            uci: key,
+            rank: Number.isFinite(entry.rank) ? entry.rank : (index + 1)
+          });
+        });
+        if (!normalizedEntries.length) {
+          return [];
+        }
+        const rating = getAverageGameRating();
+        const results = [];
+        normalizedEntries.forEach((entry) => {
+          const moveEntry = createMoveEntryFromUci(baseFen, moverColor, entry.uci);
+          if (!moveEntry) return;
+          moveEntry.ply = basePly;
+          moveEntry.preFen = baseFen;
+          moveEntry.san = entry.san || (Array.isArray(entry.pvSan) && entry.pvSan.length ? entry.pvSan[0] : null) || moveEntry.san || null;
+
+          const classification = computeClassificationForMove({
+            analysis,
+            preFen: baseFen,
+            moveEntry,
+            actualEntry: entry,
+            beforeEpOverride,
+            previousMoveEntry
+          });
+          if (!classification) return;
+
+          const record = buildClassifiedMoveRecord({
+            ply: basePly,
+            moveEntry,
+            classification
+          });
+          if (!record) return;
+
+          const display = buildSuggestionDisplay({ classification, record });
+          record.evalLabel = display.evalLabel;
+          record.deltaLabel = display.deltaLabel;
+          recordMoveClassification(basePly, entry.uci, record);
+
+          const topEp = Number.isFinite(classification.bestEp) ? classification.bestEp : null;
+          const postEp = Number.isFinite(classification.actualEp) ? classification.actualEp : null;
+          const epGapToTop = topEp != null && postEp != null ? topEp - postEp : null;
+          const preEvalCp = expectedPointsToCentipawns(classification.beforeEp, rating);
+          const overlayFinal = classification.overlay === 'brilliant' || classification.overlay === 'great'
+            ? classification.overlay
+            : null;
+          const baselineRaw = classification.baseline || classification.classification || null;
+          const baseline = baselineRaw ? baselineRaw.toLowerCase() : null;
+
+          results.push({
+            uci: entry.uci,
+            san: record.san || entry.san || entry.uci,
+            rank: Number.isFinite(entry.rank) ? entry.rank : (results.length + 1),
+            postEvalCp: Number.isFinite(classification.actualCp) ? classification.actualCp : null,
+            preEvalCp: Number.isFinite(preEvalCp) ? preEvalCp : null,
+            postEvalEp: postEp,
+            topEp,
+            epGapToTop,
+            baseline,
+            overlayFinal,
+            icon: getSuggestionIcon(baseline, overlayFinal),
+            evalLabel: display.evalLabel,
+            deltaLabel: display.deltaLabel,
+            entry,
+            classification,
+            record,
+            overlaySeq: uciSeqFromEntry(entry, 10)
+          });
+        });
+
+        results.sort((a, b) => a.rank - b.rank);
+        return results;
+      }
+
       function updatePVDisplay(entries) {
         const listEl = byId('pvList');
         if (!listEl) return;
         listEl.innerHTML = '';
 
-        if (!Array.isArray(entries) || !entries.length) {
-          return;
-        }
-
         const analysis = getAnalysisForCurrentView();
-        if (!analysis) {
+        if (!Array.isArray(entries) || !entries.length || !analysis) {
+          state.suggestionData = [];
+          state.activeSuggestion = null;
+          state.hoverSuggestion = null;
+          redrawAllArrows([]);
           return;
         }
 
@@ -3959,180 +4290,142 @@
           baseFen = effectiveInitialFen();
         }
 
-        const deduped = new Map();
-        entries.forEach((entry) => {
-          if (!entry || !entry.uci) return;
-          const key = entry.uci;
-          if (!deduped.has(key)) {
-            deduped.set(key, entry);
-          }
+        const classified = useMoveClassification({
+          entries,
+          analysis,
+          baseFen,
+          moverColor,
+          basePly,
+          beforeEpOverride,
+          previousMoveEntry
         });
 
-        const suggestionPool = [];
-
-        deduped.forEach((entry) => {
-          const moveEntry = createMoveEntryFromUci(baseFen, moverColor, entry.uci);
-          if (!moveEntry) return;
-          moveEntry.ply = basePly;
-          moveEntry.preFen = baseFen;
-          moveEntry.san = entry.san || (Array.isArray(entry.pvSan) && entry.pvSan.length ? entry.pvSan[0] : null) || null;
-
-          const classification = computeClassificationForMove({
-            analysis,
-            preFen: baseFen,
-            moveEntry,
-            actualEntry: entry,
-            beforeEpOverride,
-            previousMoveEntry
-          });
-
-          if (!classification) return;
-
-          const record = buildClassifiedMoveRecord({
-            ply: basePly,
-            moveEntry,
-            classification
-          });
-          if (!record) return;
-
-          const display = (() => {
-            const actualEntry = classification.actualEntry || null;
-            const bestEntry = classification.bestEntry || null;
-            const evalLabel = record.evalLabel || (actualEntry && actualEntry.eval) || '—';
-            let deltaLabel = null;
-            const bestParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
-            const actualParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
-            if (bestParsed && bestParsed.type === 'mate' && actualParsed && actualParsed.type === 'mate'
-              && Math.sign(bestParsed.value) === Math.sign(actualParsed.value)) {
-              const diff = Math.abs(actualParsed.value) - Math.abs(bestParsed.value);
-              if (diff === 0) {
-                deltaLabel = '#0';
-              } else if (diff > 0) {
-                deltaLabel = `#-${diff}`;
-              } else {
-                deltaLabel = `#+${Math.abs(diff)}`;
-              }
-            } else if (bestParsed && bestParsed.type === 'mate' && (!actualParsed || actualParsed.type !== 'mate')) {
-              deltaLabel = '#-∞';
-            } else if (actualParsed && actualParsed.type === 'mate' && (!bestParsed || bestParsed.type !== 'mate')) {
-              deltaLabel = '#+∞';
-            } else if (Number.isFinite(classification.bestEp) && Number.isFinite(classification.actualEp)) {
-              const dropPercent = (classification.bestEp - classification.actualEp) * 100;
-              if (Math.abs(dropPercent) >= 0.05) {
-                const approx = formatWinDeltaDisplay(Math.abs(dropPercent));
-                const prefix = dropPercent > 0 ? '−' : '+';
-                deltaLabel = `${prefix}${approx || Math.abs(dropPercent).toFixed(1)}%`;
-              }
-            } else if (Number.isFinite(classification.bestCp) && Number.isFinite(classification.actualCp)) {
-              const diffCp = classification.actualCp - classification.bestCp;
-              if (Math.abs(diffCp) >= 1) {
-                const pawns = diffCp / 100;
-                deltaLabel = `${diffCp > 0 ? '+' : '−'}${Math.abs(pawns).toFixed(2)}`;
-              }
-            }
-            return {
-              evalText: evalLabel,
-              deltaText: deltaLabel
-            };
-          })();
-
-          record.evalLabel = display.evalText;
-          record.deltaLabel = display.deltaText;
-          recordMoveClassification(basePly, entry.uci, record);
-
-          const classified = classifyMoveReadonly(basePly, entry.uci);
-          const tag = classified && classified.tag ? classified.tag.toLowerCase() : null;
-          if (!tag || !['brilliant', 'great', 'best', 'excellent'].includes(tag)) {
-            return;
-          }
-
-          suggestionPool.push({
-            entry,
-            classification,
-            record,
-            classified,
-            tag,
-            display
-          });
+        const filtered = classified.filter((item) => {
+          const overlay = item.overlayFinal;
+          const base = item.baseline;
+          return overlay === 'brilliant' || overlay === 'great' || base === 'best' || base === 'excellent';
         });
 
-        if (!suggestionPool.length) {
+        if (!filtered.length) {
+          state.suggestionData = [];
+          state.activeSuggestion = null;
+          state.hoverSuggestion = null;
+          redrawAllArrows([]);
           return;
         }
 
-        const priority = { brilliant: 0, great: 1, best: 2, excellent: 3 };
-        suggestionPool.sort((a, b) => {
-          if (priority[a.tag] !== priority[b.tag]) {
-            return priority[a.tag] - priority[b.tag];
-          }
-          const aEp = Number.isFinite(a.classification.actualEp) ? a.classification.actualEp : -Infinity;
-          const bEp = Number.isFinite(b.classification.actualEp) ? b.classification.actualEp : -Infinity;
-          return bEp - aEp;
-        });
+        filtered.sort((a, b) => a.rank - b.rank);
+        const limited = filtered.slice(0, MULTIPV_MAX_CANDIDATES);
 
-        const limited = suggestionPool.slice(0, MULTIPV_MAX_CANDIDATES);
+        if (!state.activeSuggestion || !limited.some((item) => item.uci === state.activeSuggestion)) {
+          state.activeSuggestion = limited[0] ? limited[0].uci : null;
+        }
+        if (state.hoverSuggestion && !limited.some((item) => item.uci === state.hoverSuggestion)) {
+          state.hoverSuggestion = null;
+        }
 
-        limited.forEach((item, index) => {
+        state.suggestionData = limited;
+
+        const activeUci = state.activeSuggestion;
+        limited.forEach((item) => {
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'suggestion';
-          button.dataset.uci = item.entry.uci;
+          button.dataset.uci = item.uci;
           button.dataset.ply = String(basePly);
+          const tone = getSuggestionTone(item);
+          button.dataset.tone = tone;
+
+          const badge = document.createElement('div');
+          badge.className = 'suggestion__badge';
 
           const rankEl = document.createElement('span');
           rankEl.className = 'suggestion__rank';
-          rankEl.textContent = index + 1;
-          button.appendChild(rankEl);
+          rankEl.textContent = item.rank;
+          badge.appendChild(rankEl);
 
-          const moveEl = document.createElement('span');
-          moveEl.className = 'suggestion__move';
-          const mainLine = document.createElement('span');
-          mainLine.className = 'suggestion__move-main';
-          mainLine.textContent = item.record.san || item.entry.san || item.entry.uci;
-          moveEl.appendChild(mainLine);
-          button.appendChild(moveEl);
+          if (item.icon) {
+            const iconEl = document.createElement('span');
+            iconEl.className = 'suggestion__icon';
+            iconEl.textContent = item.icon;
+            badge.appendChild(iconEl);
+          }
 
-          const pill = document.createElement('span');
-          pill.className = `pill pill--${item.tag}`;
-          pill.textContent = item.tag.charAt(0).toUpperCase() + item.tag.slice(1);
-          pill.classList.add('suggestion__pill');
-          button.appendChild(pill);
+          button.appendChild(badge);
 
-          const deltaEl = document.createElement('span');
-          deltaEl.className = 'suggestion__delta';
-          deltaEl.textContent = item.display.deltaText
-            ? `${item.display.evalText} (${item.display.deltaText})`
-            : item.display.evalText;
-          button.appendChild(deltaEl);
+          const text = document.createElement('div');
+          text.className = 'suggestion__text';
 
-          const seq = uciSeqFromEntry(item.entry, 10);
-          const overlay = overlayFromSeq(seq);
+          const sanEl = document.createElement('span');
+          sanEl.className = 'suggestion__move-main';
+          sanEl.textContent = item.san || item.uci;
+          text.appendChild(sanEl);
+
+          const metaEl = document.createElement('span');
+          metaEl.className = 'suggestion__meta';
+          const evalAfter = formatEvalLabelFromString(item.evalLabel);
+          metaEl.textContent = `Eval → ${evalAfter} · ${formatDeltaText(item)}`;
+          text.appendChild(metaEl);
+
+          button.appendChild(text);
+
+          const gapEl = document.createElement('span');
+          gapEl.className = 'suggestion__gap';
+          gapEl.textContent = formatEpGapPercent(item.epGapToTop);
+          button.appendChild(gapEl);
+
+          if (activeUci && item.uci === activeUci) {
+            button.classList.add('suggestion--active');
+            button.setAttribute('aria-pressed', 'true');
+          } else {
+            button.setAttribute('aria-pressed', 'false');
+          }
+
+          const overlaySegments = overlayFromSeq(item.overlaySeq);
 
           button.addEventListener('click', () => {
-            if (overlay.length) {
-              if (overlaysEqual(state.lineOverlay, overlay)) {
+            if (overlaySegments.length) {
+              if (overlaysEqual(state.lineOverlay, overlaySegments)) {
                 clearLineOverlay({ analysis });
               } else {
-                setLineOverlay(overlay, { analysis });
+                setLineOverlay(overlaySegments, { analysis });
               }
             } else {
               clearLineOverlay({ analysis });
             }
-            if (item.entry.uci && item.entry.uci.length >= 4) {
+            if (item.entry && item.entry.uci && item.entry.uci.length >= 4) {
               const from = item.entry.uci.slice(0, 2);
               const to = item.entry.uci.slice(2, 4);
-              showGhostPreview({ from, to, san: mainLine.textContent || item.entry.uci });
+              showGhostPreview({ from, to, san: item.san || item.entry.uci });
             }
-            Array.from(listEl.querySelectorAll('.suggestion')).forEach((el) => el.classList.remove('suggestion--active'));
-            button.classList.add('suggestion--active');
+            state.activeSuggestion = item.uci;
+            Array.from(listEl.querySelectorAll('.suggestion')).forEach((el) => {
+              const isActive = el.dataset.uci === item.uci;
+              el.classList.toggle('suggestion--active', isActive);
+              el.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+            redrawAllArrows();
           });
 
-          if (overlay.length && overlaysEqual(state.lineOverlay, overlay)) {
-            button.classList.add('suggestion--active');
-          }
+          const handleEnter = () => {
+            state.hoverSuggestion = item.uci;
+            redrawAllArrows();
+          };
+
+          const handleLeave = () => {
+            state.hoverSuggestion = null;
+            redrawAllArrows();
+          };
+
+          button.addEventListener('mouseenter', handleEnter);
+          button.addEventListener('mouseleave', handleLeave);
+          button.addEventListener('focus', handleEnter);
+          button.addEventListener('blur', handleLeave);
 
           listEl.appendChild(button);
         });
+
+        redrawAllArrows(limited);
       }
 
       function clampRating(value) {
@@ -4322,6 +4615,17 @@
         if (cp == null || Number.isNaN(cp)) return null;
         const ep = cpToExpectedPoints(cp, ratingOverride);
         return Math.max(0, Math.min(100, ep * 100));
+      }
+
+      function expectedPointsToCentipawns(ep, ratingOverride) {
+        if (!Number.isFinite(ep)) return null;
+        const clamped = Math.min(0.999, Math.max(0.001, ep));
+        const rating = Number.isFinite(ratingOverride) ? ratingOverride : getAverageGameRating();
+        const slope = slopeForRating(rating);
+        if (!Number.isFinite(slope) || slope === 0) return null;
+        const logit = Math.log(clamped / (1 - clamped));
+        const cp = logit / slope;
+        return Math.max(-2000, Math.min(2000, cp));
       }
 
       function expectedPointsFromWdl(wdl, color = 'w') {
@@ -7664,7 +7968,7 @@
       function applyAnalysisForCurrentPly() {
         const analysis = getAnalysisForCurrentView();
         if (analysis) {
-          redrawAllArrows(analysis.pvEntries || []);
+          redrawAllArrows();
           updatePVDisplay(analysis.pvEntries || []);
           updateExplanationPanel(analysis);
           let evalText = null;
@@ -8047,7 +8351,7 @@
           updateEvalBarHeight();
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
-            redrawAllArrows(analysis ? analysis.pvEntries || [] : []);
+        redrawAllArrows();
             updateBoardClassificationBadge();
           });
         });
