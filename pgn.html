@@ -1727,6 +1727,59 @@
         exploreMode: false
       };
 
+      function getPlayerDisplayName(color, headersOverride) {
+        const headers = headersOverride || state.headers || {};
+        const key = color === 'b' ? 'Black' : 'White';
+        const raw = headers[key];
+        if (typeof raw === 'string') {
+          const trimmed = raw.trim();
+          if (trimmed && !/^[-–—?]+$/.test(trimmed)) {
+            return trimmed;
+          }
+        }
+        return key;
+      }
+
+      function updatePlayerNameDisplays() {
+        const whiteName = getPlayerDisplayName('w');
+        const blackName = getPlayerDisplayName('b');
+
+        const materialCards = document.querySelectorAll('.material-card');
+        if (materialCards.length > 0) {
+          const whiteLabel = materialCards[0].querySelector('.material-player');
+          if (whiteLabel) {
+            whiteLabel.textContent = whiteName;
+          }
+        }
+        if (materialCards.length > 1) {
+          const blackLabel = materialCards[1].querySelector('.material-player');
+          if (blackLabel) {
+            blackLabel.textContent = blackName;
+          }
+        }
+
+        const summaryTable = byId('moveSummaryTable');
+        if (summaryTable) {
+          const whiteSummaryName = summaryTable.querySelector('.summary-player-card[data-color="w"] .summary-player-name');
+          if (whiteSummaryName) {
+            whiteSummaryName.textContent = whiteName;
+          }
+          const blackSummaryName = summaryTable.querySelector('.summary-player-card[data-color="b"] .summary-player-name');
+          if (blackSummaryName) {
+            blackSummaryName.textContent = blackName;
+          }
+
+          const headerCells = summaryTable.querySelectorAll('.summary-category-header .summary-category-value[data-color]');
+          headerCells.forEach((cell) => {
+            if (cell.dataset.color === 'w') {
+              cell.textContent = whiteName;
+            } else if (cell.dataset.color === 'b') {
+              cell.textContent = blackName;
+            }
+          });
+        }
+      }
+
       const navToolbarManager = {
         buttons: [],
         isCompact: null,
@@ -2037,8 +2090,8 @@
         const playersContainer = document.createElement('div');
         playersContainer.className = 'summary-player-grid';
         const players = [
-          { name: 'White', color: 'w' },
-          { name: 'Black', color: 'b' }
+          { color: 'w' },
+          { color: 'b' }
         ];
         players.forEach((player) => {
           const card = document.createElement('div');
@@ -2049,7 +2102,7 @@
           header.className = 'summary-player-header';
           const playerName = document.createElement('span');
           playerName.className = 'summary-player-name';
-          playerName.textContent = player.name;
+          playerName.textContent = getPlayerDisplayName(player.color);
           header.appendChild(playerName);
 
           const eloLabel = document.createElement('span');
@@ -2079,10 +2132,11 @@
         categoryHeader.className = 'summary-category-label';
         categoryHeader.textContent = 'Category';
         headerRow.appendChild(categoryHeader);
-        ['White', 'Black'].forEach((label) => {
+        ['w', 'b'].forEach((color) => {
           const headerCell = document.createElement('div');
           headerCell.className = 'summary-category-value';
-          headerCell.textContent = label;
+          headerCell.dataset.color = color;
+          headerCell.textContent = getPlayerDisplayName(color);
           headerRow.appendChild(headerCell);
         });
         categoryGrid.appendChild(headerRow);
@@ -2971,7 +3025,15 @@
         container.innerHTML = '';
         const header = document.createElement('header');
         header.className = 'moves__hdr';
-        header.innerHTML = '<span>#</span><span>White</span><span>Black</span>';
+        const numberHeader = document.createElement('span');
+        numberHeader.textContent = '#';
+        header.appendChild(numberHeader);
+        const whiteHeader = document.createElement('span');
+        whiteHeader.textContent = getPlayerDisplayName('w');
+        header.appendChild(whiteHeader);
+        const blackHeader = document.createElement('span');
+        blackHeader.textContent = getPlayerDisplayName('b');
+        header.appendChild(blackHeader);
         container.appendChild(header);
 
         const list = document.createElement('ol');
@@ -7727,6 +7789,7 @@
         state.game = createBaseGame();
         state.ply = 0;
         state.headers = { ...headers };
+        updatePlayerNameDisplays();
         setBoardPosition(state.initialFen);
         populateHeaders(headers);
         renderMoves();
