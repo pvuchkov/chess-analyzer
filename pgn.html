@@ -4687,8 +4687,6 @@
         const sacNetAfterReReply = Number.isFinite(sacInfo.deltaAfterReReplyNet) ? sacInfo.deltaAfterReReplyNet : null;
         const isDirectSacrifice1Ply = sacInfo.isDirectSacrifice === true;
         const isDirectSacrifice2Ply = sacInfo.isDirectSacrifice2Ply === true;
-        const sacTwoPly = isDirectSacrifice2Ply
-          || (sacLostIsMovedPiece && Number.isFinite(sacNetAfterReReply) && sacNetAfterReReply <= -SAC_TWO_PLY_MIN_NET);
         const comparisonPreCp = Number.isFinite(preEvalCp)
           ? preEvalCp
           : (preBestEval && Number.isFinite(preBestEval.cp) ? preBestEval.cp : null);
@@ -4703,17 +4701,21 @@
           && Number.isFinite(comparisonPostCp)
           && (bestLineEvalCp - comparisonPostCp) <= NEAR_BEST_CP;
         const nearBest = cpNearBest || (mateForUs(preBestEval) && mateForUs(postEvalObj));
+        const nearBestBaseline = (normalizedBase === 'best') || nearBest;
 
         const isMateAfter = mateForUs(postEvalObj);
         const mateDepthAfter = isMateAfter && postEvalObj && Number.isFinite(postEvalObj.mate)
           ? Math.abs(postEvalObj.mate)
           : null;
-        const ourReReplyIsMate = Number.isFinite(comparisonPostReReplyCp) && comparisonPostReReplyCp === 10000;
-        const mateSac = (normalizedBase === 'best' || nearBest)
+        const isFinalMateMove = isMateAfter && mateDepthAfter === 1;
+        const opponentCapturedMovedPiece = sacLostIsMovedPiece && sacLostValue > 0;
+        const mateSac = nearBestBaseline
           && isMateAfter
           && mateDepthAfter != null
           && mateDepthAfter <= BRILLIANT_MATE_SAC_MAX_DEPTH
-          && (isDirectSacrifice1Ply || ourReReplyIsMate);
+          && !isFinalMateMove
+          && isDirectSacrifice1Ply
+          && opponentCapturedMovedPiece;
         if (mateSac) {
           const tooltipParts = ['Promoted to Brilliant: sacrificial forced mate.'];
           tooltipParts.push(`Mate in ${mateDepthAfter}.`);
@@ -4741,8 +4743,11 @@
               sacLostPieceId,
               isDirectSacrifice1Ply,
               isDirectSacrifice2Ply,
-              ourReReplyIsMate,
-              postEvalCpAfterReReply
+              opponentCapturedMovedPiece,
+              isFinalMateMove,
+              postEvalCpAfterReReply,
+              mateSacResult: true,
+              nonMateBrilliantResult: false
             }
           };
         }
@@ -4757,25 +4762,26 @@
           && Number.isFinite(secondBestEvalCp)
           ? (bestLineEvalCp - secondBestEvalCp)
           : null;
+        const onlyMoveGapCp = Number.isFinite(bestLineEvalCp)
+          ? bestLineEvalCp - (Number.isFinite(secondBestEvalCp) ? secondBestEvalCp : -Infinity)
+          : null;
         const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(secondBestMoverEp)
           ? (bestMoverEp - secondBestMoverEp)
           : null;
         const epNearBestPlayed = Number.isFinite(bestMoverEp)
           && Number.isFinite(playedMoverEp)
           && Math.abs(bestMoverEp - playedMoverEp) <= (0.02 + PV_EPSILON);
-        const strongOnlyMovePressure = (Number.isFinite(bestVsSecondGap) && bestVsSecondGap >= ONLY_MOVE_GAP_CP)
-          || (Number.isFinite(epGapToSecond) && epGapToSecond >= (0.20 - PV_EPSILON));
         const cpKeepsEvaluation = Number.isFinite(comparisonPreCp)
           && Number.isFinite(comparisonPostReReplyCp)
-          && comparisonPostReReplyCp >= (comparisonPreCp - NOT_BAD_TOLERANCE_CP);
+          && comparisonPostReReplyCp >= (comparisonPreCp - 50);
+        const hasLargeOnlyMoveGap = onlyMoveGapCp != null && onlyMoveGapCp >= 150;
 
-        if ((normalizedBase === 'best' || nearBest)
+        if (nearBestBaseline
           && !isMateAfter
-          && sacTwoPly
-          && nearBest
+          && isDirectSacrifice2Ply
           && epNearBestPlayed
           && cpKeepsEvaluation
-          && strongOnlyMovePressure
+          && hasLargeOnlyMoveGap
           && endgameOnlyMove) {
           const gapText = formatNegativeCpGap(bestVsSecondGap);
           const evalText = formatCpAsPawnString(postEvalCpAfterReReply, { forceSign: true });
@@ -4808,11 +4814,12 @@
               sacNetAfterReReply,
               sacLostSquare,
               sacLostPieceId,
-              sacTwoPly,
               postEvalCpAfterReReply,
               epNearBestPlayed,
-              strongOnlyMovePressure,
-              cpKeepsEvaluation
+              cpKeepsEvaluation,
+              hasLargeOnlyMoveGap,
+              mateSacResult: false,
+              nonMateBrilliantResult: true
             }
           };
         }
@@ -6282,9 +6289,6 @@
           if (!Number.isFinite(cp)) return null;
           return moverIsWhite ? cp : -cp;
         };
-
-        const sacTwoPly = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice2Ply === true;
-
         const evalByUci = new Map();
         const cpByUci = new Map();
         const candidateCps = [];
@@ -6324,8 +6328,11 @@
 
         const preEvalCp = bestLineEvalCp;
         const postEvalCp = toMoverCp(actualCp);
-        const onlyMoveGapCp = Number.isFinite(bestLineEvalCp) && Number.isFinite(secondBestEvalCp)
+        const onlyMoveGapCpFinite = Number.isFinite(bestLineEvalCp) && Number.isFinite(secondBestEvalCp)
           ? (bestLineEvalCp - secondBestEvalCp)
+          : null;
+        const onlyMoveGapCp = Number.isFinite(bestLineEvalCp)
+          ? bestLineEvalCp - (Number.isFinite(secondBestEvalCp) ? secondBestEvalCp : -Infinity)
           : null;
         let preBestEval = null;
         if (candidateCps.length > 0) {
@@ -6350,40 +6357,47 @@
         const postEval = normalizeEvalForMover(actualEntry ? actualEntry.eval : null, moverIsWhite)
           || (Number.isFinite(postEvalCp) ? { cp: postEvalCp } : null);
         const postEvalCpAfterReReply = Number.isFinite(postEvalCp) ? postEvalCp : null;
+        const ourReReplyIsMate = Number.isFinite(postEvalCpAfterReReply)
+          && postEvalCpAfterReReply === 10000;
 
         const epGapToSecond = Number.isFinite(bestMoverEp) && Number.isFinite(EP_secondBest)
           ? bestMoverEp - EP_secondBest
           : null;
         const meetsOnlyMoveGap = (!Number.isFinite(secondBestEvalCp) && !Number.isFinite(EP_secondBest))
-          || (Number.isFinite(onlyMoveGapCp) && onlyMoveGapCp >= ONLY_MOVE_GAP_CP)
+          || (Number.isFinite(onlyMoveGapCpFinite) && onlyMoveGapCpFinite >= ONLY_MOVE_GAP_CP)
           || (Number.isFinite(epGapToSecond) && epGapToSecond >= (ONLY_MOVE_GAP_EP - PV_EPSILON));
         const isOnlyWinningMove = mateDistanceTest || meetsOnlyMoveGap;
 
         const mateSacDepthLimit = BRILLIANT_MATE_SAC_MAX_DEPTH;
         const isDirectSacrifice1Ply = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice === true;
-        const ourReReplyIsMate = Number.isFinite(postEvalCpAfterReReply)
-          && postEvalCpAfterReReply === 10000;
-        const mateSacBrilliant = (baseline === 'best' || nearBest)
-          && actualMateForMover
-          && Number.isFinite(actualMateDistance)
-          && actualMateDistance <= mateSacDepthLimit
-          && (isDirectSacrifice1Ply || ourReReplyIsMate);
+        const opponentCapturedMovedPiece = lostAfterReplyIsMovedPiece
+          && Number.isFinite(lostAfterReplyValue)
+          && lostAfterReplyValue > 0;
+        const isMateNow = Boolean(actualMateForMover);
+        const mateDepthAfter = Number.isFinite(actualMateDistance) ? actualMateDistance : null;
+        const isFinalMateMove = isMateNow && mateDepthAfter === 1;
+        const baselineNearBest = (baseline === 'best') || nearBest;
+        const mateSacBrilliant = baselineNearBest
+          && isMateNow
+          && mateDepthAfter != null
+          && mateDepthAfter <= mateSacDepthLimit
+          && !isFinalMateMove
+          && isDirectSacrifice1Ply
+          && opponentCapturedMovedPiece;
 
         const epNearBestPlayed = Number.isFinite(bestMoverEp)
           && Number.isFinite(actualMoverEp)
           && Math.abs(bestMoverEp - actualMoverEp) <= (0.02 + PV_EPSILON);
-        const strongOnlyMovePressure = (Number.isFinite(onlyMoveGapCp) && onlyMoveGapCp >= ONLY_MOVE_GAP_CP)
-          || (Number.isFinite(epGapToSecond) && epGapToSecond >= (0.20 - PV_EPSILON));
         const cpKeepsEval = Number.isFinite(preEvalCp)
           && Number.isFinite(postEvalCpAfterReReply)
-          && postEvalCpAfterReReply >= (preEvalCp - NOT_BAD_TOLERANCE_CP);
-        const nonMateBrilliant = (baseline === 'best' || nearBest)
-          && !actualMateForMover
-          && sacTwoPly
-          && nearBest
+          && postEvalCpAfterReReply >= (preEvalCp - 50);
+        const hasLargeOnlyMoveGap = onlyMoveGapCp != null && onlyMoveGapCp >= 150;
+        const nonMateBrilliant = baselineNearBest
+          && !isMateNow
+          && isDirectSacrifice2Ply
           && epNearBestPlayed
           && cpKeepsEval
-          && strongOnlyMovePressure;
+          && hasLargeOnlyMoveGap;
 
         const replyIsMate = Boolean(actualMateForMover && Number.isFinite(actualMateDistance) && actualMateDistance === 1);
         const greatCandidate = nearBest
@@ -6460,6 +6474,7 @@
           return 'none';
         })();
         const mateSacResult = promotionPath === 'mateSac';
+        const nonMateBrilliantResult = promotionPath === 'nonMateSac';
 
         if (typeof console !== 'undefined' && console && typeof console.table === 'function') {
           try {
@@ -6512,6 +6527,7 @@
               mateDepthBefore: bestMateDistance != null ? bestMateDistance : null,
               isMateAfter: Boolean(actualMateForMover),
               mateDepthAfter: actualMateDistance != null ? actualMateDistance : null,
+              isFinalMateMove,
               materialBefore,
               materialAfterMove,
               materialAfterReply,
@@ -6542,15 +6558,18 @@
               'lostAfterReply.square': lostAfterReplySquare,
               'lostAfterReply.pieceId': lostAfterReplyPieceId,
               lostIsMovedPiece: lostAfterReplyIsMovedPiece,
+              opponentCapturedMovedPiece,
               isDirectSacrifice,
               isDirectSacrifice2Ply,
               ourBestReReplyUci,
               postEvalCpAfterReReply,
-              onlyMoveGapCp: Number.isFinite(onlyMoveGapCp) ? onlyMoveGapCp : null,
+              onlyMoveGapCp: Number.isFinite(onlyMoveGapCp) ? onlyMoveGapCp : (onlyMoveGapCp === Infinity ? 'Infinity' : null),
+              hasLargeOnlyMoveGap,
               promotionPath,
               terminalFlags: { replyIsMate, ourReReplyIsMate },
               sacPath,
-              mateSacResult
+              mateSacResult,
+              nonMateBrilliantResult
             });
           } catch (err) {
             // ignore logging errors
