@@ -36,6 +36,14 @@
       --eval-score-bg: rgba(15, 23, 42, 0.88);
       --eval-score-text: #f8fafc;
       --eval-score-border: rgba(148, 163, 184, 0.4);
+      --move-best-bg: rgba(34, 197, 94, 0.18);
+      --move-best-fg: #4ade80;
+      --move-excellent-bg: rgba(56, 189, 248, 0.18);
+      --move-excellent-fg: #38bdf8;
+      --move-great-bg: rgba(245, 158, 11, 0.22);
+      --move-great-fg: #fbbf24;
+      --move-brilliant-bg: rgba(20, 184, 166, 0.22);
+      --move-brilliant-fg: #2dd4bf;
     }
 
     [data-theme="light"] {
@@ -63,6 +71,14 @@
       --eval-score-bg: rgba(248, 250, 252, 0.9);
       --eval-score-text: #0f172a;
       --eval-score-border: rgba(15, 23, 42, 0.15);
+      --move-best-bg: rgba(34, 197, 94, 0.16);
+      --move-best-fg: #166534;
+      --move-excellent-bg: rgba(37, 99, 235, 0.15);
+      --move-excellent-fg: #1d4ed8;
+      --move-great-bg: rgba(251, 191, 36, 0.22);
+      --move-great-fg: #b45309;
+      --move-brilliant-bg: rgba(45, 212, 191, 0.2);
+      --move-brilliant-fg: #0f766e;
     }
 
     * {
@@ -1038,84 +1054,118 @@
     }
 
     .moves {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+      --gap: 8px;
+      display: grid;
+      gap: var(--gap);
       font-size: 14px;
     }
 
-    .move-tree-header {
+    .moves__hdr,
+    .moves__row {
       display: grid;
-      grid-template-columns: 60px 1fr;
-      color: var(--muted);
-      font-size: 11px;
+      grid-template-columns: 48px 1fr 1fr;
+      gap: var(--gap);
+      align-items: center;
+    }
+
+    .moves__hdr {
       font-weight: 600;
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.3px;
-      padding: 0 6px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
     }
 
-    .move-tree {
+    .moves__list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: var(--gap);
+    }
+
+    .moves__no {
+      text-align: right;
+      opacity: 0.7;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .moves__cell {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
+      align-items: center;
+      justify-content: space-between;
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+      text-align: left;
+      gap: 10px;
     }
 
-    .move-row {
+    .moves__cell:hover,
+    .moves__cell:focus-visible {
+      border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+      outline: none;
+    }
+
+    .moves__cell[disabled] {
+      opacity: 0.5;
+      cursor: default;
+      border-style: dashed;
+    }
+
+    .moves__cell--active {
+      border-color: rgba(56, 189, 248, 0.55);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.32);
+    }
+
+    .moves__label {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 10px;
-      border-radius: 10px;
-      cursor: pointer;
-      background: rgba(148, 163, 184, 0.12);
-      transition: background 0.12s ease, transform 0.12s ease;
-      position: relative;
-      margin-left: calc(var(--indent, 0) * 16px);
-    }
-
-    .move-row:hover {
-      background: rgba(56, 189, 248, 0.18);
-    }
-
-    .move-row.active {
-      background: rgba(56, 189, 248, 0.28);
-      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-    }
-
-    .move-row.mainline {
-      background: rgba(148, 163, 184, 0.18);
-    }
-
-    .move-row.variation {
-      opacity: 0.92;
-    }
-
-    .move-row-index {
-      width: 50px;
-      font-weight: 600;
-      text-align: right;
-      color: var(--muted);
-    }
-
-    .move-row-san {
       min-width: 0;
     }
 
-    .move-row-eval {
-      font-size: 11px;
+    .moves__san {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       font-weight: 600;
-      color: var(--accent);
-      background: rgba(15, 23, 42, 0.75);
-      padding: 1px 4px;
-      border-radius: 4px;
-      border: 1px solid transparent;
     }
 
-    [data-theme="light"] .move-row-eval {
-      color: var(--panel);
-      background: rgba(0, 0, 0, 0.08);
-      border: 1px solid rgba(0, 0, 0, 0.12);
+    .moves__icon {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 2px rgba(8, 15, 35, 0.45));
+    }
+
+    .moves__eval {
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(148, 163, 184, 0.16);
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      white-space: nowrap;
+    }
+
+    @media (max-width: 720px) {
+      .moves__hdr,
+      .moves__row {
+        grid-template-columns: 36px 1fr;
+      }
+
+      .moves__cell--black {
+        grid-column: 2 / -1;
+        margin-top: 6px;
+      }
     }
 
     .classification-icon {
@@ -1127,82 +1177,96 @@
 
     .pv-list {
       display: grid;
-      gap: 8px;
-      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
-      font-size: 13px;
+      gap: 10px;
     }
 
-    .pv {
+    .suggestion {
       display: grid;
-      grid-template-columns: 26px minmax(0, 1fr) auto;
-      gap: 8px;
+      grid-template-columns: 32px minmax(0, 1fr) auto auto;
+      gap: 12px;
       align-items: center;
-      padding: 8px 10px;
-      border-radius: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
       background: rgba(148, 163, 184, 0.12);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+      text-align: left;
     }
 
-    .pv-rank-1 {
-      background: rgba(34, 197, 94, 0.15);
-      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35);
+    .suggestion:hover,
+    .suggestion:focus-visible {
+      border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+      outline: none;
     }
 
-    .pv-rank-2 {
-      background: rgba(56, 189, 248, 0.15);
-      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+    .suggestion--active {
+      border-color: rgba(56, 189, 248, 0.55);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.32);
     }
 
-    .pv-rank-3 {
-      background: rgba(250, 204, 21, 0.18);
-      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
-    }
-
-    .pv .rank {
+    .suggestion__rank {
       font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
     }
 
-    .pv .move {
+    .suggestion__move {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .suggestion__move-main {
+      font-weight: 600;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
     }
 
-    .pv-meta {
-      display: inline-flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 6px;
+    .suggestion__pill {
+      justify-self: start;
     }
 
-    .pv-tag {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      padding: 2px 6px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      background: rgba(148, 163, 184, 0.16);
-      color: var(--text);
-    }
-
-    .pv-tag-best {
-      background: rgba(34, 197, 94, 0.18);
-      border-color: rgba(34, 197, 94, 0.35);
-      color: var(--ok);
-    }
-
-    .pv-tag-excellent {
-      background: rgba(56, 189, 248, 0.18);
-      border-color: rgba(56, 189, 248, 0.35);
-      color: var(--accent);
-    }
-
-    .pv .eval {
-      color: var(--muted);
-      position: static;
-      background: transparent;
-      padding: 0;
+    .suggestion__delta {
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
       font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+      color: var(--muted);
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .pill--best {
+      background: var(--move-best-bg);
+      color: var(--move-best-fg);
+    }
+
+    .pill--excellent {
+      background: var(--move-excellent-bg);
+      color: var(--move-excellent-fg);
+    }
+
+    .pill--great {
+      background: var(--move-great-bg);
+      color: var(--move-great-fg);
+    }
+
+    .pill--brilliant {
+      background: var(--move-brilliant-bg);
+      color: var(--move-brilliant-fg);
     }
 
     .suggestion-mode-label {
@@ -1485,14 +1549,7 @@
           <h2>Engine explanations</h2>
         </summary>
         <div class="info-card-body">
-          <div class="engine-toolbar">
-            <div class="engine-chips" id="classificationChipGroup" role="group" aria-label="Jump to move classification">
-              <button type="button" class="chip-pill" data-classification="blunder">Blunder</button>
-              <button type="button" class="chip-pill" data-classification="mistake">Mistake</button>
-              <button type="button" class="chip-pill" data-classification="inaccuracy">Inaccuracy</button>
-              <button type="button" class="chip-pill" data-classification="book">Book</button>
-            </div>
-          </div>
+          <div class="engine-toolbar"></div>
           <div id="explanationBox" class="explanation-panel">
             <div id="explanationSummary" class="explanation-headline">Select a move to see the engine's commentary.</div>
             <div id="explanationActions" class="explanation-actions" hidden>
@@ -1626,6 +1683,7 @@
   
   <script type="module">
     import { Chess } from './chess.js';
+    import { classifyMoveReadonly, recordMoveClassification, clearMoveClassifications } from './moveClassifier.js';
     (function () {
       const byId = (id) => document.getElementById(id);
       const encoder = new TextEncoder();
@@ -2886,125 +2944,109 @@
         const container = byId('moves');
         if (!container) return;
         container.innerHTML = '';
-        const root = getRootNode();
-        if (!root) {
-          updateMoveSummary();
-          return;
-        }
-
-        const header = document.createElement('div');
-        header.className = 'move-tree-header';
-        header.innerHTML = '<span>Move</span><span>Play</span>';
+        const header = document.createElement('header');
+        header.className = 'moves__hdr';
+        header.innerHTML = '<span>#</span><span>White</span><span>Black</span>';
         container.appendChild(header);
 
-        const list = document.createElement('div');
-        list.className = 'move-tree';
+        const list = document.createElement('ol');
+        list.className = 'moves__list';
         container.appendChild(list);
 
-        function renderMoveRow(node, depth, { isMainline = false, isVariation = false } = {}) {
-          const row = document.createElement('div');
-          row.className = 'move-row';
-          if (isMainline) row.classList.add('mainline');
-          if (isVariation) row.classList.add('variation');
-          row.dataset.nodeId = node.id;
-          row.style.setProperty('--indent', String(depth));
-
-          const prefix = document.createElement('span');
-          prefix.className = 'move-row-index';
-          const number = node.moveNumber || 0;
-          if (number > 0) {
-            prefix.textContent = node.color === 'b' ? `${number}…` : `${number}.`;
-          } else {
-            prefix.textContent = '';
+        const rows = [];
+        state.verboseHistory.forEach((entry, index) => {
+          if (!entry) return;
+          const moveNumber = Math.floor(index / 2) + 1;
+          if (!rows[moveNumber - 1]) {
+            rows[moveNumber - 1] = { number: moveNumber, white: null, black: null };
           }
-          row.appendChild(prefix);
+          if (entry.color === 'b') {
+            rows[moveNumber - 1].black = entry;
+          } else {
+            rows[moveNumber - 1].white = entry;
+          }
+        });
+
+        const createCell = (entry, color) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `moves__cell moves__cell--${color}`;
+          if (!entry) {
+            btn.disabled = true;
+            btn.setAttribute('aria-hidden', 'true');
+            return btn;
+          }
+          btn.dataset.nodeId = entry.id;
+          btn.dataset.ply = Number.isFinite(entry.ply) ? String(entry.ply) : '';
+
+          const label = document.createElement('span');
+          label.className = 'moves__label';
 
           const san = document.createElement('span');
-          san.className = 'move-row-san';
-          san.textContent = node.san || '';
-          row.appendChild(san);
+          san.className = 'moves__san';
+          san.textContent = entry.san || entry.uci || '';
+          label.appendChild(san);
 
-          if (node && node.analysis) {
-            const chosenClass = getMoveDisplayClassification(node.analysis);
-            if (chosenClass) {
-              const iconPath = classificationToIcon(chosenClass);
-              if (iconPath) {
-                const icon = document.createElement('img');
-                icon.src = iconPath;
-                icon.alt = chosenClass;
-                if (node.analysis.promotion && node.analysis.promotion.tooltip) {
-                  icon.title = node.analysis.promotion.tooltip;
-                }
-                icon.className = 'classification-icon';
-                row.appendChild(icon);
+          const analysis = entry.analysis || (entry.id ? state.analysisCache.get(entry.id) : null);
+          const chosenClass = getMoveDisplayClassification(analysis);
+          if (chosenClass) {
+            const iconPath = classificationToIcon(chosenClass);
+            if (iconPath) {
+              const icon = document.createElement('img');
+              icon.src = iconPath;
+              icon.alt = chosenClass;
+              if (analysis && analysis.promotion && analysis.promotion.tooltip) {
+                icon.title = analysis.promotion.tooltip;
               }
+              icon.className = 'moves__icon';
+              label.appendChild(icon);
             }
           }
 
-          if (node && node.eval) {
-            const badge = document.createElement('span');
-            badge.className = 'move-row-eval';
-            badge.textContent = node.eval;
-            row.appendChild(badge);
+          btn.appendChild(label);
+
+          const evalText = entry.eval || (analysis && analysis.eval) || null;
+          if (evalText) {
+            const evalEl = document.createElement('span');
+            evalEl.className = 'moves__eval';
+            evalEl.textContent = evalText;
+            btn.appendChild(evalEl);
           }
 
-          row.addEventListener('click', () => {
-            setActivePathToNode(node.id);
-            const idx = getNodeIndexInActiveLine(node.id);
-            goToPly(idx + 1);
-            renderMoves();
-          });
-
-          list.appendChild(row);
-        }
-
-        function renderVariationBranch(node, depth) {
-          if (!node) return;
-          renderMoveRow(node, depth, { isVariation: true });
-          const children = Array.isArray(node.children) ? node.children : [];
-          if (!children.length) return;
-          const preferred = state.lineSelections.get(node.id) || children[0];
-          const preferredNode = getNode(preferred);
-          if (preferredNode) {
-            renderVariationBranch(preferredNode, depth);
-          }
-          children.forEach((childId) => {
-            if (childId === preferred) return;
-            const childNode = getNode(childId);
-            if (childNode) {
-              renderVariationBranch(childNode, depth + 1);
+          btn.addEventListener('click', () => {
+            if (entry.id) {
+              setActivePathToNode(entry.id);
             }
+            const ply = Number.isFinite(entry.ply) ? entry.ply : state.verboseHistory.indexOf(entry) + 1;
+            goToPly(ply);
           });
-        }
 
-        function renderMainline(parentNode, depth) {
-          const selectedId = state.lineSelections.get(parentNode.id);
-          if (!selectedId) return;
-          const node = getNode(selectedId);
-          if (!node) return;
-          renderMoveRow(node, depth, { isMainline: true });
-          const siblings = Array.isArray(parentNode.children) ? parentNode.children : [];
-          siblings.forEach((childId) => {
-            if (childId === selectedId) return;
-            const childNode = getNode(childId);
-            if (childNode) {
-              renderVariationBranch(childNode, depth + 1);
-            }
-          });
-          renderMainline(node, depth);
-        }
+          return btn;
+        };
 
-        renderMainline(root, 0);
+        rows.forEach((row) => {
+          const item = document.createElement('li');
+          item.className = 'moves__row';
+          const no = document.createElement('span');
+          no.className = 'moves__no';
+          no.textContent = `${row.number}.`;
+          item.appendChild(no);
+          item.appendChild(createCell(row.white, 'white'));
+          item.appendChild(createCell(row.black, 'black'));
+          list.appendChild(item);
+        });
+
         highlightActive();
         updateMoveSummary();
       }
 
       function highlightActive() {
-        Array.from(document.querySelectorAll('.move-row')).forEach((el) => el.classList.remove('active'));
+        Array.from(document.querySelectorAll('.moves__cell')).forEach((el) => el.classList.remove('moves__cell--active'));
         const node = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
         if (!node) return;
-        const el = document.querySelector(`.move-row[data-node-id="${node.id}"]`);
-        if (el) el.classList.add('active');
+        const selector = node.id ? `.moves__cell[data-node-id="${node.id}"]` : `.moves__cell[data-ply="${node.ply}"]`;
+        const el = document.querySelector(selector);
+        if (el) el.classList.add('moves__cell--active');
       }
 
       function goToPly(ply) {
@@ -3796,69 +3838,213 @@
           return;
         }
 
-        const bestEntry = entries[0];
-        const bestEvalNumeric = bestEntry && typeof bestEntry.eval === 'string' ? parseFloat(bestEntry.eval) : NaN;
-        const bestEvalValue = Number.isNaN(bestEvalNumeric) ? null : bestEvalNumeric;
-        const bestEp = bestEntry && Number.isFinite(bestEntry.expectedPoints) ? bestEntry.expectedPoints : null;
+        const analysis = getAnalysisForCurrentView();
+        if (!analysis) {
+          return;
+        }
 
-        entries.slice(0, MULTIPV_MAX_CANDIDATES).forEach((entry, index) => {
-          const item = document.createElement('div');
-          item.className = 'pv';
-          if (index < 3) {
-            item.classList.add(`pv-rank-${index + 1}`);
+        const isPlayedMode = state.suggestionMode === 'played';
+        const historyIndex = state.ply > 0 ? state.ply - 1 : null;
+        const activeEntry = historyIndex != null ? state.verboseHistory[historyIndex] : null;
+
+        let baseFen = null;
+        let moverColor = 'w';
+        let basePly = isPlayedMode ? state.ply : state.ply + 1;
+        let beforeEpOverride = Number.isFinite(analysis.beforeEp) ? analysis.beforeEp : null;
+        let previousMoveEntry = null;
+
+        if (isPlayedMode) {
+          baseFen = (activeEntry && activeEntry.preFen) || effectiveInitialFen();
+          moverColor = activeEntry && activeEntry.color ? activeEntry.color : sideToMoveFromFen(baseFen);
+          basePly = activeEntry && Number.isFinite(activeEntry.ply) ? activeEntry.ply : state.ply;
+          previousMoveEntry = historyIndex != null && historyIndex > 0 ? state.verboseHistory[historyIndex - 1] : null;
+        } else {
+          const currentFen = state.ply === 0
+            ? effectiveInitialFen()
+            : ((state.verboseHistory[state.ply - 1] && state.verboseHistory[state.ply - 1].fen) || effectiveInitialFen());
+          baseFen = currentFen;
+          moverColor = sideToMoveFromFen(baseFen);
+          basePly = state.ply + 1;
+          previousMoveEntry = state.ply > 0 ? state.verboseHistory[state.ply - 1] : null;
+        }
+
+        if (!baseFen) {
+          baseFen = effectiveInitialFen();
+        }
+
+        const deduped = new Map();
+        entries.forEach((entry) => {
+          if (!entry || !entry.uci) return;
+          const key = entry.uci;
+          if (!deduped.has(key)) {
+            deduped.set(key, entry);
           }
+        });
 
-          const rankEl = document.createElement('span');
-          rankEl.className = 'rank';
-          rankEl.textContent = index + 1;
-          item.appendChild(rankEl);
+        const suggestionPool = [];
 
-          const moveEl = document.createElement('span');
-          moveEl.className = 'move';
-          moveEl.textContent = entry && (entry.san || entry.uci) ? (entry.san || entry.uci) : '—';
-          item.appendChild(moveEl);
+        deduped.forEach((entry) => {
+          const moveEntry = createMoveEntryFromUci(baseFen, moverColor, entry.uci);
+          if (!moveEntry) return;
+          moveEntry.ply = basePly;
+          moveEntry.preFen = baseFen;
+          moveEntry.san = entry.san || (Array.isArray(entry.pvSan) && entry.pvSan.length ? entry.pvSan[0] : null) || null;
 
-          const metaEl = document.createElement('span');
-          metaEl.className = 'pv-meta';
+          const classification = computeClassificationForMove({
+            analysis,
+            preFen: baseFen,
+            moveEntry,
+            actualEntry: entry,
+            beforeEpOverride,
+            previousMoveEntry
+          });
 
-          if (entry && entry.tag) {
-            const tagEl = document.createElement('span');
-            const normalizedTag = String(entry.tag);
-            tagEl.className = `pv-tag pv-tag-${normalizedTag.toLowerCase()}`;
-            tagEl.textContent = normalizedTag;
-            metaEl.appendChild(tagEl);
-          }
+          if (!classification) return;
 
-          const evalEl = document.createElement('span');
-          evalEl.className = 'eval';
-          let evalText = entry && entry.eval ? entry.eval : '';
-          let annotation = '';
+          const record = buildClassifiedMoveRecord({
+            ply: basePly,
+            moveEntry,
+            classification
+          });
+          if (!record) return;
 
-          if (bestEp != null && entry && Number.isFinite(entry.expectedPoints)) {
-            const dropPercent = (bestEp - entry.expectedPoints) * 100;
-            if (dropPercent > 0.5) {
-              const approx = formatWinDeltaDisplay(dropPercent);
-              annotation = approx ? `−${approx}` : `−${dropPercent.toFixed(1)}%`;
-            }
-          } else if (bestEvalValue != null && entry) {
-            const moveEval = entry.eval != null ? parseFloat(entry.eval) : NaN;
-            if (!Number.isNaN(moveEval)) {
-              const ratingChange = (moveEval - bestEvalValue) * 100;
-              if (Math.abs(ratingChange) > 1) {
-                const sign = ratingChange > 0 ? '+' : '';
-                annotation = `${sign}${ratingChange.toFixed(0)}`;
+          const display = (() => {
+            const actualEntry = classification.actualEntry || null;
+            const bestEntry = classification.bestEntry || null;
+            const evalLabel = record.evalLabel || (actualEntry && actualEntry.eval) || '—';
+            let deltaLabel = null;
+            const bestParsed = parseEvalString(bestEntry ? bestEntry.eval : null);
+            const actualParsed = parseEvalString(actualEntry ? actualEntry.eval : null);
+            if (bestParsed && bestParsed.type === 'mate' && actualParsed && actualParsed.type === 'mate'
+              && Math.sign(bestParsed.value) === Math.sign(actualParsed.value)) {
+              const diff = Math.abs(actualParsed.value) - Math.abs(bestParsed.value);
+              if (diff === 0) {
+                deltaLabel = '#0';
+              } else if (diff > 0) {
+                deltaLabel = `#-${diff}`;
+              } else {
+                deltaLabel = `#+${Math.abs(diff)}`;
+              }
+            } else if (bestParsed && bestParsed.type === 'mate' && (!actualParsed || actualParsed.type !== 'mate')) {
+              deltaLabel = '#-∞';
+            } else if (actualParsed && actualParsed.type === 'mate' && (!bestParsed || bestParsed.type !== 'mate')) {
+              deltaLabel = '#+∞';
+            } else if (Number.isFinite(classification.bestEp) && Number.isFinite(classification.actualEp)) {
+              const dropPercent = (classification.bestEp - classification.actualEp) * 100;
+              if (Math.abs(dropPercent) >= 0.05) {
+                const approx = formatWinDeltaDisplay(Math.abs(dropPercent));
+                const prefix = dropPercent > 0 ? '−' : '+';
+                deltaLabel = `${prefix}${approx || Math.abs(dropPercent).toFixed(1)}%`;
+              }
+            } else if (Number.isFinite(classification.bestCp) && Number.isFinite(classification.actualCp)) {
+              const diffCp = classification.actualCp - classification.bestCp;
+              if (Math.abs(diffCp) >= 1) {
+                const pawns = diffCp / 100;
+                deltaLabel = `${diffCp > 0 ? '+' : '−'}${Math.abs(pawns).toFixed(2)}`;
               }
             }
+            return {
+              evalText: evalLabel,
+              deltaText: deltaLabel
+            };
+          })();
+
+          record.evalLabel = display.evalText;
+          record.deltaLabel = display.deltaText;
+          recordMoveClassification(basePly, entry.uci, record);
+
+          const classified = classifyMoveReadonly(basePly, entry.uci);
+          const tag = classified && classified.tag ? classified.tag.toLowerCase() : null;
+          if (!tag || !['brilliant', 'great', 'best', 'excellent'].includes(tag)) {
+            return;
           }
 
-          if (annotation) {
-            evalText = evalText ? `${evalText} (${annotation})` : annotation;
-          }
-          evalEl.textContent = evalText;
-          metaEl.appendChild(evalEl);
-          item.appendChild(metaEl);
+          suggestionPool.push({
+            entry,
+            classification,
+            record,
+            classified,
+            tag,
+            display
+          });
+        });
 
-          listEl.appendChild(item);
+        if (!suggestionPool.length) {
+          return;
+        }
+
+        const priority = { brilliant: 0, great: 1, best: 2, excellent: 3 };
+        suggestionPool.sort((a, b) => {
+          if (priority[a.tag] !== priority[b.tag]) {
+            return priority[a.tag] - priority[b.tag];
+          }
+          const aEp = Number.isFinite(a.classification.actualEp) ? a.classification.actualEp : -Infinity;
+          const bEp = Number.isFinite(b.classification.actualEp) ? b.classification.actualEp : -Infinity;
+          return bEp - aEp;
+        });
+
+        const limited = suggestionPool.slice(0, MULTIPV_MAX_CANDIDATES);
+
+        limited.forEach((item, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'suggestion';
+          button.dataset.uci = item.entry.uci;
+          button.dataset.ply = String(basePly);
+
+          const rankEl = document.createElement('span');
+          rankEl.className = 'suggestion__rank';
+          rankEl.textContent = index + 1;
+          button.appendChild(rankEl);
+
+          const moveEl = document.createElement('span');
+          moveEl.className = 'suggestion__move';
+          const mainLine = document.createElement('span');
+          mainLine.className = 'suggestion__move-main';
+          mainLine.textContent = item.record.san || item.entry.san || item.entry.uci;
+          moveEl.appendChild(mainLine);
+          button.appendChild(moveEl);
+
+          const pill = document.createElement('span');
+          pill.className = `pill pill--${item.tag}`;
+          pill.textContent = item.tag.charAt(0).toUpperCase() + item.tag.slice(1);
+          pill.classList.add('suggestion__pill');
+          button.appendChild(pill);
+
+          const deltaEl = document.createElement('span');
+          deltaEl.className = 'suggestion__delta';
+          deltaEl.textContent = item.display.deltaText
+            ? `${item.display.evalText} (${item.display.deltaText})`
+            : item.display.evalText;
+          button.appendChild(deltaEl);
+
+          const seq = uciSeqFromEntry(item.entry, 10);
+          const overlay = overlayFromSeq(seq);
+
+          button.addEventListener('click', () => {
+            if (overlay.length) {
+              if (overlaysEqual(state.lineOverlay, overlay)) {
+                clearLineOverlay({ analysis });
+              } else {
+                setLineOverlay(overlay, { analysis });
+              }
+            } else {
+              clearLineOverlay({ analysis });
+            }
+            if (item.entry.uci && item.entry.uci.length >= 4) {
+              const from = item.entry.uci.slice(0, 2);
+              const to = item.entry.uci.slice(2, 4);
+              showGhostPreview({ from, to, san: mainLine.textContent || item.entry.uci });
+            }
+            Array.from(listEl.querySelectorAll('.suggestion')).forEach((el) => el.classList.remove('suggestion--active'));
+            button.classList.add('suggestion--active');
+          });
+
+          if (overlay.length && overlaysEqual(state.lineOverlay, overlay)) {
+            button.classList.add('suggestion--active');
+          }
+
+          listEl.appendChild(button);
         });
       }
 
@@ -5560,36 +5746,26 @@
         return plans;
       }
 
-      function classifyPlayedMove({
+      function computeClassificationForMove({
+        analysis,
         preFen,
-        playedUci,
-        preAnalysis,
-        postAnalysis = null,
-        moveEntry = null,
+        moveEntry,
+        actualEntry,
         beforeEpOverride = null,
         legalMoves = null,
         previousMoveEntry = null
       }) {
-        if (!preFen || !preAnalysis || !playedUci) return null;
-        const moverColor = moveEntry && moveEntry.color ? moveEntry.color : sideToMoveFromFen(preFen);
-        let actualEntry = null;
-        if (preAnalysis.entriesByUci && preAnalysis.entriesByUci.has(playedUci)) {
-          actualEntry = preAnalysis.entriesByUci.get(playedUci);
-        } else if (Array.isArray(preAnalysis.pvEntries)) {
-          actualEntry = preAnalysis.pvEntries.find((entry) => entry && entry.uci === playedUci) || null;
-        }
-        const bestEntry = preAnalysis.bestEntry || (Array.isArray(preAnalysis.pvEntries) ? preAnalysis.pvEntries[0] : null) || null;
-        const pvEntries = Array.isArray(preAnalysis.pvEntries) ? preAnalysis.pvEntries.slice() : [];
+        if (!analysis || !moveEntry || !actualEntry || !preFen) return null;
+        const moverColor = moveEntry.color ? moveEntry.color : sideToMoveFromFen(preFen);
+        const pvEntries = Array.isArray(analysis.pvEntries) ? analysis.pvEntries.slice() : [];
         if (actualEntry && !pvEntries.some((entry) => entry && entry.uci === actualEntry.uci)) {
           pvEntries.push(actualEntry);
         }
+        const bestEntry = analysis.bestEntry || pvEntries[0] || null;
 
-        let summary = preAnalysis.summary || null;
+        let summary = analysis.summary || null;
         if (summary && summary.byMove instanceof Map) {
-          summary = {
-            ...summary,
-            byMove: new Map(summary.byMove)
-          };
+          summary = { ...summary, byMove: new Map(summary.byMove) };
         } else {
           summary = {
             EP1: null,
@@ -5655,12 +5831,13 @@
         const accuracyPercent = computeMoveAccuracy(winPercentBefore, winPercentAfter);
         const cpLoss = computeCpLoss(bestCp, actualCp, moverColor);
 
-        if (!Array.isArray(legalMoves)) {
+        let availableLegalMoves = legalMoves;
+        if (!Array.isArray(availableLegalMoves)) {
           try {
             const legalGame = new Chess(preFen);
-            legalMoves = legalGame.moves({ verbose: true });
+            availableLegalMoves = legalGame.moves({ verbose: true });
           } catch (err) {
-            legalMoves = [];
+            availableLegalMoves = [];
           }
         }
 
@@ -5682,7 +5859,7 @@
           actualCp,
           bestEval: bestEvalParsed,
           actualEval: actualEvalParsed,
-          legalMoves,
+          legalMoves: availableLegalMoves,
           previousMoveEntry,
           probeEvaluations: [],
           actualIsSac,
@@ -5690,7 +5867,7 @@
           bestMoverEp,
           actualMoverEp,
           rootFen: preFen
-        }) || { classification: null, overlay: null, expectedLoss: null, suggestionTag: null, promotion: null };
+        }) || { classification: null, overlay: null, expectedLoss: null, suggestionTag: null, promotion: null, baseline: null };
 
         const evalText = actualEntry && actualEntry.eval
           ? actualEntry.eval
@@ -5708,6 +5885,7 @@
           overlay: classificationData.overlay,
           suggestionTag: classificationData.suggestionTag,
           promotion: classificationData.promotion || null,
+          baseline: classificationData.baseline || null,
           bestCp,
           actualCp,
           cpLoss,
@@ -5715,21 +5893,109 @@
           winPercentAfter,
           accuracy: accuracyPercent,
           summary,
-          shortlist: preAnalysis.shortlistMeta || null,
-          depth: preAnalysis.depth || DEFAULT_ANALYSIS_DEPTH,
-          movetime: preAnalysis.movetime || DEFAULT_ANALYSIS_MOVETIME,
+          shortlist: analysis.shortlistMeta || null,
+          depth: analysis.depth || DEFAULT_ANALYSIS_DEPTH,
+          movetime: analysis.movetime || DEFAULT_ANALYSIS_MOVETIME,
           eval: evalText,
           moverColor,
           actualMoverEp,
-          bestMoverEp,
-          postAnalysis: postAnalysis || null
+          bestMoverEp
         };
 
-        if (preAnalysis.classifications && typeof preAnalysis.classifications.set === 'function') {
-          preAnalysis.classifications.set(playedUci, result);
+        return result;
+      }
+
+      function buildClassifiedMoveRecord({ ply, moveEntry, classification }) {
+        if (!classification || !Number.isFinite(ply)) {
+          return null;
+        }
+        const actualEntry = classification.actualEntry || null;
+        const uci = (actualEntry && actualEntry.uci)
+          || (moveEntry && moveEntry.uci)
+          || null;
+        const preFen = (moveEntry && moveEntry.preFen)
+          || (actualEntry && actualEntry.preFen)
+          || null;
+        let san = (moveEntry && moveEntry.san)
+          || (actualEntry && actualEntry.san)
+          || null;
+        if (!san && preFen && uci) {
+          san = uciToSan(preFen, uci);
+        }
+        const evalCp = Number.isFinite(classification.actualCp) ? classification.actualCp : null;
+        const deltaVsBestCp = (Number.isFinite(classification.actualCp) && Number.isFinite(classification.bestCp))
+          ? classification.actualCp - classification.bestCp
+          : null;
+        const epPlayed = Number.isFinite(classification.actualMoverEp) ? classification.actualMoverEp : null;
+        const epBest = Number.isFinite(classification.bestMoverEp) ? classification.bestMoverEp : null;
+        const tag = getMoveDisplayClassification(classification);
+        const baseline = classification.baseline || classification.classification || null;
+        const parsedEval = parseEvalString(actualEntry ? actualEntry.eval : null);
+        const isMate = Boolean(parsedEval && parsedEval.type === 'mate');
+        const mateDepth = isMate ? Math.abs(parsedEval.value) : null;
+        const evalLabel = actualEntry && actualEntry.eval ? actualEntry.eval : null;
+
+        return {
+          ply,
+          san: san || (uci || ''),
+          uci: uci || null,
+          evalCp,
+          deltaVsBestCp,
+          epPlayed,
+          epBest,
+          tag: tag || null,
+          baseline: baseline || null,
+          isMate,
+          mateDepth,
+          evalLabel,
+          deltaLabel: null
+        };
+      }
+
+      function classifyPlayedMove({
+        preFen,
+        playedUci,
+        preAnalysis,
+        postAnalysis = null,
+        moveEntry = null,
+        beforeEpOverride = null,
+        legalMoves = null,
+        previousMoveEntry = null
+      }) {
+        if (!preFen || !preAnalysis || !playedUci) return null;
+        let actualEntry = null;
+        if (preAnalysis.entriesByUci && preAnalysis.entriesByUci.has(playedUci)) {
+          actualEntry = preAnalysis.entriesByUci.get(playedUci);
+        } else if (Array.isArray(preAnalysis.pvEntries)) {
+          actualEntry = preAnalysis.pvEntries.find((entry) => entry && entry.uci === playedUci) || null;
+        }
+        if (!actualEntry) return null;
+
+        const preparedMove = moveEntry || createMoveEntryFromUci(preFen, actualEntry.color || sideToMoveFromFen(preFen), playedUci);
+        if (!preparedMove) return null;
+        if (!preparedMove.color) {
+          preparedMove.color = actualEntry.color || sideToMoveFromFen(preFen);
         }
 
-        return result;
+        const classification = computeClassificationForMove({
+          analysis: preAnalysis,
+          preFen,
+          moveEntry: preparedMove,
+          actualEntry,
+          beforeEpOverride,
+          legalMoves,
+          previousMoveEntry
+        });
+
+        if (!classification) return null;
+
+        classification.postAnalysis = postAnalysis || null;
+
+        if (preAnalysis.classifications && typeof preAnalysis.classifications.set === 'function') {
+          preAnalysis.classifications.set(playedUci, classification);
+        }
+
+        return classification;
       }
 
       async function analyzeMoveEntry(moveEntry, options = {}) {
@@ -5836,6 +6102,16 @@
         moveEntry.eval = classification.eval || null;
         if (moveEntry.id) {
           state.analysisCache.set(moveEntry.id, moveAnalysis);
+        }
+        if (Number.isFinite(moveEntry.ply)) {
+          const record = buildClassifiedMoveRecord({
+            ply: moveEntry.ply,
+            moveEntry,
+            classification
+          });
+          if (record) {
+            recordMoveClassification(record.ply, null, record);
+          }
         }
         if (Number.isFinite(moveEntry.ply) && state.ply === moveEntry.ply) {
           scheduleBoardBadgeUpdate();
@@ -6576,7 +6852,7 @@
           }
         }
 
-        return { classification: finalClassification, overlay, expectedLoss: loss, suggestionTag, promotion };
+        return { classification: finalClassification, overlay, expectedLoss: loss, suggestionTag, promotion, baseline };
       }
 
       const engineController = {
@@ -6839,6 +7115,7 @@
         state.enginePaused = false;
         engineController.reset();
         clearLineOverlay();
+        clearMoveClassifications();
       }
 
       function setEnginePaused(paused) {
