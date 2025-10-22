@@ -3319,23 +3319,106 @@
         };
       }
 
-      function straightSegment(fromSquare, toSquare, squareSize, startGap = 8, endGap = 14) {
-        const start = getSquareCenterCoords(fromSquare, squareSize);
-        const end = getSquareCenterCoords(toSquare, squareSize);
-        if (!start || !end) return null;
-        const dx = end.x - start.x;
-        const dy = end.y - start.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const ux = dx / length;
-        const uy = dy / length;
-        const tailGap = Math.min(startGap, length * 0.1);
-        const headGap = Math.min(endGap, length * 0.14);
+      function buildArrowGeometry(fromSquare, toSquare, squareSize, options = {}) {
+        const from = getSquareCenterCoords(fromSquare, squareSize);
+        const to = getSquareCenterCoords(toSquare, squareSize);
+        if (!from || !to) return null;
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const len = Math.hypot(dx, dy);
+        if (!len) return null;
+        const unitX = dx / len;
+        const unitY = dy / len;
+        const perpX = -unitY;
+        const perpY = unitX;
+        const defaultHeadLength = Number.isFinite(options.headLength) ? options.headLength : 18;
+        const headLength = Math.min(defaultHeadLength, len * 0.6);
+        const headWidth = Number.isFinite(options.headWidth) ? options.headWidth : 12;
+        const startOffset = Math.min(len * 0.1, squareSize * 0.35);
+        const endOffset = Math.min(len * 0.15, headLength);
+        const sx = from.x + unitX * startOffset;
+        const sy = from.y + unitY * startOffset;
+        const ex = to.x - unitX * endOffset;
+        const ey = to.y - unitY * endOffset;
+        const curvature = Number.isFinite(options.curvature) ? options.curvature : 0.28;
+        const curveOffset = curvature * len;
+        const cx1 = sx + unitX * (len / 3) + perpX * curveOffset;
+        const cy1 = sy + unitY * (len / 3) + perpY * curveOffset;
+        const cx2 = sx + unitX * (2 * len / 3) + perpX * curveOffset;
+        const cy2 = sy + unitY * (2 * len / 3) + perpY * curveOffset;
         return {
-          x1: start.x + ux * tailGap,
-          y1: start.y + uy * tailGap,
-          x2: end.x - ux * headGap,
-          y2: end.y - uy * headGap,
-          length
+          start: { x: sx, y: sy },
+          end: { x: ex, y: ey },
+          c1: { x: cx1, y: cy1 },
+          c2: { x: cx2, y: cy2 },
+          headLength,
+          headWidth,
+          unit: { x: unitX, y: unitY },
+          length: len
+        };
+      }
+
+      function renderArrowWithGeometry(layer, geometry, options = {}) {
+        if (!layer || !geometry) return null;
+        const stroke = options.stroke || 'var(--sgn-muted)';
+        const strokeWidth = Number.isFinite(options.strokeWidth) ? options.strokeWidth : 8;
+        const alpha = options.alpha != null ? options.alpha : 0.85;
+        const dashed = options.dashed === true;
+        const dashArray = options.dashArray || '8 8';
+
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        group.setAttribute('opacity', alpha);
+        if (options.zIndex != null) {
+          group.style.zIndex = String(options.zIndex);
+        }
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${geometry.start.x} ${geometry.start.y} C ${geometry.c1.x} ${geometry.c1.y} ${geometry.c2.x} ${geometry.c2.y} ${geometry.end.x} ${geometry.end.y}`);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', stroke);
+        path.setAttribute('stroke-width', strokeWidth);
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+        if (dashed) {
+          path.setAttribute('stroke-dasharray', dashArray);
+        }
+        group.appendChild(path);
+
+        const tangentX = geometry.end.x - geometry.c2.x;
+        const tangentY = geometry.end.y - geometry.c2.y;
+        let tangentLength = Math.hypot(tangentX, tangentY);
+        if (!tangentLength) {
+          tangentLength = Math.hypot(geometry.end.x - geometry.start.x, geometry.end.y - geometry.start.y) || 1;
+        }
+        const ux = tangentX / tangentLength;
+        const uy = tangentY / tangentLength;
+        const baseX = geometry.end.x - ux * geometry.headLength;
+        const baseY = geometry.end.y - uy * geometry.headLength;
+        const perpX = -uy;
+        const perpY = ux;
+        const halfWidth = geometry.headWidth / 2;
+        const leftX = baseX + perpX * halfWidth;
+        const leftY = baseY + perpY * halfWidth;
+        const rightX = baseX - perpX * halfWidth;
+        const rightY = baseY - perpY * halfWidth;
+        const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        head.setAttribute('points', `${geometry.end.x},${geometry.end.y} ${leftX},${leftY} ${rightX},${rightY}`);
+        head.setAttribute('fill', stroke);
+        group.appendChild(head);
+
+        layer.appendChild(group);
+        return { group, geometry };
+      }
+
+      function pointOnCubicBezier(geometry, t) {
+        const mt = 1 - t;
+        const a = mt * mt * mt;
+        const b = 3 * mt * mt * t;
+        const c = 3 * mt * t * t;
+        const d = t * t * t;
+        return {
+          x: a * geometry.start.x + b * geometry.c1.x + c * geometry.c2.x + d * geometry.end.x,
+          y: a * geometry.start.y + b * geometry.c1.y + c * geometry.c2.y + d * geometry.end.y
         };
       }
 
@@ -3344,6 +3427,8 @@
         if (!layers) return;
         const { baseLayer } = layers;
         clearChildren(baseLayer);
+        const list = Array.isArray(suggestions) ? suggestions : [];
+        if (!list.length) return;
 
         const boardEl = byId('board');
         if (!boardEl) return;
@@ -3352,37 +3437,30 @@
         const squareSize = boardRect.width / 8;
         if (!Number.isFinite(squareSize) || squareSize <= 0) return;
 
-        const list = Array.isArray(suggestions) ? suggestions : [];
-        const active = state.activeSuggestion;
-        const hovering = state.hoverSuggestion;
-
         list.forEach((item) => {
           if (!item || typeof item.uci !== 'string' || item.uci.length < 4) return;
           const fromSquare = item.uci.slice(0, 2);
           const toSquare = item.uci.slice(2, 4);
-          const segment = straightSegment(fromSquare, toSquare, squareSize);
-          if (!segment) return;
-
+          const geometry = buildArrowGeometry(fromSquare, toSquare, squareSize, { curvature: 0.28, headLength: 18, headWidth: 12 });
+          if (!geometry) return;
           const tone = getSuggestionTone(item);
-          const color = colorForTone(tone);
-
-          const alpha = hovering
-            ? (hovering === item.uci ? 0.95 : 0.3)
-            : (active === item.uci ? 0.95 : (item.rank === 1 ? 0.9 : 0.65));
-
-          const width = item.rank === 1 ? 8 : 7;
-
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', segment.x1);
-          line.setAttribute('y1', segment.y1);
-          line.setAttribute('x2', segment.x2);
-          line.setAttribute('y2', segment.y2);
-          line.setAttribute('stroke', color);
-          line.setAttribute('stroke-width', width);
-          line.setAttribute('stroke-linecap', 'round');
-          line.setAttribute('marker-end', 'url(#arrowHead)');
-          line.setAttribute('opacity', alpha);
-          baseLayer.appendChild(line);
+          const stroke = colorForTone(tone);
+          const alpha = (() => {
+            if (state.hoverSuggestion) {
+              return state.hoverSuggestion === item.uci ? 0.95 : 0.3;
+            }
+            if (state.activeSuggestion) {
+              return state.activeSuggestion === item.uci ? 0.95 : 0.45;
+            }
+            return item.rank === 1 ? 0.9 : 0.65;
+          })();
+          renderArrowWithGeometry(baseLayer, geometry, {
+            stroke,
+            strokeWidth: 8,
+            alpha,
+            dashed: false,
+            zIndex: 2
+          });
         });
       }
 
@@ -3415,55 +3493,33 @@
           if (!segment || typeof segment.uci !== 'string' || segment.uci.length < 4) return;
           const fromSquare = segment.uci.slice(0, 2);
           const toSquare = segment.uci.slice(2, 4);
-          const segmentData = straightSegment(
-            fromSquare,
-            toSquare,
-            squareSize,
-            Number.isFinite(segment.startGap) ? segment.startGap : 8,
-            Number.isFinite(segment.endGap) ? segment.endGap : 14
-          );
-          if (!segmentData) return;
-
+          const geometry = buildArrowGeometry(fromSquare, toSquare, squareSize, {
+            curvature: segment.curvature != null ? segment.curvature : 0.28,
+            headLength: 18,
+            headWidth: 12
+          });
+          if (!geometry) return;
           const stroke = segment.color || '#94a3b8';
           const strokeWidth = Number.isFinite(segment.width) ? segment.width : 4;
           const alpha = segment.opacity != null ? segment.opacity : 0.65;
-
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', segmentData.x1);
-          line.setAttribute('y1', segmentData.y1);
-          line.setAttribute('x2', segmentData.x2);
-          line.setAttribute('y2', segmentData.y2);
-          line.setAttribute('stroke', stroke);
-          line.setAttribute('stroke-width', strokeWidth);
-          line.setAttribute('stroke-linecap', 'round');
-          line.setAttribute('marker-end', 'url(#arrowHeadSm)');
-          if (segment.dashed !== false) {
-            line.setAttribute('stroke-dasharray', segment.dashArray || '8 8');
-          }
-          line.setAttribute('opacity', alpha);
-          if (segment.zIndex != null) {
-            line.style.zIndex = String(segment.zIndex);
-          }
-          overlayLayer.appendChild(line);
+          const arrow = renderArrowWithGeometry(overlayLayer, geometry, {
+            stroke,
+            strokeWidth,
+            alpha,
+            dashed: segment.dashed !== false,
+            dashArray: segment.dashArray || '8 8',
+            zIndex: segment.zIndex != null ? segment.zIndex : 2
+          });
+          if (!arrow) return;
 
           if (segment.showOrder && Number.isFinite(segment.order)) {
-            const dirX = segmentData.x2 - segmentData.x1;
-            const dirY = segmentData.y2 - segmentData.y1;
-            const segLen = Math.hypot(dirX, dirY) || 1;
-            const ux = dirX / segLen;
-            const uy = dirY / segLen;
             const ratioRaw = segment.labelPosition != null ? segment.labelPosition : null;
             const ratio = ratioRaw != null ? Math.min(0.85, Math.max(0.15, ratioRaw)) : null;
-            const offset = Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8;
-            const clampedOffset = Math.min(segLen * 0.85, Math.max(segLen * 0.15, offset));
             const point = ratio != null
-              ? {
-                  x: segmentData.x1 + dirX * ratio,
-                  y: segmentData.y1 + dirY * ratio
-                }
+              ? pointOnCubicBezier(geometry, ratio)
               : {
-                  x: segmentData.x1 + ux * clampedOffset,
-                  y: segmentData.y1 + uy * clampedOffset
+                  x: geometry.start.x + geometry.unit.x * (Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8),
+                  y: geometry.start.y + geometry.unit.y * (Number.isFinite(segment.labelOffset) ? segment.labelOffset : 8)
                 };
             const isDoubleDigit = Math.abs(segment.order) >= 10;
             const radius = segment.labelRadius != null ? segment.labelRadius : (isDoubleDigit ? 16 : 14);
@@ -3490,8 +3546,8 @@
 
         if (hasGhostPreview()) {
           const preview = state.ghostPreview;
-          const segment = straightSegment(preview.from, preview.to, squareSize, 8, 12);
-          if (segment) {
+          const geometry = buildArrowGeometry(preview.from, preview.to, squareSize, { curvature: 0.18, headLength: 16, headWidth: 10 });
+          if (geometry) {
             const accent = getAccentColor();
             const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             const to = getSquareCenterCoords(preview.to, squareSize);
@@ -3507,17 +3563,13 @@
               highlight.setAttribute('opacity', 0.28);
               overlayLayer.appendChild(highlight);
             }
-            const gLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            gLine.setAttribute('x1', segment.x1);
-            gLine.setAttribute('y1', segment.y1);
-            gLine.setAttribute('x2', segment.x2);
-            gLine.setAttribute('y2', segment.y2);
-            gLine.setAttribute('stroke', accent);
-            gLine.setAttribute('stroke-width', 5);
-            gLine.setAttribute('stroke-linecap', 'round');
-            gLine.setAttribute('marker-end', 'url(#arrowHeadSm)');
-            gLine.setAttribute('opacity', 0.45);
-            overlayLayer.appendChild(gLine);
+            renderArrowWithGeometry(overlayLayer, geometry, {
+              stroke: accent,
+              strokeWidth: 5,
+              alpha: 0.45,
+              dashed: false,
+              zIndex: 3
+            });
           }
         }
       }
