@@ -33,6 +33,10 @@
       --layout-padding: clamp(16px, 2vw, 28px);
       --header-height: 64px;
       --board-max-height: none;
+      --piece-white-filter: none;
+      --piece-black-filter: none;
+      --sq-light: #6a7483;
+      --sq-dark: #1e2a35;
       --eval-score-bg: rgba(15, 23, 42, 0.88);
       --eval-score-text: #f8fafc;
       --eval-score-border: rgba(148, 163, 184, 0.4);
@@ -54,8 +58,6 @@
       --row-pad-y: 10px;
       --row-pad-x: 12px;
       /* Board appearance */
-      --board-light: #647180;
-      --board-dark: #0f1b26;
       --board-border: rgba(255, 255, 255, 0.08);
       --board-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
       --board-coord: rgba(248, 250, 252, 0.7);
@@ -63,6 +65,18 @@
       --board-texture:
         radial-gradient(120px 80px at 20% 30%, rgba(255, 255, 255, 0.06) 0 60%, transparent 60%),
         radial-gradient(140px 100px at 70% 70%, rgba(255, 255, 255, 0.05) 0 60%, transparent 60%);
+      --eval-chart-line: var(--accent);
+      --eval-chart-fill-white: rgba(248, 250, 252, 0.16);
+      --eval-chart-fill-black: rgba(8, 15, 35, 0.35);
+      --eval-chart-axis: rgba(148, 163, 184, 0.32);
+      --eval-chart-grid: rgba(148, 163, 184, 0.16);
+      --eval-chart-marker-blunder: var(--danger);
+      --eval-chart-marker-mistake: var(--warn);
+      --eval-chart-marker-inaccuracy: var(--muted);
+      --eval-chart-marker-best: var(--move-best-fg);
+      --eval-chart-marker-excellent: var(--move-excellent-fg);
+      --eval-chart-marker-great: var(--move-great-fg);
+      --eval-chart-marker-brilliant: var(--move-brilliant-fg);
     }
 
     [data-theme="light"] {
@@ -107,31 +121,13 @@
       --row-radius: 12px;
       --row-pad-y: 10px;
       --row-pad-x: 12px;
-      --board-light: #dfeff6;
-      --board-dark: #7f9fb6;
       --board-border: rgba(15, 23, 42, 0.18);
       --board-shadow: 0 6px 20px rgba(8, 15, 35, 0.25);
       --board-coord: rgba(15, 23, 42, 0.55);
-    }
-
-    [data-board="icy-sea"] {
-      --board-light: #dfeff6;
-      --board-dark: #7f9fb6;
-    }
-
-    [data-board="glass"] {
-      --board-light: #647180;
-      --board-dark: #0f1b26;
-    }
-
-    [data-board="brown"] {
-      --board-light: #f0d9b5;
-      --board-dark: #b58863;
-    }
-
-    [data-board="green"] {
-      --board-light: #eeeed2;
-      --board-dark: #769656;
+      --eval-chart-fill-white: rgba(37, 99, 235, 0.12);
+      --eval-chart-fill-black: rgba(15, 23, 42, 0.12);
+      --eval-chart-axis: rgba(71, 85, 105, 0.35);
+      --eval-chart-grid: rgba(148, 163, 184, 0.22);
     }
 
     * {
@@ -290,6 +286,43 @@
       overflow: hidden;
       border: 1px solid var(--board-border);
       background: var(--panel);
+    }
+
+    .board-shell[data-board-style="glass"] {
+      --sq-light: #6a7483;
+      --sq-dark: #1e2a35;
+      --piece-white-filter: brightness(1) saturate(1) contrast(1);
+      --piece-black-filter: brightness(1.18) saturate(1.06) contrast(0.92);
+    }
+
+    .board-shell[data-board-style="classic"] {
+      --sq-light: #f0d9b5;
+      --sq-dark: #b58863;
+    }
+
+    .board-shell[data-board-style="icy-sea"] {
+      --sq-light: #e6f1f6;
+      --sq-dark: #5b8397;
+    }
+
+    .board-shell[data-board-style="wood"] {
+      --sq-light: #ecd7b0;
+      --sq-dark: #8e5e3b;
+    }
+
+    .board-shell[data-board-style="slate"] {
+      --sq-light: #cfd5db;
+      --sq-dark: #5d6b79;
+    }
+
+    .board-shell[data-board-style="sand"] {
+      --sq-light: #f2ead8;
+      --sq-dark: #c2a477;
+    }
+
+    .board-shell[data-board-style="purple"] {
+      --sq-light: #dddbff;
+      --sq-dark: #6b5fa7;
     }
 
     .row {
@@ -573,14 +606,16 @@
       background: none;
     }
 
-    #board .white-1e1d7 {
-      background: var(--board-light);
+    #board .white-1e1d7,
+    #board .square.light {
+      background: var(--sq-light);
       background-image: var(--board-texture);
       background-blend-mode: overlay;
     }
 
-    #board .black-3c85d {
-      background: var(--board-dark);
+    #board .black-3c85d,
+    #board .square.dark {
+      background: var(--sq-dark);
       background-image: var(--board-texture);
       background-blend-mode: overlay;
     }
@@ -590,11 +625,181 @@
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
     }
 
-    html[data-theme="dark"]:not([data-board]) #board .white-1e1d7,
-    html[data-theme="dark"]:not([data-board]) #board .black-3c85d,
-    [data-board="glass"] #board .white-1e1d7,
-    [data-board="glass"] #board .black-3c85d {
+    .board-shell[data-board-style="glass"] #board .white-1e1d7,
+    .board-shell[data-board-style="glass"] #board .black-3c85d,
+    .board-shell[data-board-style="glass"] #board .square.light,
+    .board-shell[data-board-style="glass"] #board .square.dark {
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 0 12px rgba(0, 0, 0, 0.35);
+      border-radius: 6px;
+    }
+
+    #board img.piece {
+      transition: filter 0.25s ease;
+    }
+
+    .board-shell[data-board-style="glass"] #board img.piece[data-side="w"] {
+      filter: var(--piece-white-filter);
+    }
+
+    .board-shell[data-board-style="glass"] #board img.piece[data-side="b"] {
+      filter: var(--piece-black-filter);
+    }
+
+    .eval-chart-card {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--panel-border);
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    [data-theme="light"] .eval-chart-card {
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .eval-chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .eval-chart-title {
+      margin: 0;
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .eval-chart-modes {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: rgba(148, 163, 184, 0.12);
+    }
+
+    [data-theme="light"] .eval-chart-modes {
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .eval-chart-mode {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .eval-chart-mode:hover,
+    .eval-chart-mode:focus-visible {
+      color: var(--text);
+      outline: none;
+    }
+
+    .eval-chart-mode:focus-visible {
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+    }
+
+    .eval-chart-mode.active {
+      background: var(--accent);
+      color: #0f172a;
+    }
+
+    .eval-chart-canvas {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: rgba(8, 15, 35, 0.35);
+      overflow: hidden;
+    }
+
+    [data-theme="light"] .eval-chart-canvas {
+      background: rgba(148, 163, 184, 0.18);
+    }
+
+    .eval-chart-canvas canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .eval-chart-tooltip {
+      position: absolute;
+      display: none;
+      min-width: 180px;
+      max-width: 240px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--eval-score-bg);
+      color: var(--eval-score-text);
+      border: 1px solid var(--eval-score-border);
+      box-shadow: 0 10px 30px rgba(8, 15, 35, 0.45);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .eval-chart-tooltip__move {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .eval-chart-tooltip__eval {
+      font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .eval-chart-tooltip__delta {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .eval-chart-tooltip__delta.positive {
+      color: var(--ok);
+    }
+
+    .eval-chart-tooltip__delta.negative {
+      color: var(--danger);
+    }
+
+    .eval-chart-tooltip__tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .eval-chart-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      pointer-events: none;
     }
 
     #evalColumn {
@@ -1662,11 +1867,13 @@
         <span class="sr-only">Board style</span>
         🎨
         <select id="boardStyle" class="compact">
-          <option value="auto">Auto (match theme)</option>
-          <option value="icy-sea">Icy Sea (light)</option>
-          <option value="glass">Glass (dark)</option>
-          <option value="brown">Classic Brown</option>
-          <option value="green">Classic Green</option>
+          <option value="glass">Glass</option>
+          <option value="classic">Classic</option>
+          <option value="icy-sea">Icy Sea</option>
+          <option value="wood">Wood</option>
+          <option value="slate">Slate</option>
+          <option value="sand">Sand</option>
+          <option value="purple">Purple</option>
         </select>
       </label>
 
@@ -1679,7 +1886,7 @@
     <div class="workspace-column">
       <div class="workspace-sticky" aria-live="polite">
         <section class="card board-card">
-          <div class="board-shell">
+          <div class="board-shell" data-board-style="glass">
             <div class="board-area">
               <div class="eval-column" id="evalColumn" data-orientation="white">
                 <div class="eval-vertical">
@@ -1717,6 +1924,20 @@
             </div>
             <div class="nav-meta" role="status" aria-live="polite">
               <span id="boardStatus" class="nav-meta-item"></span>
+            </div>
+          </div>
+          <div class="eval-chart-card" id="evalChartCard">
+            <div class="eval-chart-header">
+              <h3 class="eval-chart-title">Evaluation graph</h3>
+              <div class="eval-chart-modes" role="group" aria-label="Evaluation scale">
+                <button type="button" class="eval-chart-mode active" data-mode="cp" aria-pressed="true">CP</button>
+                <button type="button" class="eval-chart-mode" data-mode="win" aria-pressed="false">Win %</button>
+              </div>
+            </div>
+            <div class="eval-chart-canvas" id="evalChartCanvasWrap">
+              <canvas id="evalChart" height="180" role="img" aria-label="Evaluation graph"></canvas>
+              <div id="evalChartTooltip" class="eval-chart-tooltip" role="tooltip" aria-hidden="true"></div>
+              <div id="evalChartEmpty" class="eval-chart-empty">Evaluation graph appears once analysis is ready.</div>
             </div>
           </div>
           <div class="material-panel">
@@ -1906,8 +2127,33 @@
         lineSelections: new Map(),
         mainlineSelections: new Map(),
         nodeSeq: 0,
-        exploreMode: false
+        exploreMode: false,
+        evalChartMode: 'cp',
+        evalChartPoints: [],
+        evalChartLayout: [],
+        evalChartDataDirty: true,
+        evalChartHoverIndex: null,
+        evalChartHoverPosition: null
       };
+
+      const BOARD_STYLES = ['glass', 'classic', 'icy-sea', 'wood', 'slate', 'sand', 'purple'];
+      const LEGACY_BOARD_STYLE_MAP = { auto: 'glass', brown: 'wood', green: 'slate' };
+      const BOARD_STYLE_STORAGE_KEY = 'boardStyle';
+      const EVAL_CHART_MODES = ['cp', 'win'];
+      const EVAL_CHART_MODE_STORAGE_KEY = 'evalChartMode';
+      const CP_RANGE = 600;
+      const WIN_RANGE = 50;
+      const CLASSIFICATION_LABELS = {
+        brilliant: 'Brilliant move',
+        great: 'Great move',
+        blunder: 'Blunder',
+        mistake: 'Mistake',
+        inaccuracy: 'Inaccuracy',
+        best: 'Best move',
+        excellent: 'Excellent move'
+      };
+      let boardDecorationRaf = null;
+      let evalChartRaf = null;
 
       function getPlayerDisplayName(color, headersOverride) {
         const headers = headersOverride || state.headers || {};
@@ -2509,6 +2755,46 @@
         state.initialPieceCounts = countPiecesOnBoard(baseGame.board());
       }
 
+      function decorateBoardSquares() {
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        const squares = boardEl.querySelectorAll('.square-55d63');
+        squares.forEach((square) => {
+          square.classList.add('square');
+          if (square.classList.contains('white-1e1d7')) {
+            square.classList.add('light');
+            square.classList.remove('dark');
+          } else if (square.classList.contains('black-3c85d')) {
+            square.classList.add('dark');
+            square.classList.remove('light');
+          }
+        });
+      }
+
+      function tagBoardPieces() {
+        const boardEl = byId('board');
+        if (!boardEl) return;
+        const pieces = boardEl.querySelectorAll('img.piece');
+        pieces.forEach((img) => {
+          if (!img || typeof img.src !== 'string') return;
+          const match = img.src.match(/\/([wb])[KQRBNP]\.png$/i);
+          if (match && match[1]) {
+            img.dataset.side = match[1] === 'b' ? 'b' : 'w';
+          } else if (img.dataset.side) {
+            delete img.dataset.side;
+          }
+        });
+      }
+
+      function scheduleBoardDecorations() {
+        if (boardDecorationRaf != null) return;
+        boardDecorationRaf = requestAnimationFrame(() => {
+          boardDecorationRaf = null;
+          decorateBoardSquares();
+          tagBoardPieces();
+        });
+      }
+
       function setBoardPosition(fen) {
         if (!state.board) return;
         if (!fen || fen === 'start') {
@@ -2517,6 +2803,7 @@
           state.board.position(fen);
         }
         scheduleBoardBadgeUpdate();
+        scheduleBoardDecorations();
       }
 
       function updateBoardClassificationBadge() {
@@ -2898,11 +3185,13 @@
         });
         syncArrowLayer();
         initEvalBarSync();
+        scheduleBoardDecorations();
         window.addEventListener('resize', () => {
           state.board.resize();
           syncArrowLayer();
           scheduleBoardBadgeUpdate();
           syncBoardAndEval();
+          scheduleBoardDecorations();
         });
       }
 
@@ -3429,6 +3718,7 @@
 
         highlightActive();
         updateMoveSummary();
+        scheduleEvalChartUpdate({ recomputeData: true });
       }
 
       function highlightActive() {
@@ -3468,6 +3758,7 @@
         renderBoardStatus();
         updateUrlState();
         updateExploreControls();
+        scheduleEvalChartUpdate();
       }
 
       function clearChildren(node) {
@@ -4371,6 +4662,664 @@
           scoreEl.style.top = `${midpoint}%`;
         }
         renderBoardStatus();
+      }
+
+      function normalizeEvalChartMode(mode) {
+        return EVAL_CHART_MODES.includes(mode) ? mode : 'cp';
+      }
+
+      function getSavedEvalChartMode() {
+        try {
+          const stored = localStorage.getItem(EVAL_CHART_MODE_STORAGE_KEY);
+          return normalizeEvalChartMode(stored);
+        } catch (err) {
+          return 'cp';
+        }
+      }
+
+      function updateEvalChartModeUI() {
+        const card = byId('evalChartCard');
+        if (!card) return;
+        const buttons = card.querySelectorAll('.eval-chart-mode');
+        buttons.forEach((button) => {
+          if (!button || !button.dataset) return;
+          const mode = button.dataset.mode;
+          const active = mode === state.evalChartMode;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+      }
+
+      function setEvalChartMode(mode, options = {}) {
+        const normalized = normalizeEvalChartMode(mode);
+        state.evalChartMode = normalized;
+        updateEvalChartModeUI();
+        if (options.persist !== false) {
+          try {
+            localStorage.setItem(EVAL_CHART_MODE_STORAGE_KEY, normalized);
+          } catch (err) {
+            // ignore storage errors
+          }
+        }
+        scheduleEvalChartUpdate();
+      }
+
+      function getEvalChartTheme() {
+        const root = document.documentElement;
+        const styles = root ? getComputedStyle(root) : null;
+        const read = (name, fallback) => {
+          if (!styles) return fallback;
+          const value = styles.getPropertyValue(name);
+          return value && value.trim() ? value.trim() : fallback;
+        };
+        return {
+          line: read('--eval-chart-line', '#38bdf8'),
+          fillWhite: read('--eval-chart-fill-white', 'rgba(248, 250, 252, 0.16)'),
+          fillBlack: read('--eval-chart-fill-black', 'rgba(8, 15, 35, 0.35)'),
+          axis: read('--eval-chart-axis', 'rgba(148, 163, 184, 0.32)'),
+          grid: read('--eval-chart-grid', 'rgba(148, 163, 184, 0.16)'),
+          accent: read('--accent', '#38bdf8'),
+          markers: {
+            brilliant: read('--eval-chart-marker-brilliant', '#2dd4bf'),
+            great: read('--eval-chart-marker-great', '#fbbf24'),
+            blunder: read('--eval-chart-marker-blunder', '#f87171'),
+            mistake: read('--eval-chart-marker-mistake', '#facc15'),
+            inaccuracy: read('--eval-chart-marker-inaccuracy', '#94a3b8'),
+            best: read('--eval-chart-marker-best', '#4ade80'),
+            excellent: read('--eval-chart-marker-excellent', '#38bdf8')
+          }
+        };
+      }
+
+      function getPointClassTag(analysis) {
+        if (!analysis) return null;
+        const overlay = typeof analysis.overlay === 'string' ? analysis.overlay.toLowerCase() : null;
+        if (overlay === 'brilliant' || overlay === 'great') {
+          return overlay;
+        }
+        const classification = typeof analysis.classification === 'string' ? analysis.classification.toLowerCase() : null;
+        if (classification) {
+          return classification;
+        }
+        const baseline = typeof analysis.baseline === 'string' ? analysis.baseline.toLowerCase() : null;
+        return baseline || null;
+      }
+
+      function buildEvalChartPoints() {
+        const history = Array.isArray(state.verboseHistory) ? state.verboseHistory : [];
+        const points = [];
+        history.forEach((entry, index) => {
+          if (!entry) return;
+          const analysis = entry.analysis || (entry.id ? state.analysisCache.get(entry.id) : null);
+          const ply = Number.isFinite(entry.ply) ? entry.ply : index + 1;
+          const moveNumber = Math.max(1, Math.ceil(ply / 2));
+          const moveColor = entry.color === 'b' ? 'b' : 'w';
+          const mover = moveColor === 'w' ? 'b' : 'w';
+
+          let evalSource = typeof entry.eval === 'string' ? entry.eval : null;
+          if (!evalSource && analysis && analysis.actualEntry && typeof analysis.actualEntry.eval === 'string') {
+            evalSource = analysis.actualEntry.eval;
+          }
+
+          let cp = null;
+          let mate = null;
+          if (evalSource) {
+            const parsed = parseEvalToCp(evalSource);
+            if (parsed) {
+              if (parsed.type === 'mate') {
+                mate = parsed.value;
+              } else if (parsed.type === 'cp') {
+                cp = parsed.value;
+              }
+            }
+          }
+          if (cp == null && analysis) {
+            if (Number.isFinite(analysis.actualCp)) {
+              cp = analysis.actualCp;
+            } else if (analysis.actualEntry && Number.isFinite(analysis.actualEntry.cp)) {
+              cp = analysis.actualEntry.cp;
+            }
+          }
+          if (cp != null) {
+            cp = clampFiniteCp(cp);
+          }
+          if (!Number.isFinite(cp)) {
+            cp = null;
+          }
+          if (!Number.isFinite(mate)) {
+            mate = null;
+          }
+
+          const fenAfter = typeof entry.fen === 'string' ? entry.fen : null;
+          let epWhite = null;
+          if (analysis && analysis.actualEntry) {
+            const epMover = expectedPointsForMover(analysis.actualEntry, fenAfter, mover);
+            if (Number.isFinite(epMover)) {
+              epWhite = mover === 'w' ? epMover : 1 - epMover;
+            }
+          }
+          if (!Number.isFinite(epWhite)) {
+            const fallbackEntry = {};
+            if (analysis && analysis.actualEntry && analysis.actualEntry.wdl) {
+              fallbackEntry.wdl = analysis.actualEntry.wdl;
+            } else if (entry.wdl) {
+              fallbackEntry.wdl = entry.wdl;
+            }
+            if (evalSource) {
+              fallbackEntry.eval = evalSource;
+            }
+            const epMover = expectedPointsForMover(fallbackEntry, fenAfter, mover);
+            if (Number.isFinite(epMover)) {
+              epWhite = mover === 'w' ? epMover : 1 - epMover;
+            }
+          }
+          if (!Number.isFinite(epWhite) && Number.isFinite(cp)) {
+            const ep = cpToExpectedPoints(cp);
+            if (Number.isFinite(ep)) {
+              epWhite = ep;
+            }
+          }
+          if (!Number.isFinite(epWhite)) {
+            epWhite = null;
+          } else {
+            epWhite = Math.max(0, Math.min(1, epWhite));
+          }
+
+          const classTagRaw = getPointClassTag(analysis);
+          const classTag = classTagRaw ? classTagRaw.toLowerCase() : null;
+
+          points.push({
+            index,
+            ply,
+            moveNumber,
+            moveColor,
+            mover,
+            san: entry.san || entry.uci || '',
+            cp,
+            mate,
+            whiteEp: epWhite,
+            winPercent: epWhite != null ? epWhite * 100 : null,
+            classTag,
+            entry,
+            analysis
+          });
+        });
+
+        for (let i = 0; i < points.length; i += 1) {
+          const point = points[i];
+          const prev = i > 0 ? points[i - 1] : null;
+          point.deltaCp = Number.isFinite(point.cp) && prev && Number.isFinite(prev.cp)
+            ? point.cp - prev.cp
+            : null;
+          point.deltaWinPercent = Number.isFinite(point.winPercent) && prev && Number.isFinite(prev.winPercent)
+            ? point.winPercent - prev.winPercent
+            : null;
+        }
+
+        return points;
+      }
+
+      function scheduleEvalChartUpdate({ recomputeData = false } = {}) {
+        if (recomputeData) {
+          state.evalChartDataDirty = true;
+        }
+        if (evalChartRaf != null) return;
+        evalChartRaf = requestAnimationFrame(() => {
+          evalChartRaf = null;
+          renderEvalChart();
+        });
+      }
+
+      function hideEvalChartTooltip() {
+        const tooltip = byId('evalChartTooltip');
+        if (!tooltip) return;
+        tooltip.style.display = 'none';
+        tooltip.setAttribute('aria-hidden', 'true');
+      }
+
+      function formatEvalChartValue(point, mode) {
+        if (mode === 'win') {
+          if (Number.isFinite(point.winPercent)) {
+            return formatWinPercentDisplay(point.winPercent) || `${point.winPercent.toFixed(1)}%`;
+          }
+          if (Number.isFinite(point.mate)) {
+            return point.mate > 0 ? '100%' : '0%';
+          }
+          return '—';
+        }
+        if (Number.isFinite(point.mate)) {
+          const prefix = point.mate >= 0 ? '+M' : '−M';
+          return `${prefix}${Math.abs(point.mate)}`;
+        }
+        if (Number.isFinite(point.cp)) {
+          return formatEvalAfterLabel(point.cp);
+        }
+        return '—';
+      }
+
+      function formatEvalChartDelta(point, mode) {
+        if (mode === 'win') {
+          const delta = point.deltaWinPercent;
+          if (!Number.isFinite(delta)) return null;
+          const absDelta = Math.abs(delta);
+          const diffText = formatWinDeltaDisplay(absDelta) || `${absDelta.toFixed(1)}%`;
+          const minus = '\u2212';
+          const sign = delta > 0 ? '+' : delta < 0 ? minus : '';
+          const arrow = delta > 0 ? '↗︎' : delta < 0 ? '↘︎' : '→';
+          const className = delta > 0 ? 'positive' : delta < 0 ? 'negative' : '';
+          const textValue = delta === 0 ? '0%' : `${sign}${diffText.replace(/^[+\-−]/, '')}`;
+          return { text: `${arrow} ${textValue}`, className };
+        }
+        const delta = point.deltaCp;
+        if (!Number.isFinite(delta)) return null;
+        const pawns = delta / 100;
+        const decimals = Math.abs(pawns) >= 1 ? 1 : 2;
+        const formatted = pawns.toFixed(decimals);
+        const arrow = delta > 0 ? '↗︎' : delta < 0 ? '↘︎' : '→';
+        const className = delta > 0 ? 'positive' : delta < 0 ? 'negative' : '';
+        const textValue = delta === 0 ? '+0.00' : `${delta > 0 ? '+' : ''}${formatted}`;
+        return { text: `${arrow} ${textValue}`, className };
+      }
+
+      function buildEvalChartTooltipContent(point) {
+        const tooltip = byId('evalChartTooltip');
+        if (!tooltip) return;
+        tooltip.innerHTML = '';
+        const mode = normalizeEvalChartMode(state.evalChartMode);
+        const moveRow = document.createElement('div');
+        moveRow.className = 'eval-chart-tooltip__move';
+        const san = point.entry && point.entry.san ? point.entry.san : (point.entry && point.entry.uci ? point.entry.uci : '');
+        moveRow.textContent = `Move ${point.moveNumber}${point.moveColor === 'b' ? '…' : '.'} ${san}`;
+        tooltip.appendChild(moveRow);
+
+        const evalRow = document.createElement('div');
+        evalRow.className = 'eval-chart-tooltip__eval';
+        const label = document.createElement('span');
+        label.textContent = `${mode === 'win' ? 'Win' : 'Eval'} → ${formatEvalChartValue(point, mode)}`;
+        evalRow.appendChild(label);
+        const deltaInfo = formatEvalChartDelta(point, mode);
+        if (deltaInfo && deltaInfo.text) {
+          const deltaSpan = document.createElement('span');
+          deltaSpan.className = 'eval-chart-tooltip__delta';
+          if (deltaInfo.className) {
+            deltaSpan.classList.add(deltaInfo.className);
+          }
+          deltaSpan.textContent = deltaInfo.text;
+          evalRow.appendChild(deltaSpan);
+        }
+        tooltip.appendChild(evalRow);
+
+        const classTag = point.classTag ? point.classTag.toLowerCase() : null;
+        if (classTag && CLASSIFICATION_LABELS[classTag]) {
+          const tagRow = document.createElement('div');
+          tagRow.className = 'eval-chart-tooltip__tag';
+          tagRow.textContent = CLASSIFICATION_LABELS[classTag];
+          tooltip.appendChild(tagRow);
+        }
+      }
+
+      function updateEvalChartTooltip() {
+        const tooltip = byId('evalChartTooltip');
+        const canvas = byId('evalChart');
+        const wrap = byId('evalChartCanvasWrap');
+        if (!tooltip || !canvas || !wrap) return;
+        const index = state.evalChartHoverIndex;
+        if (index == null || !state.evalChartLayout || !state.evalChartLayout[index]
+          || !state.evalChartLayout[index].hasValue) {
+          hideEvalChartTooltip();
+          return;
+        }
+        const layoutPoint = state.evalChartLayout[index];
+        buildEvalChartTooltipContent(layoutPoint.point);
+        tooltip.style.display = 'block';
+        tooltip.setAttribute('aria-hidden', 'false');
+
+        const wrapRect = wrap.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const offsetX = canvasRect.left - wrapRect.left;
+        const offsetY = canvasRect.top - wrapRect.top;
+        let left = offsetX + layoutPoint.x - tooltipRect.width / 2;
+        let top = offsetY + layoutPoint.y - tooltipRect.height - 12;
+        if (top < 8) {
+          top = offsetY + layoutPoint.y + 12;
+        }
+        if (left < 8) {
+          left = 8;
+        } else if (left + tooltipRect.width > wrapRect.width - 8) {
+          left = wrapRect.width - tooltipRect.width - 8;
+        }
+        if (top + tooltipRect.height > wrapRect.height - 8) {
+          top = wrapRect.height - tooltipRect.height - 8;
+        }
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function renderEvalChart() {
+        const canvas = byId('evalChart');
+        const wrap = byId('evalChartCanvasWrap');
+        const emptyState = byId('evalChartEmpty');
+        if (!canvas || !wrap) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        if (state.evalChartDataDirty) {
+          state.evalChartPoints = buildEvalChartPoints();
+          state.evalChartDataDirty = false;
+        }
+
+        const points = state.evalChartPoints;
+        const width = canvas.clientWidth || wrap.clientWidth || 0;
+        const height = canvas.clientHeight || wrap.clientHeight || 0;
+        if (!width || !height) {
+          hideEvalChartTooltip();
+          if (emptyState) emptyState.hidden = false;
+          return;
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(width * dpr));
+        canvas.height = Math.max(1, Math.round(height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+
+        const mode = normalizeEvalChartMode(state.evalChartMode);
+        const theme = getEvalChartTheme();
+        const range = mode === 'win' ? WIN_RANGE : CP_RANGE;
+        const centerY = height / 2;
+
+        const layout = [];
+        const step = points.length > 1 ? width / (points.length - 1) : 0;
+        let hasValues = false;
+
+        points.forEach((point, index) => {
+          const x = points.length > 1 ? step * index : width / 2;
+          let value = null;
+          if (mode === 'win') {
+            if (Number.isFinite(point.winPercent)) {
+              const offset = point.winPercent - 50;
+              value = Math.max(-WIN_RANGE, Math.min(WIN_RANGE, offset));
+            } else if (Number.isFinite(point.mate)) {
+              value = Math.sign(point.mate) * WIN_RANGE;
+            }
+          } else {
+            if (Number.isFinite(point.cp)) {
+              value = Math.max(-CP_RANGE, Math.min(CP_RANGE, point.cp));
+            } else if (Number.isFinite(point.mate)) {
+              value = Math.sign(point.mate) * CP_RANGE;
+            }
+          }
+          const hasValue = Number.isFinite(value);
+          if (hasValue) {
+            hasValues = true;
+          }
+          const y = hasValue ? centerY - (value / range) * centerY : centerY;
+          layout.push({ x, y, value, hasValue, point });
+        });
+        state.evalChartLayout = layout;
+
+        if (!hasValues) {
+          if (emptyState) emptyState.hidden = false;
+          hideEvalChartTooltip();
+          return;
+        }
+        if (emptyState) emptyState.hidden = true;
+
+        ctx.save();
+        ctx.strokeStyle = theme.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(width, centerY);
+        ctx.stroke();
+        ctx.restore();
+
+        const segments = [];
+        let current = [];
+        layout.forEach((item) => {
+          if (item.hasValue) {
+            current.push(item);
+          } else if (current.length) {
+            segments.push(current);
+            current = [];
+          }
+        });
+        if (current.length) {
+          segments.push(current);
+        }
+
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        segments.forEach((segment) => {
+          if (!segment.length) return;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(segment[0].x, centerY);
+          segment.forEach((pt) => {
+            ctx.lineTo(pt.x, pt.y);
+          });
+          const last = segment[segment.length - 1];
+          ctx.lineTo(last.x, centerY);
+          ctx.closePath();
+
+          ctx.save();
+          ctx.clip();
+          ctx.fillStyle = theme.fillWhite;
+          ctx.fillRect(0, 0, width, centerY);
+          ctx.restore();
+
+          ctx.save();
+          ctx.clip();
+          ctx.fillStyle = theme.fillBlack;
+          ctx.fillRect(0, centerY, width, centerY);
+          ctx.restore();
+          ctx.restore();
+
+          ctx.beginPath();
+          ctx.moveTo(segment[0].x, segment[0].y);
+          for (let i = 1; i < segment.length; i += 1) {
+            ctx.lineTo(segment[i].x, segment[i].y);
+          }
+          ctx.strokeStyle = theme.line;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+
+        layout.forEach((pt) => {
+          const tag = pt.point.classTag ? pt.point.classTag.toLowerCase() : null;
+          const markerColor = tag && theme.markers[tag] ? theme.markers[tag] : null;
+          if (markerColor && pt.hasValue) {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+            ctx.fillStyle = markerColor;
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
+            ctx.stroke();
+          }
+          if (Number.isFinite(pt.point.mate)) {
+            const top = pt.point.mate > 0;
+            const baseY = top ? 12 : height - 12;
+            const tipY = top ? 6 : height - 6;
+            ctx.beginPath();
+            ctx.moveTo(pt.x, tipY);
+            ctx.lineTo(pt.x - 6, baseY);
+            ctx.lineTo(pt.x + 6, baseY);
+            ctx.closePath();
+            ctx.fillStyle = theme.line;
+            ctx.fill();
+            ctx.font = '11px "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = top ? 'top' : 'bottom';
+            ctx.fillStyle = theme.line;
+            const textY = top ? baseY + 2 : baseY - 2;
+            ctx.fillText(`#${Math.abs(pt.point.mate)}`, pt.x, textY);
+          }
+        });
+
+        const activeIndex = state.ply > 0 ? Math.min(state.ply - 1, layout.length - 1) : null;
+        if (activeIndex != null && layout[activeIndex] && layout[activeIndex].hasValue) {
+          const active = layout[activeIndex];
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = theme.axis;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(active.x, 0);
+          ctx.lineTo(active.x, height);
+          ctx.stroke();
+          ctx.restore();
+
+          ctx.beginPath();
+          ctx.arc(active.x, active.y, 6, 0, Math.PI * 2);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = theme.accent;
+          ctx.stroke();
+        }
+
+        const hoverIndex = state.evalChartHoverIndex;
+        if (hoverIndex != null && layout[hoverIndex] && layout[hoverIndex].hasValue) {
+          const hover = layout[hoverIndex];
+          ctx.save();
+          ctx.setLineDash([2, 3]);
+          ctx.strokeStyle = theme.accent;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(hover.x, 0);
+          ctx.lineTo(hover.x, height);
+          ctx.stroke();
+          ctx.restore();
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(hover.x, hover.y, 7, 0, Math.PI * 2);
+          ctx.fillStyle = theme.accent;
+          ctx.globalAlpha = 0.18;
+          ctx.fill();
+          ctx.restore();
+          ctx.beginPath();
+          ctx.arc(hover.x, hover.y, 7, 0, Math.PI * 2);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = theme.accent;
+          ctx.stroke();
+        }
+
+        updateEvalChartTooltip();
+      }
+
+      function handleEvalChartPointer(event) {
+        const canvas = byId('evalChart');
+        if (!canvas || !state.evalChartLayout || !state.evalChartLayout.length) return;
+        const rect = canvas.getBoundingClientRect();
+        let clientX = null;
+        if (event.touches && event.touches.length) {
+          clientX = event.touches[0].clientX;
+        } else if (event.clientX != null) {
+          clientX = event.clientX;
+        }
+        if (!Number.isFinite(clientX)) return;
+        const x = clientX - rect.left;
+        let nearestIndex = null;
+        let nearestDistance = Infinity;
+        state.evalChartLayout.forEach((pt, idx) => {
+          if (!pt || !pt.hasValue) return;
+          const distance = Math.abs(pt.x - x);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = idx;
+          }
+        });
+        if (nearestIndex == null) {
+          if (state.evalChartHoverIndex != null) {
+            state.evalChartHoverIndex = null;
+            state.evalChartHoverPosition = null;
+            hideEvalChartTooltip();
+            scheduleEvalChartUpdate();
+          }
+          return;
+        }
+        if (state.evalChartHoverIndex !== nearestIndex) {
+          state.evalChartHoverIndex = nearestIndex;
+          state.evalChartHoverPosition = {
+            x: clientX,
+            y: event.touches && event.touches.length ? event.touches[0].clientY : event.clientY
+          };
+          updateEvalChartTooltip();
+          scheduleEvalChartUpdate();
+        } else {
+          state.evalChartHoverPosition = {
+            x: clientX,
+            y: event.touches && event.touches.length ? event.touches[0].clientY : event.clientY
+          };
+          updateEvalChartTooltip();
+        }
+      }
+
+      function handleEvalChartLeave() {
+        if (state.evalChartHoverIndex != null) {
+          state.evalChartHoverIndex = null;
+          state.evalChartHoverPosition = null;
+          hideEvalChartTooltip();
+          scheduleEvalChartUpdate();
+        } else {
+          hideEvalChartTooltip();
+        }
+      }
+
+      function handleEvalChartClick(event) {
+        handleEvalChartPointer(event);
+        const index = state.evalChartHoverIndex;
+        if (index == null || !state.evalChartLayout || !state.evalChartLayout[index]) return;
+        const layoutPoint = state.evalChartLayout[index];
+        if (layoutPoint && layoutPoint.point && Number.isFinite(layoutPoint.point.ply)) {
+          goToPly(layoutPoint.point.ply);
+        }
+      }
+
+      function initEvalChart() {
+        const card = byId('evalChartCard');
+        const canvas = byId('evalChart');
+        if (!card || !canvas) return;
+        state.evalChartMode = getSavedEvalChartMode();
+        updateEvalChartModeUI();
+
+        card.addEventListener('click', (event) => {
+          const button = event.target.closest('.eval-chart-mode');
+          if (!button || !button.dataset.mode) return;
+          setEvalChartMode(button.dataset.mode);
+        });
+
+        canvas.addEventListener('mousemove', handleEvalChartPointer);
+        canvas.addEventListener('mouseleave', handleEvalChartLeave);
+        canvas.addEventListener('click', handleEvalChartClick);
+        canvas.addEventListener('touchstart', (event) => {
+          handleEvalChartPointer(event);
+          event.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener('touchmove', (event) => {
+          handleEvalChartPointer(event);
+          event.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener('touchend', (event) => {
+          if (state.evalChartHoverIndex != null && state.evalChartLayout[state.evalChartHoverIndex]) {
+            const layoutPoint = state.evalChartLayout[state.evalChartHoverIndex];
+            if (layoutPoint && layoutPoint.point && Number.isFinite(layoutPoint.point.ply)) {
+              goToPly(layoutPoint.point.ply);
+            }
+          }
+          handleEvalChartLeave();
+          event.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener('touchcancel', (event) => {
+          handleEvalChartLeave();
+          event.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('resize', () => scheduleEvalChartUpdate());
+        state.evalChartDataDirty = true;
+        scheduleEvalChartUpdate({ recomputeData: true });
       }
 
       function getSuggestionIcon(baseline, overlayFinal) {
@@ -7967,6 +8916,12 @@
         engineController.reset();
         clearLineOverlay();
         clearMoveClassifications();
+        state.evalChartPoints = [];
+        state.evalChartLayout = [];
+        state.evalChartDataDirty = true;
+        state.evalChartHoverIndex = null;
+        state.evalChartHoverPosition = null;
+        scheduleEvalChartUpdate();
       }
 
       function setEnginePaused(paused) {
@@ -8379,6 +9334,7 @@
           const shortlistMessage = analysis.shortlist && analysis.shortlist.message ? analysis.shortlist.message : null;
           setStatus('engStatus', shortlistMessage ? `${baseStatus} — ${shortlistMessage}` : baseStatus);
           renderBoardStatus();
+          scheduleEvalChartUpdate();
           return;
         }
 
@@ -8397,6 +9353,7 @@
             setStatus('engStatus', 'Next-move suggestion not available yet.');
           }
           renderBoardStatus();
+          scheduleEvalChartUpdate();
           return;
         }
 
@@ -8416,6 +9373,7 @@
           updateEvalBar(evalText);
         }
         renderBoardStatus();
+        scheduleEvalChartUpdate();
       }
       async function analyzeMoveAtIndex(index, beforeEp, token) {
         const moveEntry = state.verboseHistory[index];
@@ -8434,6 +9392,7 @@
         }
         renderMoves();
         updateEloEstimates();
+        scheduleEvalChartUpdate({ recomputeData: true });
         return { afterEp: result && Number.isFinite(result.afterEp) ? result.afterEp : beforeEp };
       }
       async function precomputeFullAnalysis() {
@@ -8500,6 +9459,8 @@
         const destination = typeof targetPly === 'number' ? targetPly : verboseHistory.length;
         redrawAllArrows([]);
         goToPly(destination);
+        state.evalChartDataDirty = true;
+        scheduleEvalChartUpdate({ recomputeData: true });
         state.analysisStatus = 'queued';
         precomputeFullAnalysis();
         setStatus('loadStatus', 'Game ready.', 'ok');
@@ -8745,6 +9706,7 @@
           state.board.flip();
           updateEvalBar(state.lastEval);
           updateEvalBarHeight();
+          scheduleBoardDecorations();
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
             redrawAllArrows();
@@ -8893,76 +9855,69 @@
       }
     }
 
-    const DEFAULT_BOARD_STYLES = ['auto', 'icy-sea', 'glass', 'brown', 'green'];
-
-    function getBoardStyleOptions(select) {
-      if (select) {
-        const values = Array.from(select.options).map((option) => option.value);
-        return values.length ? values : DEFAULT_BOARD_STYLES;
-      }
-      return DEFAULT_BOARD_STYLES;
-    }
-
-    function normalizeBoardStyle(value, select) {
-      const options = getBoardStyleOptions(select);
-      return value && options.includes(value) ? value : 'auto';
-    }
-
     function getSavedBoardStyle() {
-      return localStorage.getItem('boardStyle');
+      return localStorage.getItem(BOARD_STYLE_STORAGE_KEY);
     }
 
-    function applyBoardSkin(skin) {
-      const host = document.documentElement;
-      if (skin && skin !== 'auto') {
-        host.setAttribute('data-board', skin);
-      } else {
-        host.removeAttribute('data-board');
+    function normalizeBoardStyle(value) {
+      if (!value) return 'glass';
+      const lower = value.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(LEGACY_BOARD_STYLE_MAP, lower)) {
+        return LEGACY_BOARD_STYLE_MAP[lower];
+      }
+      return BOARD_STYLES.includes(lower) ? lower : 'glass';
+    }
+
+    function applyBoardStyle(style) {
+      const normalized = normalizeBoardStyle(style);
+      const shell = document.querySelector('.board-shell');
+      if (shell) {
+        shell.setAttribute('data-board-style', normalized);
+      }
+      return normalized;
+    }
+
+    function persistBoardStyle(style) {
+      try {
+        localStorage.setItem(BOARD_STYLE_STORAGE_KEY, style);
+      } catch (err) {
+        console.warn('Unable to persist board style', err);
       }
     }
 
-    function getDefaultSkinForTheme(theme) {
-      return theme === 'light' ? 'icy-sea' : 'glass';
+    function setBoardStyle(style) {
+      const normalized = applyBoardStyle(style);
+      persistBoardStyle(normalized);
+      const select = document.getElementById('boardStyle');
+      if (select && select.value !== normalized) {
+        select.value = normalized;
+      }
+      scheduleBoardDecorations();
+    }
+
+    function getEffectiveBoardStyle() {
+      const saved = getSavedBoardStyle();
+      return normalizeBoardStyle(saved);
     }
 
     function initBoardStyleUI() {
       const select = document.getElementById('boardStyle');
       if (!select) return;
 
-      const savedRaw = getSavedBoardStyle();
-      const initial = normalizeBoardStyle(savedRaw, select);
-      if (savedRaw !== initial) {
-        localStorage.setItem('boardStyle', initial);
+      const initial = getEffectiveBoardStyle();
+      if (initial !== getSavedBoardStyle()) {
+        persistBoardStyle(initial);
       }
       select.value = initial;
-      applyBoardSkin(initial);
-
-      const currentTheme = document.documentElement.getAttribute('data-theme') || getSystemTheme();
-      select.dataset.defaultBoardSkin = getDefaultSkinForTheme(currentTheme);
+      applyBoardStyle(initial);
 
       select.addEventListener('change', () => {
-        const value = normalizeBoardStyle(select.value, select);
-        localStorage.setItem('boardStyle', value);
-        applyBoardSkin(value);
-        const theme = document.documentElement.getAttribute('data-theme') || getSystemTheme();
-        select.dataset.defaultBoardSkin = getDefaultSkinForTheme(theme);
+        setBoardStyle(select.value);
       });
     }
 
-    function onThemeChanged(newTheme) {
-      const select = document.getElementById('boardStyle');
-      const stored = getSavedBoardStyle();
-      const effective = normalizeBoardStyle(stored, select);
-      if (stored !== effective) {
-        localStorage.setItem('boardStyle', effective);
-      }
-      applyBoardSkin(effective);
-      if (select) {
-        if (select.value !== effective) {
-          select.value = effective;
-        }
-        select.dataset.defaultBoardSkin = getDefaultSkinForTheme(newTheme);
-      }
+    function onThemeChanged() {
+      applyBoardStyle(getEffectiveBoardStyle());
     }
 
     function getSystemTheme() {
