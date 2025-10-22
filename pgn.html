@@ -32,7 +32,7 @@
       --shadow: 0 18px 48px rgba(8, 15, 35, 0.55);
       --layout-padding: clamp(16px, 2vw, 28px);
       --header-height: 64px;
-      --board-max-height: min(72vh, 720px);
+      --board-max-height: none;
       --eval-score-bg: rgba(15, 23, 42, 0.88);
       --eval-score-text: #f8fafc;
       --eval-score-border: rgba(148, 163, 184, 0.4);
@@ -465,18 +465,15 @@
 
     .board-area {
       display: grid;
-      grid-template-columns: var(--eval-bar-width) minmax(0, 1fr);
+      grid-template-columns: var(--eval-bar-width) 1fr;
       align-items: stretch;
-      gap: clamp(12px, 1.5vw, 18px);
+      gap: clamp(4px, 0.8vw, 8px);
       width: 100%;
-      max-height: var(--board-max-height);
     }
 
     .board-wrap {
       position: relative;
       width: 100%;
-      max-width: var(--board-max-height);
-      max-height: var(--board-max-height);
       aspect-ratio: 1 / 1;
       display: flex;
       align-items: stretch;
@@ -484,9 +481,17 @@
 
     #board {
       width: 100%;
-      height: 100%;
+      aspect-ratio: 1 / 1;
       max-width: none;
       display: block;
+    }
+
+    #evalColumn {
+      height: 100%;
+    }
+
+    #evalColumn .eval-vertical {
+      height: 100%;
     }
 
     #arrowLayer {
@@ -1261,23 +1266,22 @@
       --suggestion-accent: var(--sgn-brilliant);
     }
 
-    .suggestion__kind {
+    .suggestion__badge-label {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 2px 8px;
+      padding: 4px 10px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
       border-radius: 999px;
-      background: rgba(148, 163, 184, 0.16);
-      color: var(--sgn-muted);
+      background: rgba(148, 163, 184, 0.10);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--suggestion-accent);
     }
 
-    .suggestion[data-tone="top"] .suggestion__kind { outline: 1px solid var(--sgn-top); }
-    .suggestion[data-tone="best"] .suggestion__kind { outline: 1px solid var(--sgn-best); }
-    .suggestion[data-tone="excellent"] .suggestion__kind { outline: 1px solid var(--sgn-excellent); }
-    .suggestion[data-tone="great"] .suggestion__kind { outline: 1px solid var(--sgn-great); }
-    .suggestion[data-tone="brilliant"] .suggestion__kind { outline: 1px solid var(--sgn-brilliant); }
+    .suggestion[data-tone] .suggestion__badge-label {
+      border-color: var(--suggestion-accent);
+    }
 
     .suggestion__badge {
       display: flex;
@@ -1470,7 +1474,7 @@
       .board-area {
         grid-template-columns: minmax(0, 1fr);
         justify-items: center;
-        row-gap: 16px;
+        row-gap: clamp(4px, 1.6vw, 10px);
       }
 
       .eval-column {
@@ -1603,7 +1607,7 @@
         </div>
       </details>
 
-      <details id="engineSuggestions" class="info-card card collapsible sticky-card" open>
+      <details id="engineSuggestions" class="info-card card collapsible" open>
         <summary class="info-card-summary sticky-summary" style="--sticky-offset: 74px;">
           <h2>Engine suggestions</h2>
           <span class="collapsible-meta">
@@ -1892,6 +1896,26 @@
         applyHeight();
         requestAnimationFrame(() => applyHeight());
       }
+
+      function syncBoardAndEval() {
+        if (typeof updateEvalBarHeight === 'function') {
+          updateEvalBarHeight();
+          requestAnimationFrame(() => updateEvalBarHeight());
+        }
+      }
+
+      window.addEventListener('resize', syncBoardAndEval);
+      window.addEventListener('orientationchange', syncBoardAndEval);
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', syncBoardAndEval);
+      } else {
+        syncBoardAndEval();
+      }
+
+      requestAnimationFrame(() => {
+        syncBoardAndEval();
+      });
 
       const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
       const pieceNames = {
@@ -2729,7 +2753,7 @@
           state.board.resize();
           syncArrowLayer();
           scheduleBoardBadgeUpdate();
-          updateEvalBarHeight();
+          syncBoardAndEval();
         });
       }
 
@@ -3139,16 +3163,102 @@
           btn.appendChild(label);
 
           const evalText = entry.eval || (analysis && analysis.eval) || null;
-          const evalDisplay = evalText ? formatEvalLabelFromString(evalText) : '—';
-          const deltaObj = computeMoveDeltaFromAnalysis(analysis);
+          let postCpRaw = null;
+          if (analysis && Number.isFinite(analysis.actualCp)) {
+            postCpRaw = analysis.actualCp;
+          } else if (analysis && analysis.actualEntry && Number.isFinite(analysis.actualEntry.cp)) {
+            postCpRaw = analysis.actualEntry.cp;
+          }
+          if (postCpRaw == null && evalText) {
+            const parsed = parseEvalToCp(evalText);
+            if (parsed && parsed.type === 'cp') {
+              postCpRaw = parsed.value;
+            }
+          }
+          const postCp = clampFiniteCp(postCpRaw);
+          const evalAfterLabel = postCp != null
+            ? formatEvalAfterLabel(postCp)
+            : formatEvalAfterLabel(evalText);
+
+          let preCpRaw = null;
+          let preEvalRaw = analysis && analysis.beforeEval ? analysis.beforeEval : null;
+          if (analysis) {
+            if (Number.isFinite(analysis.sfBefore)) {
+              preCpRaw = analysis.sfBefore;
+            } else if (Number.isFinite(analysis.bestCpBefore)) {
+              preCpRaw = analysis.bestCpBefore;
+            } else if (Number.isFinite(analysis.actualCpBefore)) {
+              preCpRaw = analysis.actualCpBefore;
+            } else if (Number.isFinite(analysis.beforeCp)) {
+              preCpRaw = analysis.beforeCp;
+            } else if (Number.isFinite(analysis.bestCp)) {
+              preCpRaw = analysis.bestCp;
+            }
+            if (!preEvalRaw) {
+              const summaryBestEval = analysis.summary && analysis.summary.best && analysis.summary.best.eval
+                ? analysis.summary.best.eval
+                : null;
+              if (summaryBestEval) {
+                preEvalRaw = summaryBestEval;
+              } else if (analysis.bestEntry && analysis.bestEntry.eval) {
+                preEvalRaw = analysis.bestEntry.eval;
+              }
+            }
+          }
+
+          let entryIndex = null;
+          if (!Number.isFinite(entryIndex) && Number.isFinite(entry.ply)) {
+            entryIndex = entry.ply - 1;
+          }
+          if (!Number.isFinite(entryIndex)) {
+            entryIndex = state.verboseHistory.indexOf(entry);
+          }
+          if (!Number.isFinite(entryIndex)) {
+            entryIndex = -1;
+          }
+          if ((preCpRaw == null || preEvalRaw == null) && entryIndex > 0) {
+            const prevEntry = state.verboseHistory[entryIndex - 1];
+            if (prevEntry) {
+              const prevEval = prevEntry.eval
+                || (prevEntry.analysis && prevEntry.analysis.eval)
+                || (prevEntry.analysis && prevEntry.analysis.actualEntry && prevEntry.analysis.actualEntry.eval)
+                || null;
+              if (!preEvalRaw && prevEval) {
+                preEvalRaw = prevEval;
+              }
+              if (preCpRaw == null && prevEval) {
+                const parsedPrev = parseEvalToCp(prevEval);
+                if (parsedPrev && parsedPrev.type === 'cp') {
+                  preCpRaw = parsedPrev.value;
+                }
+              }
+            }
+          }
+
+          const preCp = clampFiniteCp(preCpRaw);
+          const postParsed = evalText ? parseEvalToCp(evalText) : null;
+          const preParsed = preEvalRaw ? parseEvalToCp(preEvalRaw) : null;
+          const isMateAfter = Boolean(
+            (postParsed && postParsed.type === 'mate')
+            || (Number.isFinite(postCpRaw) && Math.abs(postCpRaw) >= 10000)
+          );
+          const isMateBefore = Boolean(
+            (preParsed && preParsed.type === 'mate')
+            || (Number.isFinite(preCpRaw) && Math.abs(preCpRaw) >= 10000)
+          );
+
+          let changeText = '';
+          if (!isMateBefore && !isMateAfter && preCp != null && postCp != null) {
+            changeText = formatChangeArrow(postCp - preCp);
+          }
+
           const metaEl = document.createElement('span');
           metaEl.className = 'moves__meta';
-          if (deltaObj.text !== '—') {
-            const emojiPart = deltaObj.emoji ? `${deltaObj.emoji} ` : '';
-            metaEl.textContent = `Eval → ${evalDisplay} · ${emojiPart}Δ ${deltaObj.text}`;
-          } else {
-            metaEl.textContent = `Eval → ${evalDisplay}`;
-          }
+          metaEl.textContent = isMateAfter
+            ? `Eval → ${evalAfterLabel}`
+            : changeText
+              ? `Eval → ${evalAfterLabel} · ${changeText}`
+              : `Eval → ${evalAfterLabel}`;
           btn.appendChild(metaEl);
 
           btn.addEventListener('click', () => {
@@ -3964,6 +4074,41 @@
         return { type: 'cp', pawns, cp: pawns * 100 };
       }
 
+      function parseEvalToCp(evalStr) {
+        const parsed = parseEvalString(evalStr);
+        if (!parsed) return null;
+        if (parsed.type === 'mate') return { type: 'mate', value: parsed.value };
+        if (parsed.type === 'cp') return { type: 'cp', value: parsed.cp };
+        return null;
+      }
+
+      function formatCpAsPawns(cp) {
+        return `${cp >= 0 ? '+' : '−'}${(Math.abs(cp) / 100).toFixed(2)}`;
+      }
+
+      function formatEvalAfterLabel(evalStrOrCp) {
+        if (typeof evalStrOrCp === 'number') {
+          return `${evalStrOrCp >= 0 ? '+' : '−'}${(Math.abs(evalStrOrCp) / 100).toFixed(2)}`;
+        }
+        const parsed = parseEvalString(evalStrOrCp);
+        if (!parsed) return '—';
+        if (parsed.type === 'mate') {
+          return `${parsed.value >= 0 ? '+M' : '−M'}${Math.abs(parsed.value)}`;
+        }
+        return `${parsed.value >= 0 ? '+' : '−'}${(Math.abs(parsed.value) / 100).toFixed(2)}`;
+      }
+
+      function clampFiniteCp(v) {
+        return (Number.isFinite(v) && Math.abs(v) < 10000) ? v : null;
+      }
+
+      function formatChangeArrow(diffCp) {
+        if (!Number.isFinite(diffCp)) return '';
+        if (diffCp > 0.5) return `↗️ ${formatCpAsPawns(diffCp)}`;
+        if (diffCp < -0.5) return `↘️ ${formatCpAsPawns(diffCp)}`;
+        return `→ ${formatCpAsPawns(0)}`;
+      }
+
       function normalizeEvalForMover(evalStr, moverIsWhite) {
         const parsed = parseEvalString(evalStr);
         if (!parsed) return null;
@@ -4131,28 +4276,6 @@
         return `(${sign}${Math.abs(percent).toFixed(1)}%)`;
       }
 
-      function formatDeltaFromBefore(postCp, preCp) {
-        if (!Number.isFinite(postCp) || !Number.isFinite(preCp)) return { text: '—', emoji: '' };
-        if (Math.abs(postCp) >= 9000 || Math.abs(preCp) >= 9000) return { text: '—', emoji: '' };
-        const pawns = (postCp - preCp) / 100;
-        const emoji = pawns > 0.005 ? '↗️' : pawns < -0.005 ? '↘️' : '⏸️';
-        const sign = pawns >= 0 ? '+' : '−';
-        return { text: `${sign}${Math.abs(pawns).toFixed(2)}`, emoji };
-      }
-
-      function computeMoveDeltaFromAnalysis(analysis) {
-        if (!analysis) return { text: '—', emoji: '' };
-        const postCp = Number.isFinite(analysis.actualCp) ? analysis.actualCp : null;
-        let preCp = null;
-
-        if (Number.isFinite(analysis.beforeCp)) preCp = analysis.beforeCp;
-        if (preCp == null && Number.isFinite(analysis.beforeEp)) {
-          preCp = expectedPointsToCentipawns(analysis.beforeEp, getAverageGameRating());
-        }
-
-        return formatDeltaFromBefore(postCp, preCp);
-      }
-
       function buildSuggestionDisplay({ classification, record }) {
         if (!classification || !record) {
           return { evalLabel: record && record.evalLabel ? record.evalLabel : '—', deltaLabel: null };
@@ -4306,6 +4429,37 @@
           return;
         }
 
+        const preCpCandidates = analysis
+          ? [
+            Number.isFinite(analysis.sfBefore) ? analysis.sfBefore : null,
+            Number.isFinite(analysis.bestCpBefore) ? analysis.bestCpBefore : null,
+            Number.isFinite(analysis.actualCpBefore) ? analysis.actualCpBefore : null,
+            Number.isFinite(analysis.beforeCp) ? analysis.beforeCp : null,
+            Number.isFinite(analysis.bestCp) ? analysis.bestCp : null
+          ]
+          : [];
+        let preCpFinal = null;
+        for (const value of preCpCandidates) {
+          const clamped = clampFiniteCp(value);
+          if (clamped != null) {
+            preCpFinal = clamped;
+            break;
+          }
+        }
+        if (preCpFinal == null && analysis) {
+          const summaryBestEval = analysis.summary && analysis.summary.best && analysis.summary.best.eval
+            ? analysis.summary.best.eval
+            : null;
+          const beforeEvalLabel = analysis.beforeEval
+            || summaryBestEval
+            || (analysis.bestEntry && analysis.bestEntry.eval)
+            || null;
+          const preParsed = beforeEvalLabel ? parseEvalToCp(beforeEvalLabel) : null;
+          if (preParsed && preParsed.type === 'cp') {
+            preCpFinal = clampFiniteCp(preParsed.value);
+          }
+        }
+
         const isPlayedMode = state.suggestionMode === 'played';
         const historyIndex = state.ply > 0 ? state.ply - 1 : null;
         const activeEntry = historyIndex != null ? state.verboseHistory[historyIndex] : null;
@@ -4406,36 +4560,61 @@
           sanEl.textContent = item.san || item.uci;
           text.appendChild(sanEl);
 
-          const postAfterLabel = formatEvalLabelFromString(item.evalLabel);
-          const deltaObj = formatDeltaFromBefore(item.postEvalCp, item.preEvalCp);
+          const classification = item.classification || null;
+          const record = item.record || null;
+          const rawPostEval = (item.entry && item.entry.eval)
+            || (record && record.evalLabel)
+            || item.evalLabel
+            || null;
+          let postCpRaw = null;
+          if (classification && Number.isFinite(classification.actualCp)) {
+            postCpRaw = classification.actualCp;
+          } else if (record && Number.isFinite(record.evalCp)) {
+            postCpRaw = record.evalCp;
+          } else if (item.entry && Number.isFinite(item.entry.cp)) {
+            postCpRaw = item.entry.cp;
+          }
+          const postCp = clampFiniteCp(postCpRaw);
+          const evalAfterLabel = postCp != null
+            ? formatEvalAfterLabel(postCp)
+            : formatEvalAfterLabel(rawPostEval);
+          const postParsed = rawPostEval ? parseEvalToCp(rawPostEval) : null;
+          const isMateAfter = Boolean(
+            (postParsed && postParsed.type === 'mate')
+            || (Number.isFinite(postCpRaw) && Math.abs(postCpRaw) >= 10000)
+          );
+          let changeText = '';
+          if (!isMateAfter && preCpFinal != null && postCp != null) {
+            changeText = formatChangeArrow(postCp - preCpFinal);
+          }
           const metaEl = document.createElement('span');
           metaEl.className = 'suggestion__meta';
-          if (deltaObj.text !== '—') {
-            const emojiPart = deltaObj.emoji ? `${deltaObj.emoji} ` : '';
-            metaEl.textContent = `Eval → ${postAfterLabel} · ${emojiPart}Δ ${deltaObj.text}`;
-          } else {
-            metaEl.textContent = `Eval → ${postAfterLabel}`;
-          }
+          metaEl.textContent = isMateAfter
+            ? `Eval → ${evalAfterLabel}`
+            : changeText
+              ? `Eval → ${evalAfterLabel} · ${changeText}`
+              : `Eval → ${evalAfterLabel}`;
           text.appendChild(metaEl);
 
           button.appendChild(text);
 
-          const kind = (item.overlayFinal || item.baseline || 'best').toLowerCase();
-          const kindText = kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : 'Best';
-          const kindEl = document.createElement('span');
-          kindEl.className = 'suggestion__kind';
-          const iconPath = classificationToIcon(kind);
+          const tag = item.overlayFinal || item.baseline || 'best';
+          const normalizedTag = tag ? tag.toLowerCase() : 'best';
+          const badgeLabel = document.createElement('span');
+          badgeLabel.className = 'suggestion__badge-label';
+          const labelText = normalizedTag.charAt(0).toUpperCase() + normalizedTag.slice(1);
+          const iconPath = classificationToIcon(normalizedTag);
           if (iconPath) {
             const icon = document.createElement('img');
             icon.src = iconPath;
-            icon.alt = kindText;
+            icon.alt = labelText;
             icon.className = 'classification-icon';
-            kindEl.appendChild(icon);
+            badgeLabel.appendChild(icon);
           }
-          const labelSpan = document.createElement('span');
-          labelSpan.textContent = kindText;
-          kindEl.appendChild(labelSpan);
-          button.appendChild(kindEl);
+          const textLabel = document.createElement('span');
+          textLabel.textContent = labelText;
+          badgeLabel.appendChild(textLabel);
+          button.appendChild(badgeLabel);
 
           const gapEl = document.createElement('span');
           gapEl.className = 'suggestion__gap';
