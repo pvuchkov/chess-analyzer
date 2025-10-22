@@ -33,7 +33,7 @@
       --layout-padding: clamp(16px, 2vw, 28px);
       --header-height: 64px;
       --board-max-height: none;
-      /* piece tuning (defaults do nothing in light) */
+      /* --- piece tuning knobs (safe defaults) --- */
       --piece-black-brightness: 1;
       --piece-black-contrast: 1;
       --piece-black-saturate: 1;
@@ -301,10 +301,10 @@
     [data-theme="dark"] .board-shell[data-board-style="glass"] {
       --piece-black-brightness: 1.22;
       --piece-black-contrast: 0.96;
-      --piece-black-saturate: 0.88;
-      --piece-black-sepia: 0.10;
-      --piece-black-hue: 10deg;
-      --piece-black-drop: 0 1px 0 rgba(255, 255, 255, 0.05);
+      --piece-black-saturate: 0.90;
+      --piece-black-sepia: 0.08;
+      --piece-black-hue: 12deg;
+      --piece-black-drop: 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
     .board-shell[data-board-style="classic"] {
@@ -649,26 +649,23 @@
       transition: filter 0.25s ease;
     }
 
-    .board-shell .board-area .piece.black,
-    .board-shell .board-area img[class*="black-"] {
-      filter: drop-shadow(var(--piece-black-drop))
+    .board-shell #board img.piece[data-piece^="b"],
+    .board-shell #board img.piece[src*="/b"],
+    .board-shell #board img.piece[class*=" b"],
+    .board-shell #board img.piece.piece-black,
+    .board-shell #board img.piece[data-side="b"] {
+      filter:
+        drop-shadow(var(--piece-black-drop))
         brightness(var(--piece-black-brightness))
         contrast(var(--piece-black-contrast))
         saturate(var(--piece-black-saturate))
         sepia(var(--piece-black-sepia))
-        hue-rotate(var(--piece-black-hue));
-      -webkit-filter: drop-shadow(var(--piece-black-drop))
-        brightness(var(--piece-black-brightness))
-        contrast(var(--piece-black-contrast))
-        saturate(var(--piece-black-saturate))
-        sepia(var(--piece-black-sepia))
-        hue-rotate(var(--piece-black-hue));
+        hue-rotate(var(--piece-black-hue)) !important;
     }
 
-    .board-shell .board-area .piece.dragging.black,
-    .board-shell .board-area .piece.premove.black {
-      filter: inherit;
-      -webkit-filter: inherit;
+    .board-shell #board img.piece.dragging[data-side="b"],
+    .board-shell #board img.piece.premove[data-side="b"] {
+      filter: inherit !important;
     }
 
     .eval-chart-card {
@@ -2159,8 +2156,7 @@
         evalChartPoints: [],
         evalChartLayout: [],
         evalChartDataDirty: true,
-        evalChartHoverIndex: null,
-        evalChartHoverPosition: null
+        evalChartHoverIndex: null
       };
 
       const BOARD_STYLES = ['glass', 'classic', 'icy-sea', 'wood', 'slate', 'sand', 'purple'];
@@ -2168,8 +2164,6 @@
       const BOARD_STYLE_STORAGE_KEY = 'boardStyle';
       const EVAL_CHART_MODES = ['cp', 'win'];
       const EVAL_CHART_MODE_STORAGE_KEY = 'evalChartMode';
-      const CP_RANGE = 600;
-      const WIN_RANGE = 50;
       const CLASSIFICATION_LABELS = {
         brilliant: 'Brilliant move',
         great: 'Great move',
@@ -2798,15 +2792,19 @@
         });
       }
 
-      function tagBoardPieces() {
-        const boardEl = byId('board');
-        if (!boardEl) return;
-        const pieces = boardEl.querySelectorAll('img.piece');
-        pieces.forEach((img) => {
-          if (!img || typeof img.src !== 'string') return;
-          const match = img.src.match(/\/([wb])[KQRBNP]\.png$/i);
+      function tagPieceSides() {
+        const imgs = document.querySelectorAll('.board-shell #board img.piece');
+        imgs.forEach((img) => {
+          if (!img) return;
+          const dataPiece = img.getAttribute('data-piece');
+          if (dataPiece && (dataPiece[0] === 'w' || dataPiece[0] === 'b')) {
+            img.dataset.side = dataPiece[0];
+            return;
+          }
+          const src = typeof img.src === 'string' ? img.src : '';
+          const match = src.match(/\/([wb])[KQRBNP]\.png$/i);
           if (match && match[1]) {
-            img.dataset.side = match[1] === 'b' ? 'b' : 'w';
+            img.dataset.side = match[1].toLowerCase();
           } else if (img.dataset.side) {
             delete img.dataset.side;
           }
@@ -2818,7 +2816,7 @@
         boardDecorationRaf = requestAnimationFrame(() => {
           boardDecorationRaf = null;
           decorateBoardSquares();
-          tagBoardPieces();
+          tagPieceSides();
         });
       }
 
@@ -2829,6 +2827,7 @@
         } else {
           state.board.position(fen);
         }
+        requestAnimationFrame(tagPieceSides);
         scheduleBoardBadgeUpdate();
         scheduleBoardDecorations();
       }
@@ -3208,8 +3207,10 @@
             if (!result) return 'snapback';
             void handleUserBranchMove({ move: result, fen: game.fen(), previousFen: fen });
             return 'snapback';
-          }
+          },
+          onSnapEnd: () => tagPieceSides()
         });
+        tagPieceSides();
         syncArrowLayer();
         initEvalBarSync();
         scheduleBoardDecorations();
@@ -3219,6 +3220,7 @@
           scheduleBoardBadgeUpdate();
           syncBoardAndEval();
           scheduleBoardDecorations();
+          requestAnimationFrame(tagPieceSides);
         });
       }
 
@@ -4187,6 +4189,7 @@
           : (Array.isArray(state.suggestionData) ? state.suggestionData : []);
         renderSuggestionArrows(active);
         drawArrowOverlay(state.lineOverlay);
+        requestAnimationFrame(tagPieceSides);
       }
 
       function overlaysEqual(a, b) {
@@ -4705,29 +4708,29 @@
       }
 
       function updateEvalChartModeUI() {
-        const card = byId('evalChartCard');
-        if (!card) return;
-        const buttons = card.querySelectorAll('.eval-chart-mode');
-        buttons.forEach((button) => {
-          if (!button || !button.dataset) return;
-          const mode = button.dataset.mode;
-          const active = mode === state.evalChartMode;
-          button.classList.toggle('active', active);
-          button.setAttribute('aria-pressed', active ? 'true' : 'false');
-        });
+        const cpBtn = byId('evalModeCp');
+        const winBtn = byId('evalModeWin');
+        const isWin = state.evalChartMode === 'win';
+        if (cpBtn) {
+          cpBtn.classList.toggle('active', !isWin);
+          cpBtn.setAttribute('aria-pressed', String(!isWin));
+        }
+        if (winBtn) {
+          winBtn.classList.toggle('active', isWin);
+          winBtn.setAttribute('aria-pressed', String(isWin));
+        }
       }
 
-      function setEvalChartMode(mode, options = {}) {
-        const normalized = normalizeEvalChartMode(mode);
-        state.evalChartMode = normalized;
-        updateEvalChartModeUI();
-        if (options.persist !== false) {
-          try {
-            localStorage.setItem(EVAL_CHART_MODE_STORAGE_KEY, normalized);
-          } catch (err) {
-            // ignore storage errors
-          }
+      function setEvalChartMode(mode) {
+        const next = mode === 'win' ? 'win' : 'cp';
+        if (state.evalChartMode === next) return;
+        state.evalChartMode = next;
+        try {
+          localStorage.setItem(EVAL_CHART_MODE_STORAGE_KEY, next);
+        } catch (err) {
+          // ignore storage errors
         }
+        updateEvalChartModeUI();
         scheduleEvalChartUpdate();
       }
 
@@ -4755,6 +4758,32 @@
             best: read('--eval-chart-marker-best', '#4ade80'),
             excellent: read('--eval-chart-marker-excellent', '#38bdf8')
           }
+        };
+      }
+
+      function currentEvalAccessor() {
+        if (state.evalChartMode === 'win') {
+          return (point) => (Number.isFinite(point.winPercent) ? point.winPercent : null);
+        }
+        return (point) => (Number.isFinite(point.cp) ? point.cp : null);
+      }
+
+      function currentYScale() {
+        if (state.evalChartMode === 'win') {
+          return {
+            min: 0,
+            max: 100,
+            gridStep: 20,
+            baseline: 50,
+            label: (value) => `${value}%`
+          };
+        }
+        return {
+          min: -400,
+          max: 400,
+          gridStep: 100,
+          baseline: 0,
+          label: (value) => (value === 0 ? '0' : `${value / 100}`)
         };
       }
 
@@ -5008,6 +5037,45 @@
         }
       }
 
+      function positionEvalChartTooltip(layoutPoint) {
+        const tooltip = byId('evalChartTooltip');
+        const canvas = byId('evalChart');
+        const wrap = byId('evalChartCanvasWrap');
+        if (!tooltip || !canvas || !wrap || !layoutPoint || !layoutPoint.hasValue) {
+          hideEvalChartTooltip();
+          return;
+        }
+
+        buildEvalChartTooltipContent(layoutPoint.point);
+        tooltip.style.display = 'block';
+        tooltip.setAttribute('aria-hidden', 'false');
+
+        const wrapRect = wrap.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const offsetX = canvasRect.left - wrapRect.left;
+        const offsetY = canvasRect.top - wrapRect.top;
+        const tipWidth = tooltip.offsetWidth;
+        const tipHeight = tooltip.offsetHeight;
+
+        let left = offsetX + layoutPoint.x + 10;
+        let top = offsetY + layoutPoint.y - tipHeight - 12;
+
+        if (top < 8) {
+          top = offsetY + layoutPoint.y + 12;
+        }
+        if (left < 8) {
+          left = 8;
+        } else if (left + tipWidth > wrapRect.width - 8) {
+          left = wrapRect.width - tipWidth - 8;
+        }
+        if (top + tipHeight > wrapRect.height - 8) {
+          top = wrapRect.height - tipHeight - 8;
+        }
+
+        tooltip.style.left = `${Math.round(left)}px`;
+        tooltip.style.top = `${Math.round(top)}px`;
+      }
+
       function updateEvalChartTooltip() {
         const tooltip = byId('evalChartTooltip');
         const canvas = byId('evalChart');
@@ -5019,31 +5087,7 @@
           hideEvalChartTooltip();
           return;
         }
-        const layoutPoint = state.evalChartLayout[index];
-        buildEvalChartTooltipContent(layoutPoint.point);
-        tooltip.style.display = 'block';
-        tooltip.setAttribute('aria-hidden', 'false');
-
-        const wrapRect = wrap.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
-        const tooltipRect = tooltip.getBoundingClientRect();
-        const offsetX = canvasRect.left - wrapRect.left;
-        const offsetY = canvasRect.top - wrapRect.top;
-        let left = offsetX + layoutPoint.x - tooltipRect.width / 2;
-        let top = offsetY + layoutPoint.y - tooltipRect.height - 12;
-        if (top < 8) {
-          top = offsetY + layoutPoint.y + 12;
-        }
-        if (left < 8) {
-          left = 8;
-        } else if (left + tooltipRect.width > wrapRect.width - 8) {
-          left = wrapRect.width - tooltipRect.width - 8;
-        }
-        if (top + tooltipRect.height > wrapRect.height - 8) {
-          top = wrapRect.height - tooltipRect.height - 8;
-        }
-        tooltip.style.left = `${left}px`;
-        tooltip.style.top = `${top}px`;
+        positionEvalChartTooltip(state.evalChartLayout[index]);
       }
 
       function renderEvalChart() {
@@ -5060,70 +5104,111 @@
         }
 
         const points = state.evalChartPoints;
-        const width = canvas.clientWidth || wrap.clientWidth || 0;
-        const height = canvas.clientHeight || wrap.clientHeight || 0;
-        if (!width || !height) {
-          hideEvalChartTooltip();
-          if (emptyState) emptyState.hidden = false;
-          return;
+        if (emptyState) {
+          emptyState.style.display = points.length ? 'none' : 'flex';
         }
 
+        const width = canvas.clientWidth || wrap.clientWidth || 0;
+        const height = canvas.clientHeight || wrap.clientHeight || 0;
         const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.max(1, Math.round(width * dpr));
         canvas.height = Math.max(1, Math.round(height * dpr));
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, width, height);
 
-        const mode = normalizeEvalChartMode(state.evalChartMode);
-        const theme = getEvalChartTheme();
-        const range = mode === 'win' ? WIN_RANGE : CP_RANGE;
-        const centerY = height / 2;
+        if (!width || !height) {
+          state.evalChartLayout = [];
+          hideEvalChartTooltip();
+          return;
+        }
 
-        const layout = [];
+        const mode = normalizeEvalChartMode(state.evalChartMode);
+        if (mode !== state.evalChartMode) {
+          state.evalChartMode = mode;
+          updateEvalChartModeUI();
+        }
+        const theme = getEvalChartTheme();
+        const accessor = currentEvalAccessor();
+        const scale = currentYScale();
+        const yMin = Number.isFinite(scale.min) ? scale.min : 0;
+        const yMax = Number.isFinite(scale.max) ? scale.max : 100;
+        const range = Math.max(1, yMax - yMin);
+        const baselineValueRaw = Number.isFinite(scale.baseline) ? scale.baseline : (yMin + yMax) / 2;
+        const baselineValue = Math.max(yMin, Math.min(yMax, baselineValueRaw));
+
+        const valueToY = (value) => {
+          const clamped = Math.max(yMin, Math.min(yMax, value));
+          const ratio = (clamped - yMin) / range;
+          return height - (ratio * height);
+        };
+
         const step = points.length > 1 ? width / (points.length - 1) : 0;
+        const layout = [];
         let hasValues = false;
 
         points.forEach((point, index) => {
           const x = points.length > 1 ? step * index : width / 2;
-          let value = null;
-          if (mode === 'win') {
-            if (Number.isFinite(point.winPercent)) {
-              const offset = point.winPercent - 50;
-              value = Math.max(-WIN_RANGE, Math.min(WIN_RANGE, offset));
-            } else if (Number.isFinite(point.mate)) {
-              value = Math.sign(point.mate) * WIN_RANGE;
-            }
-          } else {
-            if (Number.isFinite(point.cp)) {
-              value = Math.max(-CP_RANGE, Math.min(CP_RANGE, point.cp));
-            } else if (Number.isFinite(point.mate)) {
-              value = Math.sign(point.mate) * CP_RANGE;
-            }
+          let rawValue = accessor(point);
+          if (!Number.isFinite(rawValue) && Number.isFinite(point.mate)) {
+            rawValue = point.mate > 0 ? yMax : yMin;
           }
-          const hasValue = Number.isFinite(value);
+          const hasValue = Number.isFinite(rawValue);
           if (hasValue) {
             hasValues = true;
           }
-          const y = hasValue ? centerY - (value / range) * centerY : centerY;
+          const value = hasValue ? Math.max(yMin, Math.min(yMax, rawValue)) : null;
+          const y = hasValue ? valueToY(value) : valueToY(baselineValue);
           layout.push({ x, y, value, hasValue, point });
         });
+
         state.evalChartLayout = layout;
 
         if (!hasValues) {
-          if (emptyState) emptyState.hidden = false;
           hideEvalChartTooltip();
           return;
         }
-        if (emptyState) emptyState.hidden = true;
+
+        const baselineY = valueToY(baselineValue);
+        const gridStep = Number.isFinite(scale.gridStep) && scale.gridStep > 0 ? scale.gridStep : null;
+
+        if (gridStep) {
+          ctx.save();
+          ctx.strokeStyle = theme.grid;
+          ctx.lineWidth = 1;
+          for (let value = yMin; value <= yMax + 1e-6; value += gridStep) {
+            const y = valueToY(value);
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
 
         ctx.save();
-        ctx.strokeStyle = theme.grid;
+        ctx.strokeStyle = theme.axis;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, centerY);
-        ctx.lineTo(width, centerY);
+        ctx.moveTo(0, baselineY);
+        ctx.lineTo(width, baselineY);
         ctx.stroke();
         ctx.restore();
+
+        if (gridStep) {
+          ctx.save();
+          ctx.fillStyle = theme.axis;
+          ctx.font = '11px "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+          ctx.textBaseline = 'middle';
+          ctx.textAlign = 'left';
+          const labelOffset = 6;
+          for (let value = yMin; value <= yMax + 1e-6; value += gridStep) {
+            const label = scale.label ? scale.label(Math.round(value * 1000) / 1000) : `${value}`;
+            if (!label) continue;
+            const y = valueToY(value);
+            ctx.fillText(label, labelOffset, y);
+          }
+          ctx.restore();
+        }
 
         const segments = [];
         let current = [];
@@ -5146,24 +5231,24 @@
           if (!segment.length) return;
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(segment[0].x, centerY);
+          ctx.moveTo(segment[0].x, baselineY);
           segment.forEach((pt) => {
             ctx.lineTo(pt.x, pt.y);
           });
           const last = segment[segment.length - 1];
-          ctx.lineTo(last.x, centerY);
+          ctx.lineTo(last.x, baselineY);
           ctx.closePath();
 
           ctx.save();
           ctx.clip();
           ctx.fillStyle = theme.fillWhite;
-          ctx.fillRect(0, 0, width, centerY);
+          ctx.fillRect(0, 0, width, baselineY);
           ctx.restore();
 
           ctx.save();
           ctx.clip();
           ctx.fillStyle = theme.fillBlack;
-          ctx.fillRect(0, centerY, width, centerY);
+          ctx.fillRect(0, baselineY, width, height - baselineY);
           ctx.restore();
           ctx.restore();
 
@@ -5261,8 +5346,11 @@
 
       function handleEvalChartPointer(event) {
         const canvas = byId('evalChart');
-        if (!canvas || !state.evalChartLayout || !state.evalChartLayout.length) return;
-        const rect = canvas.getBoundingClientRect();
+        const wrap = byId('evalChartCanvasWrap');
+        if (!canvas || !wrap) return;
+        const layout = state.evalChartLayout || [];
+        if (!layout.length) return;
+        const canvasRect = canvas.getBoundingClientRect();
         let clientX = null;
         if (event.touches && event.touches.length) {
           clientX = event.touches[0].clientX;
@@ -5270,21 +5358,21 @@
           clientX = event.clientX;
         }
         if (!Number.isFinite(clientX)) return;
-        const x = clientX - rect.left;
+        const relativeX = clientX - canvasRect.left;
         let nearestIndex = null;
         let nearestDistance = Infinity;
-        state.evalChartLayout.forEach((pt, idx) => {
-          if (!pt || !pt.hasValue) return;
-          const distance = Math.abs(pt.x - x);
+        for (let i = 0; i < layout.length; i += 1) {
+          const pt = layout[i];
+          if (!pt || !pt.hasValue) continue;
+          const distance = Math.abs(pt.x - relativeX);
           if (distance < nearestDistance) {
             nearestDistance = distance;
-            nearestIndex = idx;
+            nearestIndex = i;
           }
-        });
+        }
         if (nearestIndex == null) {
           if (state.evalChartHoverIndex != null) {
             state.evalChartHoverIndex = null;
-            state.evalChartHoverPosition = null;
             hideEvalChartTooltip();
             scheduleEvalChartUpdate();
           }
@@ -5292,25 +5380,15 @@
         }
         if (state.evalChartHoverIndex !== nearestIndex) {
           state.evalChartHoverIndex = nearestIndex;
-          state.evalChartHoverPosition = {
-            x: clientX,
-            y: event.touches && event.touches.length ? event.touches[0].clientY : event.clientY
-          };
-          updateEvalChartTooltip();
           scheduleEvalChartUpdate();
-        } else {
-          state.evalChartHoverPosition = {
-            x: clientX,
-            y: event.touches && event.touches.length ? event.touches[0].clientY : event.clientY
-          };
-          updateEvalChartTooltip();
         }
+
+        positionEvalChartTooltip(layout[nearestIndex]);
       }
 
       function handleEvalChartLeave() {
         if (state.evalChartHoverIndex != null) {
           state.evalChartHoverIndex = null;
-          state.evalChartHoverPosition = null;
           hideEvalChartTooltip();
           scheduleEvalChartUpdate();
         } else {
@@ -8978,7 +9056,6 @@
         state.evalChartLayout = [];
         state.evalChartDataDirty = true;
         state.evalChartHoverIndex = null;
-        state.evalChartHoverPosition = null;
         scheduleEvalChartUpdate();
       }
 
@@ -9765,6 +9842,7 @@
           updateEvalBar(state.lastEval);
           updateEvalBarHeight();
           scheduleBoardDecorations();
+          requestAnimationFrame(tagPieceSides);
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
             redrawAllArrows();
@@ -10072,6 +10150,7 @@
         initBoardStyleUI();
         initBoard();
         initMoveSummary();
+        initEvalChart();
         updateMoveSummary();
         setInputMode('pgn');
         bindUi();
