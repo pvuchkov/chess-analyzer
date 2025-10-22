@@ -21,7 +21,7 @@
       --eval-white: #f8fafc;
       --eval-black: #0b1220;
       --eval-border: rgba(148, 163, 184, 0.28);
-      --eval-bar-width: clamp(48px, 4vw, 64px);
+      --eval-bar-width: clamp(32px, 7.5vw, 56px);
       --material-positive: #4ade80;
       --material-negative: #f87171;
       --input-bg: rgba(15, 23, 42, 0.75);
@@ -465,18 +465,21 @@
 
     .board-area {
       display: grid;
-      grid-template-columns: var(--eval-bar-width) 1fr;
+      grid-template-columns: var(--eval-bar-width) minmax(0, 1fr);
+      gap: 0;
       align-items: stretch;
-      gap: clamp(4px, 0.8vw, 8px);
       width: 100%;
+      position: relative;
+      background: var(--panel);
     }
 
     .board-wrap {
       position: relative;
       width: 100%;
-      aspect-ratio: 1 / 1;
-      display: flex;
-      align-items: stretch;
+      min-width: 0;
+      border-radius: 0 12px 12px 0;
+      overflow: hidden;
+      background: var(--panel);
     }
 
     #board {
@@ -484,6 +487,9 @@
       aspect-ratio: 1 / 1;
       max-width: none;
       display: block;
+      border-radius: 0 12px 12px 0;
+      overflow: hidden;
+      background: var(--panel);
     }
 
     #evalColumn {
@@ -496,8 +502,7 @@
 
     #arrowLayer {
       position: absolute;
-      left: 0;
-      top: 0;
+      inset: 0;
       width: 100%;
       height: 100%;
       pointer-events: none;
@@ -564,6 +569,9 @@
       justify-content: stretch;
       gap: 0;
       height: 100%;
+      border-radius: 12px 0 0 12px;
+      overflow: hidden;
+      background: var(--panel);
     }
 
     .eval-vertical {
@@ -919,6 +927,18 @@
 
     .sticky-card .info-card-body {
       padding-top: 0;
+    }
+
+    #engineSuggestions.info-card,
+    #movesPanel.info-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+    }
+
+    #engineSuggestions .info-card-body,
+    #movesPanel .info-card-body {
+      background: transparent;
     }
 
     .summary-scroll {
@@ -1454,10 +1474,6 @@
     }
 
     @media (max-width: 768px) {
-      :root {
-        --eval-bar-width: 40px;
-      }
-
       .layout {
         grid-template-columns: 1fr;
       }
@@ -1469,20 +1485,6 @@
 
       .board-shell {
         padding-bottom: 0;
-      }
-
-      .board-area {
-        grid-template-columns: minmax(0, 1fr);
-        justify-items: center;
-        row-gap: clamp(4px, 1.6vw, 10px);
-      }
-
-      .eval-column {
-        flex-direction: row;
-        justify-content: center;
-        width: auto;
-        min-height: 0;
-        gap: 16px;
       }
 
       .eval-vertical {
@@ -1518,6 +1520,12 @@
 
       .info-column {
         padding-right: 0;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .board-area {
+        grid-template-columns: var(--eval-bar-width) minmax(0, 1fr);
       }
     }
   </style>
