@@ -1960,6 +1960,11 @@
       const PV_MATE_SLACK = 1;
       const PV_EPSILON = 0.005;
       const GREAT_PHASE_DELTA = 0.15;
+      const GREAT_BAND_LOSS_MAX = 0.35;
+      const GREAT_BAND_WIN_MIN = 0.65;
+      const GREAT_DECISIVE_MARGIN = 0.05;
+      const GREAT_SWING_MIN_DELTA = 0.20;
+      const GREAT_ONLY_MOVE_MIN_DELTA = 0.15;
       const DEFAULT_ANALYSIS_DEPTH = 20;
       const DEFAULT_ANALYSIS_MOVETIME = 2000;
       const classificationIconSet = new Set(['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder', 'brilliant', 'great', 'miss', 'book']);
@@ -1967,8 +1972,6 @@
       const NEAR_BEST_CP = 50;
       const ONLY_MOVE_GAP_CP = 150;
       const ONLY_MOVE_GAP_EP = 0.20;
-      const SWING_TO_EQUAL_CP = 80;
-      const SWING_TO_WIN_CP = 150;
       const ALREADY_WINNING_CP = 300;
       const NOT_BAD_TOLERANCE_CP = 50;
       const SAC_MIN_LOSS_POINTS = 2;
@@ -1989,6 +1992,28 @@
         { key: 'blunder', label: 'Blunder', icon: './move-classifications/blunder.png' },
         { key: 'miss', label: 'Miss', icon: './move-classifications/miss.png' }
       ];
+      const GREAT_BAND_ORDER = { loss: 0, draw: 1, win: 2 };
+
+      function clampExpectedPoints(ep) {
+        if (!Number.isFinite(ep)) return null;
+        if (ep <= 0) return 0;
+        if (ep >= 1) return 1;
+        return ep;
+      }
+
+      function getOutcomeBand(ep) {
+        const value = clampExpectedPoints(ep);
+        if (value == null) return null;
+        if (value <= GREAT_BAND_LOSS_MAX) return 'loss';
+        if (value >= GREAT_BAND_WIN_MIN) return 'win';
+        return 'draw';
+      }
+
+      function isDecisiveEp(ep) {
+        const value = clampExpectedPoints(ep);
+        if (value == null) return false;
+        return value <= GREAT_DECISIVE_MARGIN || value >= (1 - GREAT_DECISIVE_MARGIN);
+      }
 
       function createPlayerMetric(labelText, role) {
         const metric = document.createElement('div');
@@ -4846,7 +4871,8 @@
         postEvalCpAfterReReply = null,
         bestMoverEp = null,
         secondBestMoverEp = null,
-        playedMoverEp = null
+        playedMoverEp = null,
+        altMaxMoverEp = null
       }) {
         if (!enableSpecialPromotions) {
           return null;
@@ -4886,10 +4912,10 @@
         const cpNearBest = Number.isFinite(bestLineEvalCp)
           && Number.isFinite(comparisonPostCp)
           && (bestLineEvalCp - comparisonPostCp) <= NEAR_BEST_CP;
-        const nearBest = cpNearBest || (mateForUs(preBestEval) && mateForUs(postEvalObj));
-        const nearBestBaseline = (normalizedBase === 'best') || nearBest;
-
+        const isMateBefore = mateForUs(preBestEval);
         const isMateAfter = mateForUs(postEvalObj);
+        const nearBest = cpNearBest || (isMateBefore && isMateAfter);
+        const nearBestBaseline = (normalizedBase === 'best') || nearBest;
         const mateDepthAfter = isMateAfter && postEvalObj && Number.isFinite(postEvalObj.mate)
           ? Math.abs(postEvalObj.mate)
           : null;
@@ -5010,50 +5036,95 @@
           };
         }
 
-        const onlyMove = Number.isFinite(bestVsSecondGap)
-          && bestVsSecondGap >= ONLY_MOVE_GAP_CP;
-        const swingToEqual = Number.isFinite(preEvalCp)
-          && Number.isFinite(postEvalCp)
-          && preEvalCp <= -SWING_TO_EQUAL_CP
-          && postEvalCp >= -NEAR_BEST_CP;
-        const swingToWin = Number.isFinite(preEvalCp)
-          && Number.isFinite(postEvalCp)
-          && Math.abs(preEvalCp) <= NEAR_BEST_CP
-          && postEvalCp >= SWING_TO_WIN_CP;
+        const normalizedEpBefore = clampExpectedPoints(epBeforeMover);
+        const normalizedEpPlayed = clampExpectedPoints(playedMoverEp);
+        const normalizedEpAltMax = clampExpectedPoints(
+          Number.isFinite(altMaxMoverEp)
+            ? altMaxMoverEp
+            : (Number.isFinite(secondBestMoverEp) ? secondBestMoverEp : null)
+        );
 
-        if (onlyMove || swingToEqual || swingToWin) {
-          let reason = 'great-only-move';
-          const tooltipParts = ['Promoted to Great:'];
-          if (onlyMove) {
+        const bandBefore = getOutcomeBand(normalizedEpBefore);
+        const bandPlayed = getOutcomeBand(normalizedEpPlayed);
+        const bandAltMax = getOutcomeBand(normalizedEpAltMax);
+        const decisiveBefore = isDecisiveEp(normalizedEpBefore);
+        const decisiveAfter = isDecisiveEp(normalizedEpPlayed);
+        const altDecisive = isDecisiveEp(normalizedEpAltMax);
+        const epGapAlt = (Number.isFinite(normalizedEpPlayed) && Number.isFinite(normalizedEpAltMax))
+          ? (normalizedEpPlayed - normalizedEpAltMax)
+          : null;
+
+        const bandRankBefore = bandBefore != null ? GREAT_BAND_ORDER[bandBefore] : null;
+        const bandRankPlayed = bandPlayed != null ? GREAT_BAND_ORDER[bandPlayed] : null;
+        const bandRankAlt = bandAltMax != null ? GREAT_BAND_ORDER[bandAltMax] : null;
+
+        const swingUp = Number.isFinite(normalizedEpBefore)
+          && Number.isFinite(normalizedEpPlayed)
+          && bandRankBefore != null
+          && bandRankPlayed != null
+          && bandRankPlayed > bandRankBefore
+          && (normalizedEpPlayed - normalizedEpBefore) >= (GREAT_SWING_MIN_DELTA - PV_EPSILON);
+
+        const keepsBand = bandRankBefore != null
+          && bandRankPlayed != null
+          && bandRankPlayed >= bandRankBefore;
+
+        const othersDropClass = Number.isFinite(normalizedEpPlayed)
+          && Number.isFinite(normalizedEpAltMax)
+          && bandRankAlt != null
+          && bandRankPlayed != null
+          && bandRankAlt < bandRankPlayed
+          && epGapAlt != null
+          && epGapAlt >= (GREAT_ONLY_MOVE_MIN_DELTA - PV_EPSILON);
+
+        const onlyMoveGreat = keepsBand && othersDropClass;
+        const sameDecisiveBand = decisiveBefore
+          && decisiveAfter
+          && bandBefore != null
+          && bandPlayed != null
+          && bandBefore === bandPlayed;
+        const alternativesKeepDecisive = sameDecisiveBand
+          && altDecisive
+          && bandAltMax === bandPlayed;
+
+        const bandLabels = { loss: 'fighting on', draw: 'drawing', win: 'winning' };
+        let reason = null;
+        let reasonKey = null;
+        let tooltipParts = null;
+        if (nearBestBaseline && !isMateAfter && !isMateBefore) {
+          if (swingUp) {
+            reason = 'great-swing';
+            reasonKey = 'swing';
+            tooltipParts = ['Promoted to Great: turned the outcome band.'];
+            const fromBand = bandBefore ? bandLabels[bandBefore] : null;
+            const toBand = bandPlayed ? bandLabels[bandPlayed] : null;
+            if (fromBand && toBand) {
+              tooltipParts.push(`Position improved from ${fromBand} to ${toBand}.`);
+            }
+          } else if (onlyMoveGreat && !alternativesKeepDecisive) {
             reason = 'great-only-move';
-            tooltipParts.push('only move preserved the advantage.');
-            const gapText = formatNegativeCpGap(bestVsSecondGap);
-            if (gapText) {
-              tooltipParts.push(`Next-best is ${gapText} worse.`);
+            reasonKey = 'onlyMove';
+            tooltipParts = ['Promoted to Great: only move kept the outcome on track.'];
+            if (bandPlayed) {
+              tooltipParts.push(`This move keeps a ${bandLabels[bandPlayed]} result.`);
             }
-          } else if (swingToEqual) {
-            reason = 'great-swing-equal';
-            const fromText = formatCpAsPawnString(preEvalCp, { forceSign: true });
-            const toText = formatCpAsPawnString(postEvalCp, { forceSign: true });
-            if (fromText && toText) {
-              tooltipParts.push(`evaluation swung from ${fromText} to ${toText}.`);
-            } else {
-              tooltipParts.push('evaluation swung back to equality.');
+            if (bandAltMax) {
+              tooltipParts.push(`Alternatives slip to ${bandLabels[bandAltMax]} positions.`);
             }
-          } else if (swingToWin) {
-            reason = 'great-swing-win';
-            const fromText = formatCpAsPawnString(preEvalCp, { forceSign: true });
-            const toText = formatCpAsPawnString(postEvalCp, { forceSign: true });
-            if (fromText && toText) {
-              tooltipParts.push(`evaluation jumped from ${fromText} to ${toText}.`);
-            } else {
-              tooltipParts.push('evaluation jumped into winning territory.');
+            if (Number.isFinite(epGapAlt)) {
+              const gapText = formatWinDeltaDisplay(epGapAlt * 100);
+              if (gapText) {
+                tooltipParts.push(`Next-best drops ${gapText} in win chances.`);
+              }
             }
           }
+        }
+
+        if (reason) {
           return {
             label: 'great',
             reason,
-            tooltip: tooltipParts.join(' '),
+            tooltip: tooltipParts ? tooltipParts.join(' ') : 'Promoted to Great.',
             log: {
               move: moveSan || null,
               baseLabel: normalizedBase,
@@ -5063,7 +5134,16 @@
               postEvalCp,
               bestLineEvalCp,
               secondBestEvalCp,
-              materialDeltaAfterMove
+              materialDeltaAfterMove,
+              bandBefore,
+              bandPlayed,
+              bandAltMax,
+              decisiveBefore,
+              decisiveAfter,
+              epGapAlt,
+              swingUp,
+              onlyMoveGreat,
+              greatReason: reasonKey
             }
           };
         }
@@ -6724,7 +6804,8 @@
             postEvalCpAfterReReply,
             bestMoverEp: Number.isFinite(bestMoverEp) ? bestMoverEp : null,
             secondBestMoverEp: Number.isFinite(EP_secondBest) ? EP_secondBest : null,
-            playedMoverEp: Number.isFinite(actualMoverEp) ? actualMoverEp : null
+            playedMoverEp: Number.isFinite(actualMoverEp) ? actualMoverEp : null,
+            altMaxMoverEp: Number.isFinite(EP_altMaxOverTopK) ? EP_altMaxOverTopK : null
           });
         } catch (err) {
           console.warn('Failed to apply special promotions', err);
@@ -6791,6 +6872,14 @@
               EP_played: Number.isFinite(actualMoverEp) ? actualMoverEp.toFixed(3) : null,
               EP_secondBest: Number.isFinite(EP_secondBest) ? EP_secondBest.toFixed(3) : null,
               EP_altMaxOverTopK: Number.isFinite(EP_altMaxOverTopK) ? EP_altMaxOverTopK.toFixed(3) : null,
+              bandBefore: getOutcomeBand(beforeMoverEp),
+              bandPlayed: getOutcomeBand(actualMoverEp),
+              bandAltMax: getOutcomeBand(EP_altMaxOverTopK),
+              decisiveBefore: isDecisiveEp(beforeMoverEp),
+              decisiveAfter: isDecisiveEp(actualMoverEp),
+              epGapAlt: (Number.isFinite(actualMoverEp) && Number.isFinite(EP_altMaxOverTopK))
+                ? (actualMoverEp - EP_altMaxOverTopK).toFixed(3)
+                : null,
               gap: (Number.isFinite(bestMoverEp) && Number.isFinite(actualMoverEp))
                 ? (bestMoverEp - actualMoverEp).toFixed(3)
                 : null,
@@ -6845,7 +6934,10 @@
               terminalFlags: { replyIsMate, ourReReplyIsMate },
               sacPath,
               mateSacResult,
-              nonMateBrilliantResult
+              nonMateBrilliantResult,
+              swingUp: promotion && promotion.log ? Boolean(promotion.log.swingUp) : false,
+              onlyMoveGreat: promotion && promotion.log ? Boolean(promotion.log.onlyMoveGreat) : false,
+              greatReason: promotion && promotion.log ? promotion.log.greatReason : null
             });
           } catch (err) {
             // ignore logging errors
