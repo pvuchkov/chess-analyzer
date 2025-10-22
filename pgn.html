@@ -1261,6 +1261,24 @@
       --suggestion-accent: var(--sgn-brilliant);
     }
 
+    .suggestion__kind {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.16);
+      color: var(--sgn-muted);
+    }
+
+    .suggestion[data-tone="top"] .suggestion__kind { outline: 1px solid var(--sgn-top); }
+    .suggestion[data-tone="best"] .suggestion__kind { outline: 1px solid var(--sgn-best); }
+    .suggestion[data-tone="excellent"] .suggestion__kind { outline: 1px solid var(--sgn-excellent); }
+    .suggestion[data-tone="great"] .suggestion__kind { outline: 1px solid var(--sgn-great); }
+    .suggestion[data-tone="brilliant"] .suggestion__kind { outline: 1px solid var(--sgn-brilliant); }
+
     .suggestion__badge {
       display: flex;
       align-items: center;
@@ -3037,29 +3055,6 @@
         return analysis.overlay || analysis.classification || null;
       }
 
-      function computeMoveDelta(entry, analysis) {
-        if (!analysis) {
-          return null;
-        }
-        const postCp = Number.isFinite(analysis.actualCp) ? analysis.actualCp : null;
-        const beforeEp = analysis.beforeEp;
-        const preCp = Number.isFinite(beforeEp) ? expectedPointsToCentipawns(beforeEp, getAverageGameRating()) : null;
-        if (Number.isFinite(postCp) && Number.isFinite(preCp) && Math.abs(postCp) < 9000 && Math.abs(preCp) < 9000) {
-          const diff = (postCp - preCp) / 100;
-          const sign = diff >= 0 ? '+' : '−';
-          return `${sign}${Math.abs(diff).toFixed(2)}`;
-        }
-        const record = entry && Number.isFinite(entry.ply)
-          ? classifyMoveReadonly(entry.ply, entry.uci || null)
-          : null;
-        if (record && Number.isFinite(record.deltaVsBestCp)) {
-          const diff = record.deltaVsBestCp / 100;
-          const sign = diff >= 0 ? '+' : '−';
-          return `${sign}${Math.abs(diff).toFixed(2)}`;
-        }
-        return null;
-      }
-
       function renderMoves() {
         const container = byId('moves');
         if (!container) return;
@@ -3145,12 +3140,15 @@
 
           const evalText = entry.eval || (analysis && analysis.eval) || null;
           const evalDisplay = evalText ? formatEvalLabelFromString(evalText) : '—';
-          const deltaDisplay = computeMoveDelta(entry, analysis);
+          const deltaObj = computeMoveDeltaFromAnalysis(analysis);
           const metaEl = document.createElement('span');
           metaEl.className = 'moves__meta';
-          metaEl.textContent = deltaDisplay
-            ? `Eval → ${evalDisplay} · Δ ${deltaDisplay}`
-            : `Eval → ${evalDisplay}`;
+          if (deltaObj.text !== '—') {
+            const emojiPart = deltaObj.emoji ? `${deltaObj.emoji} ` : '';
+            metaEl.textContent = `Eval → ${evalDisplay} · ${emojiPart}Δ ${deltaObj.text}`;
+          } else {
+            metaEl.textContent = `Eval → ${evalDisplay}`;
+          }
           btn.appendChild(metaEl);
 
           btn.addEventListener('click', () => {
@@ -4133,22 +4131,26 @@
         return `(${sign}${Math.abs(percent).toFixed(1)}%)`;
       }
 
-      function formatDeltaText(suggestion) {
-        if (!suggestion) return 'Δ —';
-        const { postEvalCp, preEvalCp, deltaLabel } = suggestion;
-        const hasNumeric = Number.isFinite(postEvalCp)
-          && Number.isFinite(preEvalCp)
-          && Math.abs(postEvalCp) < 9000
-          && Math.abs(preEvalCp) < 9000;
-        if (hasNumeric) {
-          const diff = (postEvalCp - preEvalCp) / 100;
-          const sign = diff >= 0 ? '+' : '−';
-          return `Δ ${sign}${Math.abs(diff).toFixed(2)}`;
+      function formatDeltaFromBefore(postCp, preCp) {
+        if (!Number.isFinite(postCp) || !Number.isFinite(preCp)) return { text: '—', emoji: '' };
+        if (Math.abs(postCp) >= 9000 || Math.abs(preCp) >= 9000) return { text: '—', emoji: '' };
+        const pawns = (postCp - preCp) / 100;
+        const emoji = pawns > 0.005 ? '↗️' : pawns < -0.005 ? '↘️' : '⏸️';
+        const sign = pawns >= 0 ? '+' : '−';
+        return { text: `${sign}${Math.abs(pawns).toFixed(2)}`, emoji };
+      }
+
+      function computeMoveDeltaFromAnalysis(analysis) {
+        if (!analysis) return { text: '—', emoji: '' };
+        const postCp = Number.isFinite(analysis.actualCp) ? analysis.actualCp : null;
+        let preCp = null;
+
+        if (Number.isFinite(analysis.beforeCp)) preCp = analysis.beforeCp;
+        if (preCp == null && Number.isFinite(analysis.beforeEp)) {
+          preCp = expectedPointsToCentipawns(analysis.beforeEp, getAverageGameRating());
         }
-        if (deltaLabel) {
-          return `Δ ${deltaLabel}`;
-        }
-        return 'Δ —';
+
+        return formatDeltaFromBefore(postCp, preCp);
       }
 
       function buildSuggestionDisplay({ classification, record }) {
@@ -4404,13 +4406,36 @@
           sanEl.textContent = item.san || item.uci;
           text.appendChild(sanEl);
 
+          const postAfterLabel = formatEvalLabelFromString(item.evalLabel);
+          const deltaObj = formatDeltaFromBefore(item.postEvalCp, item.preEvalCp);
           const metaEl = document.createElement('span');
           metaEl.className = 'suggestion__meta';
-          const evalAfter = formatEvalLabelFromString(item.evalLabel);
-          metaEl.textContent = `Eval → ${evalAfter} · ${formatDeltaText(item)}`;
+          if (deltaObj.text !== '—') {
+            const emojiPart = deltaObj.emoji ? `${deltaObj.emoji} ` : '';
+            metaEl.textContent = `Eval → ${postAfterLabel} · ${emojiPart}Δ ${deltaObj.text}`;
+          } else {
+            metaEl.textContent = `Eval → ${postAfterLabel}`;
+          }
           text.appendChild(metaEl);
 
           button.appendChild(text);
+
+          const kind = (item.overlayFinal || item.baseline || 'best').toLowerCase();
+          const kindText = kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : 'Best';
+          const kindEl = document.createElement('span');
+          kindEl.className = 'suggestion__kind';
+          const iconPath = classificationToIcon(kind);
+          if (iconPath) {
+            const icon = document.createElement('img');
+            icon.src = iconPath;
+            icon.alt = kindText;
+            icon.className = 'classification-icon';
+            kindEl.appendChild(icon);
+          }
+          const labelSpan = document.createElement('span');
+          labelSpan.textContent = kindText;
+          kindEl.appendChild(labelSpan);
+          button.appendChild(kindEl);
 
           const gapEl = document.createElement('span');
           gapEl.className = 'suggestion__gap';
