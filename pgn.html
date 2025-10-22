@@ -181,6 +181,47 @@
       margin: 0;
     }
 
+    .header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .header-select {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      position: relative;
+    }
+
+    .header-select select.compact {
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 0;
+      max-width: 140px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     .header-toggle {
       padding: 8px 14px;
       font-size: 14px;
@@ -896,9 +937,10 @@
       justify-content: flex-start;
       gap: 12px;
       padding: 6px 12px;
-      height: 48px;
+      min-height: 48px;
       box-sizing: border-box;
-      white-space: nowrap;
+      flex-wrap: wrap;
+      white-space: normal;
       overflow-x: auto;
       overflow-y: hidden;
       -webkit-overflow-scrolling: touch;
@@ -921,33 +963,9 @@
       flex: 0 0 auto;
     }
 
-    .nav-extras {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      margin-left: auto;
-      flex: 0 0 auto;
-    }
-
     .nav-toolbar button {
       flex: 0 0 auto;
       white-space: nowrap;
-    }
-
-    .board-style-control {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      flex: 0 0 auto;
-      white-space: nowrap;
-    }
-
-    .board-style-control .mode-toggle-label {
-      margin: 0;
-    }
-
-    .board-style-control select {
-      flex: 0 0 180px;
     }
 
     .nav-meta {
@@ -960,10 +978,26 @@
       letter-spacing: 0.12em;
       flex: 0 0 auto;
       justify-content: flex-end;
+      margin-left: auto;
     }
 
     .nav-meta-item {
       white-space: nowrap;
+    }
+
+    .pill-toggle {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--text);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+    .pill-toggle.is-on {
+      border-color: rgba(34, 197, 94, 0.4);
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15) inset;
     }
 
     .engine-mode-toggle {
@@ -1598,29 +1632,12 @@
         box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.2);
       }
 
-      .nav-extras {
-        flex: 0 0 100%;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-left: 0;
-      }
-
-      .board-style-control {
-        flex: 0 0 100%;
-        justify-content: center;
-      }
-
-      .board-style-control select {
-        flex: 1 1 auto;
-        max-width: 220px;
-      }
-
       .nav-meta {
         width: 100%;
         justify-content: center;
         margin-left: 0;
         flex: 0 0 100%;
+        text-align: center;
       }
 
       .info-column {
@@ -1639,7 +1656,24 @@
 <body>
   <header class="app-header">
     <h1>Lichess PGN Analyzer</h1>
-    <button id="themeToggle" class="secondary header-toggle">🌙 Dark</button>
+
+    <div class="header-actions">
+      <label class="header-select" for="boardStyle" title="Board style">
+        <span class="sr-only">Board style</span>
+        🎨
+        <select id="boardStyle" class="compact">
+          <option value="auto">Auto (match theme)</option>
+          <option value="icy-sea">Icy Sea (light)</option>
+          <option value="glass">Glass (dark)</option>
+          <option value="brown">Classic Brown</option>
+          <option value="green">Classic Green</option>
+        </select>
+      </label>
+
+      <button id="themeToggle" class="secondary header-toggle" aria-live="polite">
+        🌙 Dark
+      </button>
+    </div>
   </header>
   <main class="layout">
     <div class="workspace-column">
@@ -1673,29 +1707,16 @@
               <button id="nextBtn" data-label="Next ▶" data-label-compact="▶">Next ▶</button>
               <button id="lastBtn" data-label="Last ⏭" data-label-compact="⏭">Last ⏭</button>
               <button id="flipBtn" class="secondary" data-label="Flip" data-label-compact="Flip">Flip</button>
-              <button id="exploreToggle" class="secondary" title="Toggle explore mode" data-label="Enable explore"
-                data-label-compact="Explore">Enable explore</button>
+              <button id="exploreToggle" class="pill-toggle" aria-pressed="false" title="Explore lines freely">
+                🧭 Explore: Off
+              </button>
               <button id="exploreResetBtn" class="secondary" title="Reset explore branch" data-label="Reset to game"
                 data-label-compact="Reset" hidden>Reset to game</button>
               <button id="rejoinBtn" class="secondary" title="Return to the main line" data-label="Rejoin main line"
                 data-label-compact="Rejoin" hidden>Rejoin main line</button>
             </div>
-            <div class="nav-extras">
-              <div class="board-style-control">
-                <label class="mode-toggle-label" for="boardStyle">Board style</label>
-                <select id="boardStyle" class="secondary">
-                  <option value="auto">Auto (match theme)</option>
-                  <option value="icy-sea">Icy Sea (light)</option>
-                  <option value="glass">Glass (dark)</option>
-                  <option value="brown">Classic Brown</option>
-                  <option value="green">Classic Green</option>
-                </select>
-              </div>
-              <div class="nav-meta" role="status" aria-live="polite">
-                <span id="navMoveCount" class="nav-meta-item">Move 0 / 0</span>
-                <span id="navSideToMove" class="nav-meta-item">White to move</span>
-                <span id="navEvalValue" class="nav-meta-item">Eval —</span>
-              </div>
+            <div class="nav-meta" role="status" aria-live="polite">
+              <span id="boardStatus" class="nav-meta-item"></span>
             </div>
           </div>
           <div class="material-panel">
@@ -1959,6 +1980,9 @@
           : window.innerWidth <= 640;
         if (!force && navToolbarManager.isCompact === shouldCompact) return;
         navToolbarManager.buttons.forEach((button) => {
+          if (button.id === 'exploreToggle') {
+            return;
+          }
           if (!button.dataset.label) {
             button.dataset.label = button.textContent.trim();
           }
@@ -2892,16 +2916,19 @@
         return true;
       }
 
+      function updateExploreToggleUI() {
+        const btn = document.getElementById('exploreToggle');
+        if (!btn) return;
+        const on = Boolean(state.exploreMode);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('is-on', on);
+        btn.textContent = on ? '🧭 Explore: On' : '🧭 Explore: Off';
+      }
+
       function updateExploreControls() {
-        const toggle = byId('exploreToggle');
+        updateExploreToggleUI();
         const rejoin = byId('rejoinBtn');
         const reset = byId('exploreResetBtn');
-        if (toggle) {
-          const label = state.exploreMode ? 'Disable explore' : 'Enable explore';
-          toggle.dataset.label = label;
-          toggle.textContent = label;
-          toggle.setAttribute('aria-pressed', state.exploreMode ? 'true' : 'false');
-        }
         if (rejoin) {
           rejoin.hidden = isOnMainLine();
           rejoin.disabled = isOnMainLine();
@@ -3047,24 +3074,18 @@
         if (type === 'ok') el.classList.add('ok');
       }
 
-      function updateNavMeta() {
-        const moveCountEl = byId('navMoveCount');
-        const sideEl = byId('navSideToMove');
-        const evalEl = byId('navEvalValue');
-        const total = state.verboseHistory.length;
-        if (moveCountEl) {
-          moveCountEl.textContent = `Move ${state.ply} / ${total}`;
-        }
-        const fen = state.ply === 0
-          ? effectiveInitialFen()
-          : ((state.verboseHistory[state.ply - 1] && state.verboseHistory[state.ply - 1].fen) || effectiveInitialFen());
-        const side = sideToMoveFromFen(fen);
-        if (sideEl) {
-          sideEl.textContent = side === 'b' ? 'Black to move' : 'White to move';
-        }
-        if (evalEl) {
-          evalEl.textContent = `Eval ${formatEvalLabelFromString(state.lastEval)}`;
-        }
+      function renderBoardStatus() {
+        const el = document.getElementById('boardStatus');
+        if (!el) return;
+
+        const totalPlies = Array.isArray(state.verboseHistory) ? state.verboseHistory.length : 0;
+        const curPly = Math.max(0, Math.min(state.ply || 0, totalPlies));
+        const moveNo = Math.max(1, Math.ceil(curPly / 2));
+        const totalMoves = Math.max(1, Math.ceil(totalPlies / 2));
+        const mover = state.game && typeof state.game.turn === 'function' && state.game.turn() === 'b' ? 'Black' : 'White';
+        const evalLabel = state.lastEval ? formatEvalLabelFromString(state.lastEval) : '—';
+
+        el.textContent = `Move ${moveNo} / ${totalMoves} • ${mover} to move • Eval ${evalLabel}`;
       }
 
       function extractGameId(input) {
@@ -3444,7 +3465,7 @@
         applyAnalysisForCurrentPly();
 
         setStatus('navStatus', '');
-        updateNavMeta();
+        renderBoardStatus();
         updateUrlState();
         updateExploreControls();
       }
@@ -4349,7 +4370,7 @@
           const midpoint = orientation === 'white' ? 50 : 50;
           scoreEl.style.top = `${midpoint}%`;
         }
-        updateNavMeta();
+        renderBoardStatus();
       }
 
       function getSuggestionIcon(baseline, overlayFinal) {
@@ -8357,6 +8378,7 @@
           const baseStatus = `Precomputed (depth ${analysis.depth || 0})`;
           const shortlistMessage = analysis.shortlist && analysis.shortlist.message ? analysis.shortlist.message : null;
           setStatus('engStatus', shortlistMessage ? `${baseStatus} — ${shortlistMessage}` : baseStatus);
+          renderBoardStatus();
           return;
         }
 
@@ -8374,6 +8396,7 @@
           } else {
             setStatus('engStatus', 'Next-move suggestion not available yet.');
           }
+          renderBoardStatus();
           return;
         }
 
@@ -8392,6 +8415,7 @@
           }
           updateEvalBar(evalText);
         }
+        renderBoardStatus();
       }
       async function analyzeMoveAtIndex(index, beforeEp, token) {
         const moveEntry = state.verboseHistory[index];
