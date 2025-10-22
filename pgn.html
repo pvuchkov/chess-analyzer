@@ -33,8 +33,13 @@
       --layout-padding: clamp(16px, 2vw, 28px);
       --header-height: 64px;
       --board-max-height: none;
-      --piece-white-filter: none;
-      --piece-black-filter: none;
+      /* piece tuning (defaults do nothing in light) */
+      --piece-black-brightness: 1;
+      --piece-black-contrast: 1;
+      --piece-black-saturate: 1;
+      --piece-black-sepia: 0;
+      --piece-black-hue: 0deg;
+      --piece-black-drop: 0 0 0 rgba(0, 0, 0, 0);
       --sq-light: #6a7483;
       --sq-dark: #1e2a35;
       --eval-score-bg: rgba(15, 23, 42, 0.88);
@@ -291,8 +296,15 @@
     .board-shell[data-board-style="glass"] {
       --sq-light: #6a7483;
       --sq-dark: #1e2a35;
-      --piece-white-filter: brightness(1) saturate(1) contrast(1);
-      --piece-black-filter: brightness(1.18) saturate(1.06) contrast(0.92);
+    }
+
+    [data-theme="dark"] .board-shell[data-board-style="glass"] {
+      --piece-black-brightness: 1.22;
+      --piece-black-contrast: 0.96;
+      --piece-black-saturate: 0.88;
+      --piece-black-sepia: 0.10;
+      --piece-black-hue: 10deg;
+      --piece-black-drop: 0 1px 0 rgba(255, 255, 255, 0.05);
     }
 
     .board-shell[data-board-style="classic"] {
@@ -637,12 +649,26 @@
       transition: filter 0.25s ease;
     }
 
-    .board-shell[data-board-style="glass"] #board img.piece[data-side="w"] {
-      filter: var(--piece-white-filter);
+    .board-shell .board-area .piece.black,
+    .board-shell .board-area img[class*="black-"] {
+      filter: drop-shadow(var(--piece-black-drop))
+        brightness(var(--piece-black-brightness))
+        contrast(var(--piece-black-contrast))
+        saturate(var(--piece-black-saturate))
+        sepia(var(--piece-black-sepia))
+        hue-rotate(var(--piece-black-hue));
+      -webkit-filter: drop-shadow(var(--piece-black-drop))
+        brightness(var(--piece-black-brightness))
+        contrast(var(--piece-black-contrast))
+        saturate(var(--piece-black-saturate))
+        sepia(var(--piece-black-sepia))
+        hue-rotate(var(--piece-black-hue));
     }
 
-    .board-shell[data-board-style="glass"] #board img.piece[data-side="b"] {
-      filter: var(--piece-black-filter);
+    .board-shell .board-area .piece.dragging.black,
+    .board-shell .board-area .piece.premove.black {
+      filter: inherit;
+      -webkit-filter: inherit;
     }
 
     .eval-chart-card {
@@ -713,7 +739,8 @@
 
     .eval-chart-mode.active {
       background: var(--accent);
-      color: #0f172a;
+      color: #fff;
+      border-color: transparent;
     }
 
     .eval-chart-canvas {
@@ -1930,8 +1957,8 @@
             <div class="eval-chart-header">
               <h3 class="eval-chart-title">Evaluation graph</h3>
               <div class="eval-chart-modes" role="group" aria-label="Evaluation scale">
-                <button type="button" class="eval-chart-mode active" data-mode="cp" aria-pressed="true">CP</button>
-                <button type="button" class="eval-chart-mode" data-mode="win" aria-pressed="false">Win %</button>
+                <button id="evalModeCp" type="button" class="eval-chart-mode active" data-mode="cp" aria-pressed="true">CP</button>
+                <button id="evalModeWin" type="button" class="eval-chart-mode" data-mode="win" aria-pressed="false">Win %</button>
               </div>
             </div>
             <div class="eval-chart-canvas" id="evalChartCanvasWrap">
@@ -4748,6 +4775,7 @@
       function buildEvalChartPoints() {
         const history = Array.isArray(state.verboseHistory) ? state.verboseHistory : [];
         const points = [];
+        const rating = getAverageGameRating();
         history.forEach((entry, index) => {
           if (!entry) return;
           const analysis = entry.analysis || (entry.id ? state.analysisCache.get(entry.id) : null);
@@ -4825,6 +4853,24 @@
             epWhite = Math.max(0, Math.min(1, epWhite));
           }
 
+          let winPercent = null;
+          if (Number.isFinite(cp)) {
+            const converted = centipawnsToWinPercent(cp, rating);
+            if (Number.isFinite(converted)) {
+              winPercent = Math.max(0, Math.min(100, converted));
+            }
+          }
+          if (!Number.isFinite(winPercent) && Number.isFinite(epWhite)) {
+            winPercent = Math.max(0, Math.min(100, epWhite * 100));
+          }
+          if (!Number.isFinite(winPercent) && Number.isFinite(mate)) {
+            winPercent = mate > 0 ? 100 : 0;
+          }
+
+          if (!Number.isFinite(winPercent)) {
+            winPercent = null;
+          }
+
           const classTagRaw = getPointClassTag(analysis);
           const classTag = classTagRaw ? classTagRaw.toLowerCase() : null;
 
@@ -4838,7 +4884,7 @@
             cp,
             mate,
             whiteEp: epWhite,
-            winPercent: epWhite != null ? epWhite * 100 : null,
+            winPercent,
             classTag,
             entry,
             analysis
@@ -4935,7 +4981,11 @@
         const evalRow = document.createElement('div');
         evalRow.className = 'eval-chart-tooltip__eval';
         const label = document.createElement('span');
-        label.textContent = `${mode === 'win' ? 'Win' : 'Eval'} → ${formatEvalChartValue(point, mode)}`;
+        const metricLabel = mode === 'win' ? 'Win %' : 'Eval';
+        label.textContent = `${metricLabel}: `;
+        const valueStrong = document.createElement('strong');
+        valueStrong.textContent = formatEvalChartValue(point, mode);
+        label.appendChild(valueStrong);
         evalRow.appendChild(label);
         const deltaInfo = formatEvalChartDelta(point, mode);
         if (deltaInfo && deltaInfo.text) {
@@ -5285,11 +5335,19 @@
         state.evalChartMode = getSavedEvalChartMode();
         updateEvalChartModeUI();
 
-        card.addEventListener('click', (event) => {
-          const button = event.target.closest('.eval-chart-mode');
-          if (!button || !button.dataset.mode) return;
-          setEvalChartMode(button.dataset.mode);
-        });
+        const modeCpBtn = byId('evalModeCp');
+        if (modeCpBtn) {
+          modeCpBtn.addEventListener('click', () => {
+            setEvalChartMode('cp');
+          });
+        }
+
+        const modeWinBtn = byId('evalModeWin');
+        if (modeWinBtn) {
+          modeWinBtn.addEventListener('click', () => {
+            setEvalChartMode('win');
+          });
+        }
 
         canvas.addEventListener('mousemove', handleEvalChartPointer);
         canvas.addEventListener('mouseleave', handleEvalChartLeave);
