@@ -39,7 +39,6 @@
       --piece-black-saturate: 1;
       --piece-black-sepia: 0;
       --piece-black-hue: 0deg;
-      --piece-black-drop: 0 0 0 rgba(0, 0, 0, 0);
       --sq-light: #6a7483;
       --sq-dark: #1e2a35;
       --eval-score-bg: rgba(15, 23, 42, 0.88);
@@ -303,8 +302,7 @@
       --piece-black-contrast: 0.96;
       --piece-black-saturate: 0.90;
       --piece-black-sepia: 0.08;
-      --piece-black-hue: 12deg;
-      --piece-black-drop: 0 1px 0 rgba(255, 255, 255, 0.06);
+      --piece-black-hue: 10deg;
     }
 
     .board-shell[data-board-style="classic"] {
@@ -649,23 +647,21 @@
       transition: filter 0.25s ease;
     }
 
-    .board-shell #board img.piece[data-piece^="b"],
-    .board-shell #board img.piece[src*="/b"],
-    .board-shell #board img.piece[class*=" b"],
-    .board-shell #board img.piece.piece-black,
-    .board-shell #board img.piece[data-side="b"] {
+    /* Make black pieces lighter only (works for chessboard.js piece imgs) */
+    #board img.piece[data-side="b"] {
+      /* Glassy/darker board friendly: lift brightness, slightly desaturate */
       filter:
-        drop-shadow(var(--piece-black-drop))
-        brightness(var(--piece-black-brightness))
-        contrast(var(--piece-black-contrast))
-        saturate(var(--piece-black-saturate))
-        sepia(var(--piece-black-sepia))
-        hue-rotate(var(--piece-black-hue)) !important;
+        drop-shadow(0 1px 0 rgba(255, 255, 255, 0.05))
+        brightness(var(--piece-black-brightness, 1.22))
+        contrast(var(--piece-black-contrast, 0.96))
+        saturate(var(--piece-black-saturate, 0.90))
+        sepia(var(--piece-black-sepia, 0.08))
+        hue-rotate(var(--piece-black-hue, 10deg));
     }
 
-    .board-shell #board img.piece.dragging[data-side="b"],
-    .board-shell #board img.piece.premove[data-side="b"] {
-      filter: inherit !important;
+    #board img.piece.dragging[data-side="b"],
+    #board img.piece.premove[data-side="b"] {
+      filter: inherit;
     }
 
     .eval-chart-card {
@@ -2792,22 +2788,11 @@
         });
       }
 
-      function tagPieceSides() {
-        const imgs = document.querySelectorAll('.board-shell #board img.piece');
-        imgs.forEach((img) => {
-          if (!img) return;
-          const dataPiece = img.getAttribute('data-piece');
-          if (dataPiece && (dataPiece[0] === 'w' || dataPiece[0] === 'b')) {
-            img.dataset.side = dataPiece[0];
-            return;
-          }
-          const src = typeof img.src === 'string' ? img.src : '';
-          const match = src.match(/\/([wb])[KQRBNP]\.png$/i);
-          if (match && match[1]) {
-            img.dataset.side = match[1].toLowerCase();
-          } else if (img.dataset.side) {
-            delete img.dataset.side;
-          }
+      function tagPieceSidesOnce() {
+        document.querySelectorAll('#board img.piece').forEach((img) => {
+          if (!img || img.dataset.side) return;
+          const cls = typeof img.className === 'string' ? img.className : '';
+          img.dataset.side = /\bb[prnbqk]\b/i.test(cls) ? 'b' : 'w';
         });
       }
 
@@ -2816,7 +2801,7 @@
         boardDecorationRaf = requestAnimationFrame(() => {
           boardDecorationRaf = null;
           decorateBoardSquares();
-          tagPieceSides();
+          tagPieceSidesOnce();
         });
       }
 
@@ -2827,7 +2812,7 @@
         } else {
           state.board.position(fen);
         }
-        requestAnimationFrame(tagPieceSides);
+        requestAnimationFrame(tagPieceSidesOnce);
         scheduleBoardBadgeUpdate();
         scheduleBoardDecorations();
       }
@@ -3208,9 +3193,9 @@
             void handleUserBranchMove({ move: result, fen: game.fen(), previousFen: fen });
             return 'snapback';
           },
-          onSnapEnd: () => tagPieceSides()
+          onSnapEnd: () => requestAnimationFrame(tagPieceSidesOnce)
         });
-        tagPieceSides();
+        requestAnimationFrame(tagPieceSidesOnce);
         syncArrowLayer();
         initEvalBarSync();
         scheduleBoardDecorations();
@@ -3220,7 +3205,7 @@
           scheduleBoardBadgeUpdate();
           syncBoardAndEval();
           scheduleBoardDecorations();
-          requestAnimationFrame(tagPieceSides);
+          requestAnimationFrame(tagPieceSidesOnce);
         });
       }
 
@@ -4189,7 +4174,7 @@
           : (Array.isArray(state.suggestionData) ? state.suggestionData : []);
         renderSuggestionArrows(active);
         drawArrowOverlay(state.lineOverlay);
-        requestAnimationFrame(tagPieceSides);
+        requestAnimationFrame(tagPieceSidesOnce);
       }
 
       function overlaysEqual(a, b) {
@@ -4549,6 +4534,51 @@
         return null;
       }
 
+      function parseEvalStringToRaw(evalStr) {
+        return parseEvalToCp(evalStr);
+      }
+
+      function normalizeToWhite(evalStr, fenAfter) {
+        const native = parseEvalStringToRaw(evalStr);
+        if (!native) {
+          return { cpWhite: null, mateWhite: null };
+        }
+        const mover = sideToMoveFromFen(fenAfter);
+        if (native.type === 'mate') {
+          const mateForMover = native.value;
+          const mateWhite = mover === 'w' ? mateForMover : -mateForMover;
+          return { cpWhite: null, mateWhite };
+        }
+        const cpNative = native.value;
+        const cpWhite = mover === 'w' ? cpNative : -cpNative;
+        return { cpWhite, mateWhite: null };
+      }
+
+      function epWhiteFrom(entryOrAnalysis, fenAfter) {
+        if (!entryOrAnalysis) return null;
+        const mover = sideToMoveFromFen(fenAfter);
+        let epWhite = null;
+
+        const wdl = entryOrAnalysis.wdl || null;
+        if (wdl && Number.isFinite(wdl.w) && Number.isFinite(wdl.d) && Number.isFinite(wdl.l)) {
+          const total = Math.max(1, wdl.w + wdl.d + wdl.l);
+          const epMover = (wdl.w + 0.5 * wdl.d) / total;
+          epWhite = mover === 'w' ? epMover : 1 - epMover;
+        }
+
+        if (epWhite == null && entryOrAnalysis.eval) {
+          const normalized = normalizeToWhite(entryOrAnalysis.eval, fenAfter);
+          if (Number.isFinite(normalized.cpWhite)) {
+            epWhite = cpToExpectedPoints(normalized.cpWhite);
+          } else if (Number.isFinite(normalized.mateWhite)) {
+            epWhite = normalized.mateWhite > 0 ? 1 : 0;
+          }
+        }
+
+        if (epWhite == null) return null;
+        return Math.max(0, Math.min(1, epWhite));
+      }
+
       function formatCpAsPawns(cp) {
         return `${cp >= 0 ? '+' : '−'}${(Math.abs(cp) / 100).toFixed(2)}`;
       }
@@ -4710,20 +4740,20 @@
       function updateEvalChartModeUI() {
         const cpBtn = byId('evalModeCp');
         const winBtn = byId('evalModeWin');
-        const isWin = state.evalChartMode === 'win';
         if (cpBtn) {
-          cpBtn.classList.toggle('active', !isWin);
-          cpBtn.setAttribute('aria-pressed', String(!isWin));
+          const active = state.evalChartMode === 'cp';
+          cpBtn.classList.toggle('active', active);
+          cpBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
         }
         if (winBtn) {
-          winBtn.classList.toggle('active', isWin);
-          winBtn.setAttribute('aria-pressed', String(isWin));
+          const active = state.evalChartMode === 'win';
+          winBtn.classList.toggle('active', active);
+          winBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
         }
       }
 
       function setEvalChartMode(mode) {
         const next = mode === 'win' ? 'win' : 'cp';
-        if (state.evalChartMode === next) return;
         state.evalChartMode = next;
         try {
           localStorage.setItem(EVAL_CHART_MODE_STORAGE_KEY, next);
@@ -4731,7 +4761,7 @@
           // ignore storage errors
         }
         updateEvalChartModeUI();
-        scheduleEvalChartUpdate();
+        scheduleEvalChartUpdate({ recomputeData: false });
       }
 
       function getEvalChartTheme() {
@@ -4763,7 +4793,20 @@
 
       function currentEvalAccessor() {
         if (state.evalChartMode === 'win') {
-          return (point) => (Number.isFinite(point.winPercent) ? point.winPercent : null);
+          return (point) => {
+            if (!point) return null;
+            let percent = null;
+            if (Number.isFinite(point.winPercent)) {
+              percent = point.winPercent;
+            } else if (Number.isFinite(point.whiteEp)) {
+              percent = point.whiteEp * 100;
+            } else if (Number.isFinite(point.mate)) {
+              percent = point.mate > 0 ? 100 : 0;
+            }
+            if (!Number.isFinite(percent)) return null;
+            const orientation = state.orientation === 'white' ? 'white' : 'black';
+            return orientation === 'white' ? (100 - percent) : percent;
+          };
         }
         return (point) => (Number.isFinite(point.cp) ? point.cp : null);
       }
@@ -4805,100 +4848,74 @@
         const history = Array.isArray(state.verboseHistory) ? state.verboseHistory : [];
         const points = [];
         const rating = getAverageGameRating();
+
         history.forEach((entry, index) => {
           if (!entry) return;
           const analysis = entry.analysis || (entry.id ? state.analysisCache.get(entry.id) : null);
           const ply = Number.isFinite(entry.ply) ? entry.ply : index + 1;
           const moveNumber = Math.max(1, Math.ceil(ply / 2));
           const moveColor = entry.color === 'b' ? 'b' : 'w';
-          const mover = moveColor === 'w' ? 'b' : 'w';
+          const fallbackMover = moveColor === 'w' ? 'b' : 'w';
+
+          const fenAfter = typeof entry.fen === 'string' && entry.fen ? entry.fen : null;
+          const fenForSide = fenAfter || `8/8/8/8/8/8/8/8 ${fallbackMover} - - 0 1`;
 
           let evalSource = typeof entry.eval === 'string' ? entry.eval : null;
           if (!evalSource && analysis && analysis.actualEntry && typeof analysis.actualEntry.eval === 'string') {
             evalSource = analysis.actualEntry.eval;
           }
 
-          let cp = null;
-          let mate = null;
-          if (evalSource) {
-            const parsed = parseEvalToCp(evalSource);
-            if (parsed) {
-              if (parsed.type === 'mate') {
-                mate = parsed.value;
-              } else if (parsed.type === 'cp') {
-                cp = parsed.value;
-              }
+          const normalized = normalizeToWhite(evalSource, fenForSide);
+          let cpWhite = Number.isFinite(normalized.cpWhite) ? normalized.cpWhite : null;
+          let mateWhite = Number.isFinite(normalized.mateWhite) ? normalized.mateWhite : null;
+
+          if (cpWhite == null) {
+            const mover = sideToMoveFromFen(fenForSide);
+            const candidates = [
+              analysis && Number.isFinite(analysis.actualCp) ? analysis.actualCp : null,
+              analysis && analysis.actualEntry && Number.isFinite(analysis.actualEntry.cp) ? analysis.actualEntry.cp : null,
+              Number.isFinite(entry.cp) ? entry.cp : null
+            ];
+            for (const candidate of candidates) {
+              if (!Number.isFinite(candidate)) continue;
+              cpWhite = mover === 'w' ? candidate : -candidate;
+              break;
             }
-          }
-          if (cp == null && analysis) {
-            if (Number.isFinite(analysis.actualCp)) {
-              cp = analysis.actualCp;
-            } else if (analysis.actualEntry && Number.isFinite(analysis.actualEntry.cp)) {
-              cp = analysis.actualEntry.cp;
-            }
-          }
-          if (cp != null) {
-            cp = clampFiniteCp(cp);
-          }
-          if (!Number.isFinite(cp)) {
-            cp = null;
-          }
-          if (!Number.isFinite(mate)) {
-            mate = null;
           }
 
-          const fenAfter = typeof entry.fen === 'string' ? entry.fen : null;
-          let epWhite = null;
-          if (analysis && analysis.actualEntry) {
-            const epMover = expectedPointsForMover(analysis.actualEntry, fenAfter, mover);
-            if (Number.isFinite(epMover)) {
-              epWhite = mover === 'w' ? epMover : 1 - epMover;
-            }
-          }
-          if (!Number.isFinite(epWhite)) {
-            const fallbackEntry = {};
-            if (analysis && analysis.actualEntry && analysis.actualEntry.wdl) {
-              fallbackEntry.wdl = analysis.actualEntry.wdl;
-            } else if (entry.wdl) {
-              fallbackEntry.wdl = entry.wdl;
-            }
-            if (evalSource) {
-              fallbackEntry.eval = evalSource;
-            }
-            const epMover = expectedPointsForMover(fallbackEntry, fenAfter, mover);
-            if (Number.isFinite(epMover)) {
-              epWhite = mover === 'w' ? epMover : 1 - epMover;
-            }
-          }
-          if (!Number.isFinite(epWhite) && Number.isFinite(cp)) {
-            const ep = cpToExpectedPoints(cp);
-            if (Number.isFinite(ep)) {
-              epWhite = ep;
-            }
-          }
-          if (!Number.isFinite(epWhite)) {
-            epWhite = null;
+          if (Number.isFinite(cpWhite)) {
+            cpWhite = clampFiniteCp(cpWhite);
           } else {
-            epWhite = Math.max(0, Math.min(1, epWhite));
+            cpWhite = null;
           }
 
-          let winPercent = null;
-          if (Number.isFinite(cp)) {
-            const converted = centipawnsToWinPercent(cp, rating);
-            if (Number.isFinite(converted)) {
-              winPercent = Math.max(0, Math.min(100, converted));
+          if (mateWhite == null) {
+            const mateCandidate = analysis && analysis.actualEntry && Number.isFinite(analysis.actualEntry.mate)
+              ? analysis.actualEntry.mate
+              : null;
+            if (Number.isFinite(mateCandidate)) {
+              const mover = sideToMoveFromFen(fenForSide);
+              mateWhite = mover === 'w' ? mateCandidate : -mateCandidate;
             }
           }
-          if (!Number.isFinite(winPercent) && Number.isFinite(epWhite)) {
-            winPercent = Math.max(0, Math.min(100, epWhite * 100));
-          }
-          if (!Number.isFinite(winPercent) && Number.isFinite(mate)) {
-            winPercent = mate > 0 ? 100 : 0;
+          if (!Number.isFinite(mateWhite)) {
+            mateWhite = null;
           }
 
-          if (!Number.isFinite(winPercent)) {
-            winPercent = null;
+          let epWhite = epWhiteFrom((analysis && analysis.actualEntry) || entry, fenForSide);
+          if (epWhite == null && Number.isFinite(cpWhite)) {
+            epWhite = cpToExpectedPoints(cpWhite, rating);
           }
+          if (epWhite == null && Number.isFinite(mateWhite)) {
+            epWhite = mateWhite > 0 ? 1 : 0;
+          }
+          if (Number.isFinite(epWhite)) {
+            epWhite = Math.max(0, Math.min(1, epWhite));
+          } else {
+            epWhite = null;
+          }
+
+          const winPercent = epWhite == null ? null : epWhite * 100;
 
           const classTagRaw = getPointClassTag(analysis);
           const classTag = classTagRaw ? classTagRaw.toLowerCase() : null;
@@ -4908,10 +4925,9 @@
             ply,
             moveNumber,
             moveColor,
-            mover,
             san: entry.san || entry.uci || '',
-            cp,
-            mate,
+            cp: cpWhite,
+            mate: mateWhite,
             whiteEp: epWhite,
             winPercent,
             classTag,
@@ -4952,80 +4968,58 @@
         tooltip.setAttribute('aria-hidden', 'true');
       }
 
-      function formatEvalChartValue(point, mode) {
-        if (mode === 'win') {
-          if (Number.isFinite(point.winPercent)) {
-            return formatWinPercentDisplay(point.winPercent) || `${point.winPercent.toFixed(1)}%`;
-          }
-          if (Number.isFinite(point.mate)) {
-            return point.mate > 0 ? '100%' : '0%';
-          }
-          return '—';
-        }
-        if (Number.isFinite(point.mate)) {
-          const prefix = point.mate >= 0 ? '+M' : '−M';
-          return `${prefix}${Math.abs(point.mate)}`;
-        }
-        if (Number.isFinite(point.cp)) {
-          return formatEvalAfterLabel(point.cp);
-        }
-        return '—';
-      }
-
-      function formatEvalChartDelta(point, mode) {
-        if (mode === 'win') {
-          const delta = point.deltaWinPercent;
-          if (!Number.isFinite(delta)) return null;
-          const absDelta = Math.abs(delta);
-          const diffText = formatWinDeltaDisplay(absDelta) || `${absDelta.toFixed(1)}%`;
-          const minus = '\u2212';
-          const sign = delta > 0 ? '+' : delta < 0 ? minus : '';
-          const arrow = delta > 0 ? '↗︎' : delta < 0 ? '↘︎' : '→';
-          const className = delta > 0 ? 'positive' : delta < 0 ? 'negative' : '';
-          const textValue = delta === 0 ? '0%' : `${sign}${diffText.replace(/^[+\-−]/, '')}`;
-          return { text: `${arrow} ${textValue}`, className };
-        }
-        const delta = point.deltaCp;
-        if (!Number.isFinite(delta)) return null;
-        const pawns = delta / 100;
-        const decimals = Math.abs(pawns) >= 1 ? 1 : 2;
-        const formatted = pawns.toFixed(decimals);
-        const arrow = delta > 0 ? '↗︎' : delta < 0 ? '↘︎' : '→';
-        const className = delta > 0 ? 'positive' : delta < 0 ? 'negative' : '';
-        const textValue = delta === 0 ? '+0.00' : `${delta > 0 ? '+' : ''}${formatted}`;
-        return { text: `${arrow} ${textValue}`, className };
-      }
-
       function buildEvalChartTooltipContent(point) {
         const tooltip = byId('evalChartTooltip');
         if (!tooltip) return;
         tooltip.innerHTML = '';
-        const mode = normalizeEvalChartMode(state.evalChartMode);
         const moveRow = document.createElement('div');
         moveRow.className = 'eval-chart-tooltip__move';
         const san = point.entry && point.entry.san ? point.entry.san : (point.entry && point.entry.uci ? point.entry.uci : '');
         moveRow.textContent = `Move ${point.moveNumber}${point.moveColor === 'b' ? '…' : '.'} ${san}`;
         tooltip.appendChild(moveRow);
 
+        const mode = state.evalChartMode;
         const evalRow = document.createElement('div');
         evalRow.className = 'eval-chart-tooltip__eval';
-        const label = document.createElement('span');
-        const metricLabel = mode === 'win' ? 'Win %' : 'Eval';
-        label.textContent = `${metricLabel}: `;
         const valueStrong = document.createElement('strong');
-        valueStrong.textContent = formatEvalChartValue(point, mode);
-        label.appendChild(valueStrong);
-        evalRow.appendChild(label);
-        const deltaInfo = formatEvalChartDelta(point, mode);
-        if (deltaInfo && deltaInfo.text) {
-          const deltaSpan = document.createElement('span');
-          deltaSpan.className = 'eval-chart-tooltip__delta';
-          if (deltaInfo.className) {
-            deltaSpan.classList.add(deltaInfo.className);
-          }
-          deltaSpan.textContent = deltaInfo.text;
-          evalRow.appendChild(deltaSpan);
+
+        if (mode === 'win') {
+          const percent = Number.isFinite(point.winPercent)
+            ? point.winPercent
+            : (Number.isFinite(point.whiteEp) ? point.whiteEp * 100 : null);
+          const display = percent == null ? 0 : Math.round(percent);
+          valueStrong.textContent = `${display}%`;
+        } else {
+          const pawns = (point.cp ?? 0) / 100;
+          const abs = Math.abs(pawns);
+          const decimals = abs >= 1 ? 1 : 2;
+          const formatted = `${pawns >= 0 ? '+' : '−'}${abs.toFixed(decimals)}`.replace('−-', '−');
+          valueStrong.textContent = formatted;
         }
+
+        evalRow.append('Value: ', valueStrong);
+
+        if (mode === 'win' && Number.isFinite(point.deltaWinPercent)) {
+          const delta = point.deltaWinPercent;
+          const span = document.createElement('span');
+          span.className = 'eval-chart-tooltip__delta';
+          if (delta > 0) span.classList.add('positive');
+          if (delta < 0) span.classList.add('negative');
+          const arrow = delta > 0 ? '↗︎' : delta < 0 ? '↘︎' : '→';
+          span.textContent = `${arrow} ${Math.abs(delta).toFixed(1)}%`;
+          evalRow.append(' ', span);
+        } else if (mode === 'cp' && Number.isFinite(point.deltaCp)) {
+          const delta = point.deltaCp / 100;
+          const span = document.createElement('span');
+          span.className = 'eval-chart-tooltip__delta';
+          if (delta > 0) span.classList.add('positive');
+          if (delta < 0) span.classList.add('negative');
+          const decimals = Math.abs(delta) >= 1 ? 1 : 2;
+          const arrow = delta > 0 ? '↗︎' : delta < 0 ? '↘︎' : '→';
+          span.textContent = `${arrow} ${Math.abs(delta).toFixed(decimals)}`;
+          evalRow.append(' ', span);
+        }
+
         tooltip.appendChild(evalRow);
 
         const classTag = point.classTag ? point.classTag.toLowerCase() : null;
@@ -5150,7 +5144,9 @@
           const x = points.length > 1 ? step * index : width / 2;
           let rawValue = accessor(point);
           if (!Number.isFinite(rawValue) && Number.isFinite(point.mate)) {
-            rawValue = point.mate > 0 ? yMax : yMin;
+            const orientation = state.orientation === 'white' ? 'white' : 'black';
+            const percent = point.mate > 0 ? 100 : 0;
+            rawValue = orientation === 'white' ? (100 - percent) : percent;
           }
           const hasValue = Number.isFinite(rawValue);
           if (hasValue) {
@@ -9842,7 +9838,8 @@
           updateEvalBar(state.lastEval);
           updateEvalBarHeight();
           scheduleBoardDecorations();
-          requestAnimationFrame(tagPieceSides);
+          requestAnimationFrame(tagPieceSidesOnce);
+          scheduleEvalChartUpdate();
           requestAnimationFrame(() => {
             const analysis = getAnalysisForCurrentView();
             redrawAllArrows();
