@@ -8184,20 +8184,51 @@
             classification = 'blunder';
           }
         } else {
+          const epGap = lossIsKnown ? loss : null;
+          const cpDiff = Number.isFinite(cpLoss)
+            ? cpLoss
+            : (Number.isFinite(cpGap) ? Math.abs(cpGap) : null);
+
           if (!lossIsKnown) {
             classification = qualifiesAsBest ? 'best' : 'good';
-          } else if (qualifiesAsBest) {
-            classification = 'best';
-          } else if (loss <= (PV_KEEP_MARGIN + PV_EPSILON)) {
-            classification = 'excellent';
-          } else if (loss <= (0.05 + PV_EPSILON)) {
-            classification = 'good';
-          } else if (loss <= (0.10 + PV_EPSILON)) {
-            classification = 'inaccuracy';
-          } else if (loss <= (0.20 + PV_EPSILON)) {
-            classification = 'mistake';
           } else {
-            classification = 'blunder';
+            const BLUNDER_THRESHOLD = 0.50 + PV_EPSILON;
+            const MISTAKE_THRESHOLD = 0.20 + PV_EPSILON;
+            const INACCURACY_THRESHOLD = 0.08 - PV_EPSILON;
+            let bucket;
+            if (epGap > BLUNDER_THRESHOLD) {
+              bucket = 'blunder';
+            } else if (epGap > MISTAKE_THRESHOLD) {
+              bucket = 'mistake';
+            } else if (epGap >= INACCURACY_THRESHOLD) {
+              bucket = 'inaccuracy';
+            } else {
+              bucket = 'good';
+            }
+
+            if (Number.isFinite(cpDiff)) {
+              const adjustAroundBoundary = (threshold, lowerLabel, upperLabel, options = {}) => {
+                const tolerance = 0.02 + PV_EPSILON;
+                const distance = Math.abs(epGap - threshold);
+                if (distance > tolerance) return;
+                const lowerCp = options.lowerCp ?? 40;
+                const upperCp = options.upperCp ?? 120;
+                const minLossForUpper = options.minLossForUpper ?? null;
+                if (epGap < threshold && cpDiff >= upperCp) {
+                  if (minLossForUpper == null || epGap >= minLossForUpper) {
+                    bucket = upperLabel;
+                  }
+                } else if (epGap > threshold && cpDiff <= lowerCp) {
+                  bucket = lowerLabel;
+                }
+              };
+
+              adjustAroundBoundary(0.08, 'good', 'inaccuracy');
+              adjustAroundBoundary(0.20, 'inaccuracy', 'mistake');
+              adjustAroundBoundary(0.50, 'mistake', 'blunder', { upperCp: 200, minLossForUpper: 0.33 });
+            }
+
+            classification = bucket;
           }
 
           if (bestMateForMover && !actualMateForMover) {
@@ -8213,7 +8244,7 @@
           }
         }
 
-        const baseline = classification;
+        let baseline = classification;
 
         const entryData = [];
         const actualMoveIsSac = actualMoveSacIndicator != null
@@ -8303,6 +8334,10 @@
 
         const moverWinBefore = beforeMoverEp;
         const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
+        const bandBefore = getOutcomeBand(moverWinBefore);
+        const bandAfter = getOutcomeBand(moverWinAfter);
+        const decisiveBefore = isDecisiveEp(moverWinBefore);
+        const decisiveAfter = isDecisiveEp(moverWinAfter);
         const entryEpByUci = new Map();
         const mateValueByMove = new Map();
         dedupedEntryData.forEach((item) => {
@@ -8530,6 +8565,7 @@
         const onlyMoveGapCp = Number.isFinite(bestLineEvalCp)
           ? bestLineEvalCp - (Number.isFinite(secondBestEvalCp) ? secondBestEvalCp : -Infinity)
           : null;
+        const hasLargeOnlyMoveGap = onlyMoveGapCp != null && onlyMoveGapCp >= 150;
         let preBestEval = null;
         if (candidateCps.length > 0) {
           const bestCandidate = candidateCps[0];
@@ -8564,6 +8600,60 @@
           || (Number.isFinite(epGapToSecond) && epGapToSecond >= (ONLY_MOVE_GAP_EP - PV_EPSILON));
         const isOnlyWinningMove = mateDistanceTest || meetsOnlyMoveGap;
 
+        const onlyMoveGapIsHuge = (typeof hasLargeOnlyMoveGap === 'boolean' ? hasLargeOnlyMoveGap : false)
+          || onlyMoveGapCp === Infinity
+          || (Number.isFinite(onlyMoveGapCp) && onlyMoveGapCp >= 150);
+        const lossIsKnownForMiss = Number.isFinite(loss);
+        const epGapForMiss = lossIsKnownForMiss ? loss : null;
+        const bandWorsened = bandBefore && bandAfter
+          && GREAT_BAND_ORDER[bandAfter] != null
+          && GREAT_BAND_ORDER[bandBefore] != null
+          && GREAT_BAND_ORDER[bandAfter] < GREAT_BAND_ORDER[bandBefore];
+        const missOverride = isOnlyWinningMove
+          && !sameAsBest
+          && onlyMoveGapIsHuge
+          && (bandWorsened || (Number.isFinite(epGapForMiss) && epGapForMiss >= (0.30 - PV_EPSILON)));
+        if (missOverride) {
+          classification = 'miss';
+        }
+
+        const cpDiffForQuality = Number.isFinite(cpLoss)
+          ? cpLoss
+          : (Number.isFinite(cpGap) ? Math.abs(cpGap) : null);
+        const evalDelta = Number.isFinite(preEvalCp) && Number.isFinite(postEvalCpAfterReReply)
+          ? (postEvalCpAfterReReply - preEvalCp)
+          : null;
+        const worsenedDecisiveBand = decisiveBefore
+          && bandWorsened
+          && (!decisiveAfter || GREAT_BAND_ORDER[bandAfter] < GREAT_BAND_ORDER[bandBefore]);
+        const lossForQuality = Number.isFinite(loss) ? loss : null;
+        if (classification !== 'miss') {
+          const inSmallGap = (lossForQuality == null) || (lossForQuality <= (0.08 + PV_EPSILON));
+          const eligibleQualityClass = classification === 'good'
+            || classification === 'best'
+            || classification === 'excellent';
+          if (eligibleQualityClass && inSmallGap) {
+            if (sameAsBest) {
+              classification = 'best';
+              if (isOnlyWinningMove && onlyMoveGapIsHuge && !worsenedDecisiveBand) {
+                classification = 'great';
+              }
+            } else if (nearBest && !worsenedDecisiveBand) {
+              if (Number.isFinite(cpDiffForQuality)
+                && cpDiffForQuality <= (30 + PV_EPSILON)
+                && (evalDelta == null || evalDelta >= -PV_EPSILON)) {
+                classification = 'excellent';
+              } else {
+                classification = 'good';
+              }
+            } else if (nearBest) {
+              classification = 'good';
+            }
+          }
+        }
+
+        baseline = classification;
+
         const mateSacDepthLimit = BRILLIANT_MATE_SAC_MAX_DEPTH;
         const isDirectSacrifice1Ply = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice === true;
         const opponentCapturedMovedPiece = lostAfterReplyIsMovedPiece
@@ -8587,7 +8677,6 @@
         const cpKeepsEval = Number.isFinite(preEvalCp)
           && Number.isFinite(postEvalCpAfterReReply)
           && postEvalCpAfterReReply >= (preEvalCp - 50);
-        const hasLargeOnlyMoveGap = onlyMoveGapCp != null && onlyMoveGapCp >= 150;
         const nonMateBrilliant = baselineNearBest
           && !isMateNow
           && isDirectSacrifice2Ply
@@ -8610,7 +8699,7 @@
           brilliantReason = 'sacrifice2Ply';
         } else if (greatCandidate) {
           overlay = 'great';
-        } else if (missCandidate && baseline !== 'blunder') {
+        } else if (classification === 'miss' || (missCandidate && baseline !== 'blunder')) {
           overlay = 'miss';
         }
 
