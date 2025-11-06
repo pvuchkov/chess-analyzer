@@ -8101,6 +8101,19 @@
         const moverColor = moveEntry && moveEntry.color === 'b' ? 'b' : 'w';
         const moverIsWhite = moverColor === 'w';
         const sameAsBest = Boolean(bestEntry && actualEntry && bestEntry.uci === actualEntry.uci);
+        const CP_EQUALITY_THRESHOLD = 10;
+        const EP_EQUALITY_THRESHOLD = 0.01;
+        const GREAT_CP_THRESHOLD = 35;
+        const GREAT_EP_DRAW = 0.06;
+        const GREAT_EP_WIN = 0.10;
+        const GREAT_EP_MIN = 0.03;
+        const INACCURACY_EP_DRAW = 0.12;
+        const MISTAKE_EP_DRAW = 0.30;
+        const INACCURACY_EP_WIN = 0.22;
+        const MISTAKE_EP_WIN = 0.45;
+        const LOSS_INACCURACY_CP = 80;
+        const LOSS_MISTAKE_CP = 180;
+        const LOSS_BLUNDER_CP = 350;
         const averageRating = getAverageGameRating();
         const moverRating = getPlayerRating(moverColor);
         const baselineFen = typeof rootFen === 'string'
@@ -8138,6 +8151,14 @@
         const beforeMoverEp = Number.isFinite(beforeWhiteEp)
           ? (moverIsWhite ? beforeWhiteEp : 1 - beforeWhiteEp)
           : null;
+        const moverWinBefore = beforeMoverEp;
+        const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
+        const bandBefore = getOutcomeBand(moverWinBefore);
+        const bandAfter = getOutcomeBand(moverWinAfter);
+        const decisiveBefore = isDecisiveEp(moverWinBefore);
+        const decisiveAfter = isDecisiveEp(moverWinAfter);
+        const bandBeforeRank = bandBefore != null ? GREAT_BAND_ORDER[bandBefore] : null;
+        const bandAfterRank = bandAfter != null ? GREAT_BAND_ORDER[bandAfter] : null;
 
         const cpGap = Number.isFinite(bestCp) && Number.isFinite(actualCp)
           ? Math.abs(bestCp - actualCp)
@@ -8158,9 +8179,21 @@
           suggestionTag = summaryActualTag;
         }
 
-        const bestLossMargin = PV_BEST_MARGIN;
         const lossIsKnown = Number.isFinite(loss);
-        const qualifiesAsBest = sameAsBest || (lossIsKnown && loss <= (bestLossMargin + PV_EPSILON));
+        const epGap = lossIsKnown ? loss : null;
+        const cpDrop = Number.isFinite(cpLoss)
+          ? cpLoss
+          : (Number.isFinite(cpGap) ? Math.max(0, cpGap) : null);
+        const epIsEqual = Number.isFinite(epGap) && epGap <= (EP_EQUALITY_THRESHOLD + PV_EPSILON);
+        const cpIsEqual = Number.isFinite(cpDrop) && cpDrop <= (CP_EQUALITY_THRESHOLD + (PV_EPSILON * 100));
+        const qualifiesAsBest = sameAsBest || (epIsEqual && cpIsEqual);
+        if (!suggestionTag && qualifiesAsBest) {
+          suggestionTag = 'best';
+        }
+        const worsenedDecisiveBand = decisiveBefore
+          && bandBeforeRank != null
+          && bandAfterRank != null
+          && bandAfterRank < bandBeforeRank;
 
         const bestMateVal = bestEval && bestEval.type === 'mate' ? bestEval.value : null;
         const actualMateVal = actualEval && actualEval.type === 'mate' ? actualEval.value : null;
@@ -8184,51 +8217,36 @@
             classification = 'blunder';
           }
         } else {
-          const epGap = lossIsKnown ? loss : null;
-          const cpDiff = Number.isFinite(cpLoss)
-            ? cpLoss
-            : (Number.isFinite(cpGap) ? Math.abs(cpGap) : null);
-
           if (!lossIsKnown) {
             classification = qualifiesAsBest ? 'best' : 'good';
-          } else {
-            const BLUNDER_THRESHOLD = 0.50 + PV_EPSILON;
-            const MISTAKE_THRESHOLD = 0.20 + PV_EPSILON;
-            const INACCURACY_THRESHOLD = 0.08 - PV_EPSILON;
-            let bucket;
-            if (epGap > BLUNDER_THRESHOLD) {
-              bucket = 'blunder';
-            } else if (epGap > MISTAKE_THRESHOLD) {
-              bucket = 'mistake';
-            } else if (epGap >= INACCURACY_THRESHOLD) {
-              bucket = 'inaccuracy';
+          } else if (qualifiesAsBest) {
+            classification = 'best';
+          } else if (bandBefore === 'loss' && Number.isFinite(cpDrop)) {
+            if (cpDrop >= LOSS_BLUNDER_CP) {
+              classification = 'blunder';
+            } else if (cpDrop >= LOSS_MISTAKE_CP) {
+              classification = 'mistake';
+            } else if (cpDrop >= LOSS_INACCURACY_CP) {
+              classification = 'inaccuracy';
             } else {
-              bucket = 'good';
+              classification = 'good';
             }
+          } else {
+            const epInaccuracy = bandBefore === 'draw' ? INACCURACY_EP_DRAW : INACCURACY_EP_WIN;
+            const epMistake = bandBefore === 'draw' ? MISTAKE_EP_DRAW : MISTAKE_EP_WIN;
+            const greatCap = bandBefore === 'draw' ? GREAT_EP_DRAW : GREAT_EP_WIN;
+            const effectiveGreat = Math.min(greatCap, Math.max(EP_EQUALITY_THRESHOLD * 3, GREAT_EP_MIN));
 
-            if (Number.isFinite(cpDiff)) {
-              const adjustAroundBoundary = (threshold, lowerLabel, upperLabel, options = {}) => {
-                const tolerance = 0.02 + PV_EPSILON;
-                const distance = Math.abs(epGap - threshold);
-                if (distance > tolerance) return;
-                const lowerCp = options.lowerCp ?? 40;
-                const upperCp = options.upperCp ?? 120;
-                const minLossForUpper = options.minLossForUpper ?? null;
-                if (epGap < threshold && cpDiff >= upperCp) {
-                  if (minLossForUpper == null || epGap >= minLossForUpper) {
-                    bucket = upperLabel;
-                  }
-                } else if (epGap > threshold && cpDiff <= lowerCp) {
-                  bucket = lowerLabel;
-                }
-              };
-
-              adjustAroundBoundary(0.08, 'good', 'inaccuracy');
-              adjustAroundBoundary(0.20, 'inaccuracy', 'mistake');
-              adjustAroundBoundary(0.50, 'mistake', 'blunder', { upperCp: 200, minLossForUpper: 0.33 });
+            if (Number.isFinite(epGap) && epGap <= effectiveGreat && !worsenedDecisiveBand
+              && (!Number.isFinite(cpDrop) || cpDrop <= (GREAT_CP_THRESHOLD + PV_EPSILON))) {
+              classification = 'great';
+            } else if (Number.isFinite(epGap) && epGap <= (epInaccuracy + PV_EPSILON)) {
+              classification = 'inaccuracy';
+            } else if (Number.isFinite(epGap) && epGap <= (epMistake + PV_EPSILON)) {
+              classification = 'mistake';
+            } else {
+              classification = 'blunder';
             }
-
-            classification = bucket;
           }
 
           if (bestMateForMover && !actualMateForMover) {
@@ -8332,12 +8350,6 @@
         });
         const dedupedEntryData = Array.from(dedupedEntryMap.values());
 
-        const moverWinBefore = beforeMoverEp;
-        const moverWinAfter = Number.isFinite(actualMoverEp) ? actualMoverEp : null;
-        const bandBefore = getOutcomeBand(moverWinBefore);
-        const bandAfter = getOutcomeBand(moverWinAfter);
-        const decisiveBefore = isDecisiveEp(moverWinBefore);
-        const decisiveAfter = isDecisiveEp(moverWinAfter);
         const entryEpByUci = new Map();
         const mateValueByMove = new Map();
         dedupedEntryData.forEach((item) => {
@@ -8617,8 +8629,8 @@
           classification = 'miss';
         }
 
-        const cpDiffForQuality = Number.isFinite(cpLoss)
-          ? cpLoss
+        const cpDiffForQuality = Number.isFinite(cpDrop)
+          ? cpDrop
           : (Number.isFinite(cpGap) ? Math.abs(cpGap) : null);
         const evalDelta = Number.isFinite(preEvalCp) && Number.isFinite(postEvalCpAfterReReply)
           ? (postEvalCpAfterReReply - preEvalCp)
@@ -8628,21 +8640,23 @@
           && (!decisiveAfter || GREAT_BAND_ORDER[bandAfter] < GREAT_BAND_ORDER[bandBefore]);
         const lossForQuality = Number.isFinite(loss) ? loss : null;
         if (classification !== 'miss') {
-          const inSmallGap = (lossForQuality == null) || (lossForQuality <= (0.08 + PV_EPSILON));
+          const inSmallGap = (lossForQuality == null)
+            || (lossForQuality <= (Math.min((bandBefore === 'draw' ? GREAT_EP_DRAW : GREAT_EP_WIN), 0.12) + PV_EPSILON));
           const eligibleQualityClass = classification === 'good'
             || classification === 'best'
             || classification === 'excellent';
           if (eligibleQualityClass && inSmallGap) {
-            if (sameAsBest) {
+            if (qualifiesAsBest) {
               classification = 'best';
-              if (isOnlyWinningMove && onlyMoveGapIsHuge && !worsenedDecisiveBand) {
-                classification = 'great';
-              }
             } else if (nearBest && !worsenedDecisiveBand) {
               if (Number.isFinite(cpDiffForQuality)
                 && cpDiffForQuality <= (30 + PV_EPSILON)
                 && (evalDelta == null || evalDelta >= -PV_EPSILON)) {
                 classification = 'excellent';
+              } else if (Number.isFinite(cpDiffForQuality)
+                && cpDiffForQuality <= (GREAT_CP_THRESHOLD + PV_EPSILON)
+                && (evalDelta == null || evalDelta >= -PV_EPSILON)) {
+                classification = 'great';
               } else {
                 classification = 'good';
               }
@@ -8653,6 +8667,9 @@
         }
 
         baseline = classification;
+        if (baseline === 'miss') {
+          baseline = 'blunder';
+        }
 
         const mateSacDepthLimit = BRILLIANT_MATE_SAC_MAX_DEPTH;
         const isDirectSacrifice1Ply = directSacrificeInfo && directSacrificeInfo.isDirectSacrifice === true;
@@ -8685,7 +8702,7 @@
           && hasLargeOnlyMoveGap;
 
         const replyIsMate = Boolean(actualMateForMover && Number.isFinite(actualMateDistance) && actualMateDistance === 1);
-        const greatCandidate = nearBest
+        const greatCandidate = !qualifiesAsBest && nearBest
           && Number.isFinite(epGapToSecond)
           && epGapToSecond >= (0.20 - PV_EPSILON);
 
@@ -8701,6 +8718,10 @@
           overlay = 'great';
         } else if (classification === 'miss' || (missCandidate && baseline !== 'blunder')) {
           overlay = 'miss';
+        }
+
+        if (overlay === 'miss' && baseline !== 'blunder') {
+          baseline = 'blunder';
         }
 
         const playedUci = actualEntry && actualEntry.uci ? actualEntry.uci : null;
@@ -8740,7 +8761,8 @@
           console.warn('Failed to apply special promotions', err);
         }
 
-        let finalClassification = baseline;
+        const finalTag = overlay || suggestionTag || baseline;
+        let finalClassification = finalTag;
         if (promotion && promotion.label) {
           finalClassification = promotion.label;
           if (promotion.log && typeof console !== 'undefined' && console && typeof console.info === 'function') {
@@ -8846,6 +8868,7 @@
               baseline,
               overlayCandidate,
               overlayFinal: overlay,
+              tag: finalClassification,
               vCaptured: Number.isFinite(capturedOnMoveValue) ? capturedOnMoveValue : null,
               'lostAfterReply.value': Number.isFinite(lostAfterReplyValue) ? lostAfterReplyValue : null,
               netLost: Number.isFinite(netLostAfterReplyValue) ? netLostAfterReplyValue : null,
